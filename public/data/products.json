@@ -1,0 +1,1161 @@
+[
+  {
+    "id": "prod-1790772687181",
+    "name": "jjjj",
+    "slug": "jjjj",
+    "sku": "SKU-675017",
+    "brand": "ShopMe",
+    "categoryId": "cat-femme",
+    "categoryName": "Mode Femme",
+    "price": 299,
+    "compareAtPrice": 399,
+    "costPrice": 120,
+    "stockQuantity": 25,
+    "shortDescription": "Qualité supérieure, finitions raffinées et livraison express partout au Maroc.",
+    "description": "Fiche produit confectionnée avec des matériaux nobles. Idéal pour un usage quotidien ou un cadeau d'exception. Paiement à la livraison après inspection.",
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "seoTitle": "jjjj – ShopMe Maroc",
+    "seoDescription": "Qualité supérieure, finitions raffinées et livraison express partout au Maroc.",
+    "images": [
+      {
+        "id": "img-1790772679202-0",
+        "productId": "",
+        "imageUrl": "/uploads/img_1790772679872_logo_webp.webp",
+        "altText": "logo",
+        "displayOrder": 2,
+        "isPrimary": false
+      }
+    ],
+    "variants": [
+      {
+        "id": "var-1790772675017-1",
+        "productId": "",
+        "sku": "SKU-5017-STD",
+        "title": "Modèle Standard",
+        "sizeOption": "Standard",
+        "colorOption": "Noir",
+        "price": 299,
+        "compareAtPrice": 399,
+        "stockQuantity": 15
+      },
+      {
+        "id": "var-1790772675017-2",
+        "productId": "",
+        "sku": "SKU-5017-PREM",
+        "title": "Édition Prestige",
+        "sizeOption": "Luxe",
+        "colorOption": "Argent / Doré",
+        "price": 349,
+        "compareAtPrice": 449,
+        "stockQuantity": 10
+      }
+    ],
+    "technicalSpecs": {
+      "weight": "320 g",
+      "dimensions": "18 x 12 x 4 cm",
+      "warranty": "Garantie 1 an · Échange sous 7 jours",
+      "origin": "Maroc / Fabrication Artisanale",
+      "material": "Matériaux nobles · Finition soignée",
+      "batteryLife": "Conçu pour durer · Testé et certifié"
+    },
+    "rating": 5,
+    "reviewsCount": 0,
+    "viewCount": 0,
+    "createdAt": "2026-09-30T12:51:27.314Z",
+    "updatedAt": "2026-09-30T12:51:27.314Z"
+  },
+  {
+    "id": "prd-6002",
+    "categoryId": "cat-maison",
+    "categoryName": "Maison & Déco",
+    "name": "Lanterne marocaine en laiton",
+    "slug": "lanterne-marocaine-laiton",
+    "sku": "SM-LAN-6002",
+    "shortDescription": "Lanterne ajourée en laiton massif.",
+    "brand": "Maison Fes",
+    "price": 449,
+    "compareAtPrice": null,
+    "costPrice": 240,
+    "status": "PUBLISHED",
+    "isFeatured": false,
+    "isVisible": true,
+    "stockQuantity": 19,
+    "rating": 4.8,
+    "reviewsCount": 44,
+    "viewCount": 1180,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-6002-v1",
+        "productId": "prd-6002",
+        "sku": "PRD-6002-MOYEN",
+        "title": "Moyen",
+        "sizeOption": "Moyen",
+        "colorOption": null,
+        "price": 449,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-6002-v2",
+        "productId": "prd-6002",
+        "sku": "PRD-6002-GRAND",
+        "title": "Grand",
+        "sizeOption": "Grand",
+        "colorOption": null,
+        "price": 449,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "material": "Laiton massif",
+      "origin": "Fès, Maroc"
+    },
+    "createdAt": "2026-09-30T12:48:32.533Z",
+    "updatedAt": "2026-09-30T12:48:32.533Z"
+  },
+  {
+    "id": "prd-6001",
+    "categoryId": "cat-maison",
+    "categoryName": "Maison & Déco",
+    "name": "Tapis berbère tissé main",
+    "slug": "tapis-berbere-tisse-main",
+    "sku": "SM-TAP-6001",
+    "shortDescription": "Tapis 100% laine, tissé main à Fes.",
+    "brand": "Maison Fes",
+    "price": 1890,
+    "compareAtPrice": 2490,
+    "costPrice": 1100,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 4,
+    "rating": 5,
+    "reviewsCount": 18,
+    "viewCount": 1520,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1600166898405-da9535204843?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-6001-v1",
+        "productId": "prd-6001",
+        "sku": "PRD-6001-160X230",
+        "title": "160x230",
+        "sizeOption": "160x230",
+        "colorOption": null,
+        "price": 1890,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-6001-v2",
+        "productId": "prd-6001",
+        "sku": "PRD-6001-200X300",
+        "title": "200x300",
+        "sizeOption": "200x300",
+        "colorOption": null,
+        "price": 1890,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "material": "100% laine",
+      "origin": "Fès, Maroc",
+      "dimensions": "160x230 cm"
+    },
+    "createdAt": "2026-09-30T12:48:32.522Z",
+    "updatedAt": "2026-09-30T12:48:32.522Z"
+  },
+  {
+    "id": "prd-5002",
+    "categoryId": "cat-beaute",
+    "categoryName": "Beauté & Soins",
+    "name": "Coffret Hammam",
+    "slug": "coffret-hammam",
+    "sku": "SM-SKN-5002",
+    "shortDescription": "Savon noir, ghassoul, argile blanche et gant.",
+    "description": "",
+    "brand": "Riad Lab",
+    "price": 349,
+    "costPrice": 170,
+    "status": "PUBLISHED",
+    "isFeatured": false,
+    "isVisible": true,
+    "rating": 4.9,
+    "reviewsCount": 76,
+    "viewCount": 2140,
+    "stockQuantity": 28,
+    "images": [
+      {
+        "id": "img-1",
+        "altText": "",
+        "imageUrl": "https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?auto=format&fit=crop&w=800&q=80",
+        "isPrimary": true,
+        "productId": "",
+        "displayOrder": 0
+      }
+    ],
+    "variants": [],
+    "technicalSpecs": {
+      "features": [
+        "Savon noir",
+        "Ghassoul de Marrakech",
+        "Argile blanche"
+      ]
+    },
+    "createdAt": "2026-09-30T12:48:31.913Z",
+    "updatedAt": "2026-09-30T12:49:04.753Z"
+  },
+  {
+    "id": "prd-5001",
+    "categoryId": "cat-beaute",
+    "categoryName": "Beauté & Soins",
+    "name": "Sérum visage Vitamine C",
+    "slug": "serum-visage-vitamine-c",
+    "sku": "SM-SKN-5001",
+    "shortDescription": "Sérum illuminateur 15% vitamine C.",
+    "brand": "Riad Lab",
+    "price": 279,
+    "compareAtPrice": 349,
+    "costPrice": 140,
+    "status": "PUBLISHED",
+    "isFeatured": false,
+    "isVisible": true,
+    "stockQuantity": 55,
+    "rating": 4.8,
+    "reviewsCount": 210,
+    "viewCount": 5230,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-5001-v1",
+        "productId": "prd-5001",
+        "sku": "PRD-5001-30ML",
+        "title": "30ml",
+        "sizeOption": "30ml",
+        "colorOption": null,
+        "price": 279,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-5001-v2",
+        "productId": "prd-5001",
+        "sku": "PRD-5001-50ML",
+        "title": "50ml",
+        "sizeOption": "50ml",
+        "colorOption": null,
+        "price": 279,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "features": [
+        "Vitamine C 15%",
+        "Acide hyaluronique"
+      ],
+      "origin": "Maroc"
+    },
+    "createdAt": "2026-09-30T12:48:32.500Z",
+    "updatedAt": "2026-09-30T12:48:32.500Z"
+  },
+  {
+    "id": "prd-4002",
+    "categoryId": "cat-electronique",
+    "categoryName": "Électronique",
+    "name": "Smartphone Nova 5G 256Go",
+    "slug": "smartphone-nova-5g-256go",
+    "sku": "SM-PHO-4002",
+    "shortDescription": "Écran AMOLED 120Hz, 256Go, 8Go RAM.",
+    "brand": "TechLine",
+    "price": 4299,
+    "compareAtPrice": 4999,
+    "costPrice": 3300,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 14,
+    "rating": 4.7,
+    "reviewsCount": 112,
+    "viewCount": 6140,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-4002-v1",
+        "productId": "prd-4002",
+        "sku": "PRD-4002-256GO NOIR",
+        "title": "256Go Noir",
+        "sizeOption": "256Go Noir",
+        "colorOption": null,
+        "price": 4299,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-4002-v2",
+        "productId": "prd-4002",
+        "sku": "PRD-4002-256GO BLEU",
+        "title": "256Go Bleu",
+        "sizeOption": "256Go Bleu",
+        "colorOption": null,
+        "price": 4299,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "screen": "6.7\" AMOLED 120Hz",
+      "batteryLife": "5000mAh",
+      "warranty": "2 ans"
+    },
+    "createdAt": "2026-09-30T12:48:32.489Z",
+    "updatedAt": "2026-09-30T12:48:32.489Z"
+  },
+  {
+    "id": "prd-4001",
+    "categoryId": "cat-electronique",
+    "categoryName": "Électronique",
+    "name": "Écouteurs sans fil Pro",
+    "slug": "ecouteurs-sans-fil-pro",
+    "sku": "SM-AUD-4001",
+    "shortDescription": "Réduction de bruit active, 40h de lecture.",
+    "brand": "TechLine",
+    "price": 899,
+    "compareAtPrice": 1199,
+    "costPrice": 520,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 30,
+    "rating": 4.6,
+    "reviewsCount": 145,
+    "viewCount": 4820,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-4001-v1",
+        "productId": "prd-4001",
+        "sku": "PRD-4001-NOIR",
+        "title": "Noir",
+        "sizeOption": "Noir",
+        "colorOption": null,
+        "price": 899,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-4001-v2",
+        "productId": "prd-4001",
+        "sku": "PRD-4001-BLANC",
+        "title": "Blanc",
+        "sizeOption": "Blanc",
+        "colorOption": null,
+        "price": 899,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "batteryLife": "40h (ANC)",
+      "features": [
+        "ANC",
+        "Bluetooth 5.3",
+        "IPX4"
+      ],
+      "warranty": "1 an"
+    },
+    "createdAt": "2026-09-30T12:48:32.478Z",
+    "updatedAt": "2026-09-30T12:48:32.478Z"
+  },
+  {
+    "id": "prd-3002",
+    "categoryId": "cat-montre",
+    "categoryName": "Montres",
+    "name": "Montre connectée Pulse",
+    "slug": "montre-connectee-pulse",
+    "sku": "SM-MNT-3002",
+    "shortDescription": "GPS, SpO2, 14 jours d'autonomie.",
+    "brand": "TechLine",
+    "price": 1199,
+    "compareAtPrice": 1499,
+    "costPrice": 800,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 21,
+    "rating": 4.4,
+    "reviewsCount": 87,
+    "viewCount": 3320,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1510017803434-a899398421b3?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-3002-v1",
+        "productId": "prd-3002",
+        "sku": "PRD-3002-NOIR",
+        "title": "Noir",
+        "sizeOption": "Noir",
+        "colorOption": null,
+        "price": 1199,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-3002-v2",
+        "productId": "prd-3002",
+        "sku": "PRD-3002-BLEU",
+        "title": "Bleu",
+        "sizeOption": "Bleu",
+        "colorOption": null,
+        "price": 1199,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "batteryLife": "14 jours",
+      "waterResistance": "5 ATM",
+      "features": [
+        "GPS",
+        "SpO2",
+        "NFC"
+      ]
+    },
+    "createdAt": "2026-09-30T12:48:32.467Z",
+    "updatedAt": "2026-09-30T12:48:32.467Z"
+  },
+  {
+    "id": "prd-3001",
+    "categoryId": "cat-montre",
+    "categoryName": "Montres",
+    "name": "Montre automatique Acier",
+    "slug": "montre-automatique-acier",
+    "sku": "SM-MNT-3001",
+    "shortDescription": "Automatique 41mm, bracelet acier, saphir.",
+    "brand": "Rihla",
+    "price": 2490,
+    "compareAtPrice": 3190,
+    "costPrice": 1500,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 5,
+    "rating": 4.9,
+    "reviewsCount": 22,
+    "viewCount": 2410,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-3001-v1",
+        "productId": "prd-3001",
+        "sku": "PRD-3001-ACIER",
+        "title": "Acier",
+        "sizeOption": "Acier",
+        "colorOption": null,
+        "price": 2490,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-3001-v2",
+        "productId": "prd-3001",
+        "sku": "PRD-3001-CUIR NOIR",
+        "title": "Cuir noir",
+        "sizeOption": "Cuir noir",
+        "colorOption": null,
+        "price": 2490,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "movement": "Automatique 41h",
+      "glass": "Saphir",
+      "waterResistance": "50m",
+      "warranty": "2 ans"
+    },
+    "createdAt": "2026-09-30T12:48:32.458Z",
+    "updatedAt": "2026-09-30T12:48:32.458Z"
+  },
+  {
+    "id": "prd-2002",
+    "categoryId": "cat-parfum",
+    "categoryName": "Parfumerie & Oud",
+    "name": "Eau de Parfum Musc Blanc",
+    "slug": "edp-musc-blanc",
+    "sku": "SM-MSC-2002",
+    "shortDescription": "Musc blanc powdery, tenue 10h.",
+    "brand": "Rihla",
+    "price": 590,
+    "compareAtPrice": null,
+    "costPrice": 310,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 18,
+    "rating": 4.7,
+    "reviewsCount": 39,
+    "viewCount": 1650,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1615634260167-c8cdede054de?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-2002-v1",
+        "productId": "prd-2002",
+        "sku": "PRD-2002-50ML",
+        "title": "50ml",
+        "sizeOption": "50ml",
+        "colorOption": null,
+        "price": 590,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-2002-v2",
+        "productId": "prd-2002",
+        "sku": "PRD-2002-100ML",
+        "title": "100ml",
+        "sizeOption": "100ml",
+        "colorOption": null,
+        "price": 590,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "concentration": "EDP 18%",
+      "origin": "Grasse, France"
+    },
+    "createdAt": "2026-09-30T12:48:32.448Z",
+    "updatedAt": "2026-09-30T12:48:32.448Z"
+  },
+  {
+    "id": "prd-2001",
+    "categoryId": "cat-parfum",
+    "categoryName": "Parfumerie & Oud",
+    "name": "Oud Cambodi intense",
+    "slug": "oud-cambodi-intensity",
+    "sku": "SM-OUD-2001",
+    "shortDescription": "Huile de oud Cambodian 12 ans, concentration extrait.",
+    "description": "",
+    "brand": "Maison Oud",
+    "price": 1290,
+    "compareAtPrice": 1690,
+    "costPrice": 720,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "rating": 5,
+    "reviewsCount": 51,
+    "viewCount": 3120,
+    "stockQuantity": 7,
+    "images": [
+      {
+        "id": "img-1",
+        "altText": "",
+        "imageUrl": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=800&q=80",
+        "isPrimary": true,
+        "productId": "",
+        "displayOrder": 0
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-2001-v1",
+        "sku": "PRD-2001-6ML",
+        "price": 1290,
+        "title": "6ml",
+        "isActive": true,
+        "productId": "prd-2001",
+        "sizeOption": "6ml",
+        "colorOption": null,
+        "stockQuantity": 10
+      },
+      {
+        "id": "prd-2001-v2",
+        "sku": "PRD-2001-12ML",
+        "price": 1290,
+        "title": "12ml",
+        "isActive": true,
+        "productId": "prd-2001",
+        "sizeOption": "12ml",
+        "colorOption": null,
+        "stockQuantity": 13
+      },
+      {
+        "id": "prd-2001-v3",
+        "sku": "PRD-2001-25ML",
+        "price": 1290,
+        "title": "25ml",
+        "isActive": true,
+        "productId": "prd-2001",
+        "sizeOption": "25ml",
+        "colorOption": null,
+        "stockQuantity": 16
+      }
+    ],
+    "technicalSpecs": {
+      "origin": "Cambodge",
+      "features": [
+        "Oud naturel",
+        "Ambré",
+        "Boisé"
+      ],
+      "concentration": "Extrait 30%"
+    },
+    "createdAt": "2026-09-30T12:48:31.835Z",
+    "updatedAt": "2026-09-30T12:49:04.693Z"
+  },
+  {
+    "id": "prd-1006",
+    "categoryId": "cat-homme",
+    "categoryName": "Mode Homme",
+    "name": "Jean slim délavé",
+    "slug": "jean-slim-delave",
+    "sku": "SM-JNS-1006",
+    "shortDescription": "Denim stretch délavé, taille basse.",
+    "brand": "ShopMe",
+    "price": 399,
+    "compareAtPrice": null,
+    "costPrice": 220,
+    "status": "PUBLISHED",
+    "isFeatured": false,
+    "isVisible": true,
+    "stockQuantity": 33,
+    "rating": 4.5,
+    "reviewsCount": 74,
+    "viewCount": 1980,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1006-v1",
+        "productId": "prd-1006",
+        "sku": "PRD-1006-30",
+        "title": "30",
+        "sizeOption": "30",
+        "colorOption": null,
+        "price": 399,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-1006-v2",
+        "productId": "prd-1006",
+        "sku": "PRD-1006-32",
+        "title": "32",
+        "sizeOption": "32",
+        "colorOption": null,
+        "price": 399,
+        "stockQuantity": 13,
+        "isActive": true
+      },
+      {
+        "id": "prd-1006-v3",
+        "productId": "prd-1006",
+        "sku": "PRD-1006-34",
+        "title": "34",
+        "sizeOption": "34",
+        "colorOption": null,
+        "price": 399,
+        "stockQuantity": 16,
+        "isActive": true
+      },
+      {
+        "id": "prd-1006-v4",
+        "productId": "prd-1006",
+        "sku": "PRD-1006-36",
+        "title": "36",
+        "sizeOption": "36",
+        "colorOption": null,
+        "price": 399,
+        "stockQuantity": 19,
+        "isActive": true
+      },
+      {
+        "id": "prd-1006-v5",
+        "productId": "prd-1006",
+        "sku": "PRD-1006-38",
+        "title": "38",
+        "sizeOption": "38",
+        "colorOption": null,
+        "price": 399,
+        "stockQuantity": 22,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "material": "98% coton, 2% élasthanne",
+      "origin": "Maroc"
+    },
+    "createdAt": "2026-09-30T12:48:32.428Z",
+    "updatedAt": "2026-09-30T12:48:32.428Z"
+  },
+  {
+    "id": "prd-1005",
+    "categoryId": "cat-homme",
+    "categoryName": "Mode Homme",
+    "name": "Veste blazer structurée",
+    "slug": "veste-blazer-structuree",
+    "sku": "SM-BLZ-1005",
+    "shortDescription": "Blazer demi-toilé, épaules légèrement tombantes.",
+    "description": "",
+    "brand": "Atelier Maroc",
+    "price": 749,
+    "compareAtPrice": 999,
+    "costPrice": 430,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "rating": 4.8,
+    "reviewsCount": 33,
+    "viewCount": 1420,
+    "stockQuantity": 15,
+    "images": [
+      {
+        "id": "img-1",
+        "altText": "",
+        "imageUrl": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80",
+        "isPrimary": true,
+        "productId": "",
+        "displayOrder": 0
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1005-v1",
+        "sku": "PRD-1005-46",
+        "price": 749,
+        "title": "46",
+        "isActive": true,
+        "productId": "prd-1005",
+        "sizeOption": "46",
+        "colorOption": null,
+        "stockQuantity": 10
+      },
+      {
+        "id": "prd-1005-v2",
+        "sku": "PRD-1005-48",
+        "price": 749,
+        "title": "48",
+        "isActive": true,
+        "productId": "prd-1005",
+        "sizeOption": "48",
+        "colorOption": null,
+        "stockQuantity": 13
+      },
+      {
+        "id": "prd-1005-v3",
+        "sku": "PRD-1005-50",
+        "price": 749,
+        "title": "50",
+        "isActive": true,
+        "productId": "prd-1005",
+        "sizeOption": "50",
+        "colorOption": null,
+        "stockQuantity": 16
+      },
+      {
+        "id": "prd-1005-v4",
+        "sku": "PRD-1005-52",
+        "price": 749,
+        "title": "52",
+        "isActive": true,
+        "productId": "prd-1005",
+        "sizeOption": "52",
+        "colorOption": null,
+        "stockQuantity": 19
+      }
+    ],
+    "technicalSpecs": {
+      "origin": "Maroc",
+      "material": "Laine mélangée"
+    },
+    "createdAt": "2026-09-30T12:48:31.816Z",
+    "updatedAt": "2026-09-30T12:49:04.730Z"
+  },
+  {
+    "id": "prd-1004",
+    "categoryId": "cat-homme",
+    "categoryName": "Mode Homme",
+    "name": "ChemiseOxford coton",
+    "slug": "chemise-oxford-coton",
+    "sku": "SM-CHM-1004",
+    "shortDescription": "Chemise Oxford coupe régulière, dispose de boutons corozo.",
+    "description": "",
+    "brand": "ShopMe",
+    "price": 289,
+    "compareAtPrice": 379,
+    "costPrice": 150,
+    "status": "PUBLISHED",
+    "isFeatured": false,
+    "isVisible": true,
+    "rating": 4.6,
+    "reviewsCount": 95,
+    "viewCount": 2310,
+    "stockQuantity": 40,
+    "images": [
+      {
+        "id": "img-1",
+        "altText": "",
+        "imageUrl": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=800&q=80",
+        "isPrimary": true,
+        "productId": "",
+        "displayOrder": 0
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1004-v1",
+        "sku": "PRD-1004-M",
+        "price": 289,
+        "title": "M",
+        "isActive": true,
+        "productId": "prd-1004",
+        "sizeOption": "M",
+        "colorOption": null,
+        "stockQuantity": 10
+      },
+      {
+        "id": "prd-1004-v2",
+        "sku": "PRD-1004-L",
+        "price": 289,
+        "title": "L",
+        "isActive": true,
+        "productId": "prd-1004",
+        "sizeOption": "L",
+        "colorOption": null,
+        "stockQuantity": 13
+      },
+      {
+        "id": "prd-1004-v3",
+        "sku": "PRD-1004-XL",
+        "price": 289,
+        "title": "XL",
+        "isActive": true,
+        "productId": "prd-1004",
+        "sizeOption": "XL",
+        "colorOption": null,
+        "stockQuantity": 16
+      },
+      {
+        "id": "prd-1004-v4",
+        "sku": "PRD-1004-XXL",
+        "price": 289,
+        "title": "XXL",
+        "isActive": true,
+        "productId": "prd-1004",
+        "sizeOption": "XXL",
+        "colorOption": null,
+        "stockQuantity": 19
+      }
+    ],
+    "technicalSpecs": {
+      "origin": "Portugal",
+      "weight": "180 g/m2",
+      "material": "100% coton"
+    },
+    "createdAt": "2026-09-30T12:48:31.806Z",
+    "updatedAt": "2026-09-30T12:49:04.741Z"
+  },
+  {
+    "id": "prd-1003",
+    "categoryId": "cat-femme",
+    "categoryName": "Mode Femme",
+    "name": "Sac à main cuir naturel",
+    "slug": "sac-main-cuir-naturel",
+    "sku": "SM-SAC-1003",
+    "shortDescription": "Sac structuré en cuir pleine fleur, bandoulière réglable.",
+    "brand": "Marrakech Leather",
+    "price": 649,
+    "compareAtPrice": null,
+    "costPrice": 380,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 9,
+    "rating": 4.7,
+    "reviewsCount": 28,
+    "viewCount": 870,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1003-v1",
+        "productId": "prd-1003",
+        "sku": "PRD-1003-NOISETTE",
+        "title": "Noisette",
+        "sizeOption": "Noisette",
+        "colorOption": null,
+        "price": 649,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-1003-v2",
+        "productId": "prd-1003",
+        "sku": "PRD-1003-NOIR",
+        "title": "Noir",
+        "sizeOption": "Noir",
+        "colorOption": null,
+        "price": 649,
+        "stockQuantity": 13,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "material": "Cuir pleine fleur",
+      "origin": "Tafilalet, Maroc",
+      "warranty": "2 ans"
+    },
+    "createdAt": "2026-09-30T12:48:32.400Z",
+    "updatedAt": "2026-09-30T12:48:32.400Z"
+  },
+  {
+    "id": "prd-1002",
+    "categoryId": "cat-femme",
+    "categoryName": "Mode Femme",
+    "name": "Manteau long en laine",
+    "slug": "manteau-long-laine",
+    "sku": "SM-MNT-1002",
+    "shortDescription": "Manteau droit double face, coupe oversize.",
+    "description": "",
+    "brand": "Atelier Maroc",
+    "price": 899,
+    "compareAtPrice": 1290,
+    "costPrice": 520,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "rating": 4.9,
+    "reviewsCount": 41,
+    "viewCount": 1210,
+    "stockQuantity": 12,
+    "images": [
+      {
+        "id": "img-1",
+        "altText": "",
+        "imageUrl": "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?auto=format&fit=crop&w=800&q=80",
+        "isPrimary": true,
+        "productId": "",
+        "displayOrder": 0
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1002-v1",
+        "sku": "PRD-1002-S",
+        "price": 899,
+        "title": "S",
+        "isActive": true,
+        "productId": "prd-1002",
+        "sizeOption": "S",
+        "colorOption": null,
+        "stockQuantity": 10
+      },
+      {
+        "id": "prd-1002-v2",
+        "sku": "PRD-1002-M",
+        "price": 899,
+        "title": "M",
+        "isActive": true,
+        "productId": "prd-1002",
+        "sizeOption": "M",
+        "colorOption": null,
+        "stockQuantity": 13
+      },
+      {
+        "id": "prd-1002-v3",
+        "sku": "PRD-1002-L",
+        "price": 899,
+        "title": "L",
+        "isActive": true,
+        "productId": "prd-1002",
+        "sizeOption": "L",
+        "colorOption": null,
+        "stockQuantity": 16
+      }
+    ],
+    "technicalSpecs": {
+      "origin": "Maroc",
+      "material": "80% laine, 20% cachemire",
+      "warranty": "1 an"
+    },
+    "createdAt": "2026-09-30T12:48:31.786Z",
+    "updatedAt": "2026-09-30T12:49:04.720Z"
+  },
+  {
+    "id": "prd-1001",
+    "categoryId": "cat-femme",
+    "categoryName": "Mode Femme",
+    "name": "Robe imprimie fleurie",
+    "slug": "robe-imprimee-fleurie",
+    "sku": "SM-RDB-1001",
+    "shortDescription": "Robe midi en viscose, imprimé floral exclusif.",
+    "brand": "ShopMe",
+    "price": 349,
+    "compareAtPrice": 499,
+    "costPrice": 190,
+    "status": "PUBLISHED",
+    "isFeatured": true,
+    "isVisible": true,
+    "stockQuantity": 24,
+    "rating": 4.8,
+    "reviewsCount": 62,
+    "viewCount": 1840,
+    "images": [
+      {
+        "id": "img-1",
+        "productId": "",
+        "imageUrl": "https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80",
+        "altText": "",
+        "displayOrder": 0,
+        "isPrimary": true
+      }
+    ],
+    "variants": [
+      {
+        "id": "prd-1001-v1",
+        "productId": "prd-1001",
+        "sku": "PRD-1001-S",
+        "title": "S",
+        "sizeOption": "S",
+        "colorOption": null,
+        "price": 349,
+        "stockQuantity": 10,
+        "isActive": true
+      },
+      {
+        "id": "prd-1001-v2",
+        "productId": "prd-1001",
+        "sku": "PRD-1001-M",
+        "title": "M",
+        "sizeOption": "M",
+        "colorOption": null,
+        "price": 349,
+        "stockQuantity": 13,
+        "isActive": true
+      },
+      {
+        "id": "prd-1001-v3",
+        "productId": "prd-1001",
+        "sku": "PRD-1001-L",
+        "title": "L",
+        "sizeOption": "L",
+        "colorOption": null,
+        "price": 349,
+        "stockQuantity": 16,
+        "isActive": true
+      },
+      {
+        "id": "prd-1001-v4",
+        "productId": "prd-1001",
+        "sku": "PRD-1001-XL",
+        "title": "XL",
+        "sizeOption": "XL",
+        "colorOption": null,
+        "price": 349,
+        "stockQuantity": 19,
+        "isActive": true
+      }
+    ],
+    "technicalSpecs": {
+      "material": "Viscose",
+      "origin": "Maroc",
+      "weight": "320 g",
+      "warranty": "14 jours"
+    },
+    "createdAt": "2026-09-30T12:48:32.336Z",
+    "updatedAt": "2026-09-30T12:48:32.336Z"
+  }
+]

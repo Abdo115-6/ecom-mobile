@@ -1,0 +1,24 @@
+{
+  "storeName": "ShopMe",
+  "defaultCurrency": "MAD",
+  "defaultLanguage": "fr",
+  "taxRatePercent": 20,
+  "freeShippingThreshold": 500,
+  "standardShippingFee": 30,
+  "isFreeShippingPromoActive": true,
+  "cityShippingRates": {
+    "Casablanca": 25,
+    "Rabat": 30,
+    "Marrakech": 40,
+    "Fes": 40,
+    "Tanger": 45,
+    "Agadir": 55
+  },
+  "whatsappPhoneNumber": "+212600112233",
+  "whatsappOrderConfirmationTemplate": "Bonjour {customerName}, merci pour votre commande *{orderNumber}* chez ShopMe. Total: {total} MAD. Livraison estimée: {eta}.",
+  "whatsappShippingTemplate": "Bonjour {customerName}, votre commande *{orderNumber}* est en route. Suivi: {trackingUrl}",
+  "metaPixelId": "982348273619284",
+  "googleAnalyticsId": "G-XXXXXXXXXX",
+  "tiktokPixelId": "C1234567890ABCDEFGH",
+  "snapchatPixelId": "snap-pix-9821381-abcd"
+}

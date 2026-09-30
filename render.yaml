@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: aura-commerce
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PGHOST
+        fromService:
+          type: postgres
+          name: aura-db
+          property: host
+      - key: PGPORT
+        fromService:
+          type: postgres
+          name: aura-db
+          property: port
+      - key: PGUSER
+        fromService:
+          type: postgres
+          name: aura-db
+          property: user
+      - key: PGPASSWORD
+        fromService:
+          type: postgres
+          name: aura-db
+          property: password
+      - key: PGDATABASE
+        fromService:
+          type: postgres
+          name: aura-db
+          property: database
+
+databases:
+  - name: aura-db
+    plan: free
+    postgresMajorVersion: "17"
