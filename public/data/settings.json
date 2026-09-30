@@ -15,10 +15,10 @@
     "Agadir": 55
   },
   "whatsappPhoneNumber": "+212600112233",
-  "whatsappOrderConfirmationTemplate": "Bonjour {customerName}, merci pour votre commande *{orderNumber}* chez ShopMe. Total: {total} MAD. Livraison estimée: {eta}.",
-  "whatsappShippingTemplate": "Bonjour {customerName}, votre commande *{orderNumber}* est en route. Suivi: {trackingUrl}",
-  "metaPixelId": "982348273619284",
-  "googleAnalyticsId": "G-XXXXXXXXXX",
-  "tiktokPixelId": "C1234567890ABCDEFGH",
-  "snapchatPixelId": "snap-pix-9821381-abcd"
+  "whatsappOrderConfirmationTemplate": "Bonjour {customerName}, merci pour votre commande *{orderNumber}* chez ShopMe. Total: {total} MAD.",
+  "whatsappShippingTemplate": "Bonjour {customerName}, votre commande *{orderNumber}* est en route.",
+  "metaPixelId": "",
+  "googleAnalyticsId": "",
+  "tiktokPixelId": "",
+  "snapchatPixelId": ""
 }
