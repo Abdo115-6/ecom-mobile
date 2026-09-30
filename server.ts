@@ -13,13 +13,31 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
-// PostgreSQL Connection Pool (configured for the user's local Postgres instance)
+// PostgreSQL Connection Pool
+// Supports either discrete PG* vars or a single DATABASE_URL, which is what
+// Render, Railway, Neon and Supabase all provide.
+const pgConfig = (() => {
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    return {
+      host: url.hostname,
+      port: Number(url.port) || 5432,
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: url.pathname.replace(/^\//, '') || 'postgres',
+    };
+  }
+  return {
+    host: process.env.PGHOST || 'localhost',
+    port: Number(process.env.PGPORT) || 5432,
+    user: process.env.PGUSER || 'ecommerce_user',
+    password: process.env.PGPASSWORD || 'ecom',
+    database: process.env.PGDATABASE || 'ecommerce',
+  };
+})();
+
 const pgPool = new pg.Pool({
-  host: process.env.PGHOST || 'localhost',
-  port: Number(process.env.PGPORT) || 5432,
-  user: process.env.PGUSER || 'ecommerce_user',
-  password: process.env.PGPASSWORD || 'ecom',
-  database: process.env.PGDATABASE || 'ecommerce',
+  ...pgConfig,
   connectionTimeoutMillis: 3000,
   idleTimeoutMillis: 10000
 });
@@ -287,10 +305,10 @@ async function startServer() {
       status: 'ok',
       postgres: {
         status: pgStatus,
-        host: process.env.PGHOST || 'localhost',
-        port: Number(process.env.PGPORT) || 5432,
-        user: process.env.PGUSER || 'ecommerce_user',
-        database: process.env.PGDATABASE || 'ecommerce',
+        host: pgConfig.host,
+        port: pgConfig.port,
+        user: pgConfig.user,
+        database: pgConfig.database,
         version,
         tablesCount
       }
@@ -758,7 +776,7 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 ShopMe Full-Stack Server running at http://0.0.0.0:${PORT}`);
-    console.log(`📦 PostgreSQL Config: ${process.env.PGUSER || 'ecommerce_user'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE || 'ecommerce'}`);
+    console.log(`📦 PostgreSQL Config: ${pgConfig.user}@${pgConfig.host}:${pgConfig.port}/${pgConfig.database} (${process.env.DATABASE_URL ? 'via DATABASE_URL' : 'via PG* vars'})`);
   });
 }
 

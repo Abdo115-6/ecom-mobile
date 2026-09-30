@@ -8,31 +8,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PGHOST
-        fromService:
-          type: postgres
+      # Render Postgres is referenced with `fromDatabase` (not `fromService`).
+      # `connectionString` resolves to postgresql://user:pass@host:port/db over
+      # Render's private network; server.ts parses it into its pool config.
+      - key: DATABASE_URL
+        fromDatabase:
           name: aura-db
-          property: host
-      - key: PGPORT
-        fromService:
-          type: postgres
-          name: aura-db
-          property: port
-      - key: PGUSER
-        fromService:
-          type: postgres
-          name: aura-db
-          property: user
-      - key: PGPASSWORD
-        fromService:
-          type: postgres
-          name: aura-db
-          property: password
-      - key: PGDATABASE
-        fromService:
-          type: postgres
-          name: aura-db
-          property: database
+          property: connectionString
 
 databases:
   - name: aura-db
