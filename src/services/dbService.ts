@@ -1035,6 +1035,22 @@ class DatabaseStore {
     }
   }
 
+  // --- Order deletion ---
+  deleteOrder(orderId: string, user?: User): boolean {
+    const order = this.orders.find(o => o.id === orderId);
+    if (!order) return false;
+
+    this.orders = this.orders.filter(o => o.id !== orderId);
+    if (user) {
+      this.addAuditLog(user, 'DELETE', 'Order', orderId, `Suppression commande : #${order.orderNumber}`);
+    }
+    this.saveToStorage();
+    if (typeof window !== 'undefined') {
+      fetch(`/api/orders/${encodeURIComponent(orderId)}`, { method: 'DELETE' }).catch(() => null);
+    }
+    return true;
+  }
+
   // --- WhatsApp Order Confirmation ---
   confirmOrderViaWhatsApp(orderId: string, customReply?: string, user?: User): Order | undefined {
     const order = this.orders.find(o => o.id === orderId);
@@ -1042,7 +1058,7 @@ class DatabaseStore {
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const reply = customReply || "Salam ShopMe ! Oui je confirme ma commande avec grand plaisir. Merci d'envoyer le livreur au plus vite 🙏✅";
+    if (!customReply?.trim()) return order;
 
     const itemsSummary = order.items.map(i => `${i.productName} (x${i.quantity})`).join(', ');
 

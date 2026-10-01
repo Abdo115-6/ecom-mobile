@@ -26,6 +26,7 @@ export const DashboardView: React.FC = () => {
   const funnel = dataMiningService.getFunnelData();
   const recentOrders = dbService.orders.slice(0, 5);
 
+
   // Sales timeline calculated strictly from real orders
   const daysOfWeek = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
   const salesTimeline = Array.from({ length: 7 }).map((_, i) => {
@@ -280,6 +281,7 @@ export const DashboardView: React.FC = () => {
                 <th className="pb-3 font-semibold">Total</th>
                 <th className="pb-3 font-semibold">Canal UTM</th>
                 <th className="pb-3 font-semibold">Statut</th>
+                <th className="pb-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/50">
@@ -298,6 +300,14 @@ export const DashboardView: React.FC = () => {
                     <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-md font-bold text-[10px]">
                       {order.status}
                     </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={() => setCurrentView('admin-orders')}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-bold"
+                    >
+                      Gérer
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -37,8 +37,7 @@ export const WhatsAppConfirmationModal: React.FC<WhatsAppConfirmationModalProps>
   const defaultSentMessage = conf?.sentMessageText || 
     `Salam ${customerName} ! 👋\nMerci pour votre commande sur ShopMe Maroc 🇲🇦.\n\n📋 *Détails de la Commande #${order.orderNumber}* :\n• ${itemsText}\n\n💰 *Total à régler* : ${order.totalAmount.toFixed(2)} DH (Paiement Cash à la livraison)\n📍 *Adresse* : ${order.shippingAddress.street}, ${order.shippingAddress.city}\n\nVeuillez répondre « OUI » ou « JE CONFIRME » pour autoriser l'expédition express de votre colis.`;
 
-  const defaultReplyMessage = conf?.replyMessageText || 
-    `Salam ShopMe, oui je confirme ma commande ! Merci de l'envoyer au plus vite 🙏✅`;
+  const defaultReplyMessage = conf?.replyMessageText;
 
   const timeSent = conf?.messageTimestamp || '10:15';
   const timeReply = conf?.replyTimestamp || '10:18';
@@ -148,20 +147,20 @@ export const WhatsAppConfirmationModal: React.FC<WhatsAppConfirmationModalProps>
               </div>
             </div>
 
-            {/* Incoming Message from Customer (Confirmation reply) */}
-            <div className="flex justify-start">
-              <div className="bg-[#202c33] text-white rounded-2xl rounded-tl-xs p-3 max-w-[85%] sm:max-w-[80%] shadow-md space-y-1 border border-slate-700/50 text-xs">
-                <div className="text-[10px] font-bold text-amber-300">
-                  {customerName}
-                </div>
-                <div className="text-[12px] font-medium leading-relaxed text-slate-100">
-                  {defaultReplyMessage}
-                </div>
-                <div className="flex items-center justify-end text-[9px] text-slate-400 pt-0.5">
-                  <span>{timeReply}</span>
+            {/* Only render a customer reply when WhatsApp actually delivered one. */}
+            {defaultReplyMessage ? (
+              <div className="flex justify-start">
+                <div className="bg-[#202c33] text-white rounded-2xl rounded-tl-xs p-3 max-w-[85%] sm:max-w-[80%] shadow-md space-y-1 border border-slate-700/50 text-xs">
+                  <div className="text-[10px] font-bold text-amber-300">{customerName}</div>
+                  <div className="text-[12px] font-medium leading-relaxed text-slate-100">{defaultReplyMessage}</div>
+                  <div className="flex items-center justify-end text-[9px] text-slate-400 pt-0.5"><span>{timeReply}</span></div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs">
+                En attente de la réponse réelle du client. La commande ne sera pas confirmée automatiquement.
+              </div>
+            )}
 
             {/* Confirmation Verified Badge */}
             <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-400 text-xs">

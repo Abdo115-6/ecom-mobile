@@ -584,6 +584,27 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+    const nextOrders = currentOrders.filter(order => order.id !== id);
+    if (nextOrders.length === currentOrders.length) {
+      return res.status(404).json({ success: false, message: 'Commande introuvable' });
+    }
+    writeJsonFile(ORDERS_FILE, nextOrders);
+
+    if (isPgConnected) {
+      try {
+        const client = await pgPool.connect();
+        await client.query('DELETE FROM orders WHERE id = $1', [id]);
+        client.release();
+      } catch (err) {
+        console.warn('Postgres delete order error:', err);
+      }
+    }
+    return res.json({ success: true, id });
+  });
+
   app.patch('/api/orders/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, whatsappConfirmation } = req.body;

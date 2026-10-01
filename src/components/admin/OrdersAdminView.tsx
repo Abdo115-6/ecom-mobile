@@ -18,7 +18,8 @@ import {
   User,
   QrCode,
   Printer,
-  CheckCheck
+  CheckCheck,
+  Trash2
 } from 'lucide-react';
 import { whatsappService } from '../../services/whatsappService';
 
@@ -53,16 +54,25 @@ export const OrdersAdminView: React.FC = () => {
     showToast(`Statut commande mis à jour : ${newStatus}`);
   };
 
-  const handleConfirmViaWhatsApp = (orderId: string) => {
-    const updated = dbService.confirmOrderViaWhatsApp(orderId, undefined, currentUser);
-    if (updated) {
+  const handleDeleteOrder = (order: Order) => {
+    if (!window.confirm(`Supprimer définitivement la commande #${order.orderNumber} ?`)) return;
+    if (dbService.deleteOrder(order.id, currentUser)) {
       setOrders([...dbService.orders]);
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(updated);
-      }
-      setWhatsappModalOrder(updated);
-      showToast(`✓ Commande #${updated.orderNumber} confirmée via WhatsApp !`);
+      if (selectedOrder?.id === order.id) setSelectedOrder(null);
+      if (whatsappModalOrder?.id === order.id) setWhatsappModalOrder(null);
+      showToast(`Commande #${order.orderNumber} supprimée`);
     }
+  };
+
+  const handleOpenWhatsApp = (order: Order) => {
+    window.open(whatsappService.generateOrderConfirmationLink(order), '_blank', 'noopener,noreferrer');
+    showToast('Message de confirmation prêt dans WhatsApp. Attendez la réponse du client avant de valider.');
+  };
+
+  const handleConfirmViaWhatsApp = (orderId: string) => {
+    const order = orders.find(item => item.id === orderId);
+    if (!order) return;
+    handleOpenWhatsApp(order);
   };
 
   const handleExportCSV = () => {
@@ -233,6 +243,15 @@ export const OrdersAdminView: React.FC = () => {
                         >
                           <QrCode className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Ticket</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteOrder(order)}
+                          className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors cursor-pointer"
+                          title="Supprimer la commande"
+                          aria-label={`Supprimer la commande ${order.orderNumber}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Inspect Order */}
