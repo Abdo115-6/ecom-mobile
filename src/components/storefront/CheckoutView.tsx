@@ -150,6 +150,13 @@ export const CheckoutView: React.FC = () => {
 
     clientMovementService.markAsPurchased(order.orderNumber, cartTotal);
 
+    // Send the confirmation to the customer's WhatsApp number, not the store number.
+    fetch('/api/whatsapp/order-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    }).catch((error) => console.warn('[v0] WhatsApp confirmation could not be sent:', error));
+
     setLastConfirmedOrder(order);
     clearCart();
     setIsSubmitting(false);

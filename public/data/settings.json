@@ -14,7 +14,7 @@
     "Tanger": 45,
     "Agadir": 55
   },
-  "whatsappPhoneNumber": "+212600112233",
+  "whatsappPhoneNumber": "+212 668-381916",
   "whatsappOrderConfirmationTemplate": "Bonjour {customerName}, merci pour votre commande *{orderNumber}* chez ShopMe. Total: {total} MAD.",
   "whatsappShippingTemplate": "Bonjour {customerName}, votre commande *{orderNumber}* est en route.",
   "metaPixelId": "",

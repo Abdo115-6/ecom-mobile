@@ -1,0 +1,96 @@
+[
+  {
+    "customerId": "cust-1790895624232",
+    "customerName": "fwekgej",
+    "customerEmail": "0661252184@client-shopme.ma",
+    "customerPhone": "0661252184",
+    "status": "PROCESSING",
+    "currency": "MAD",
+    "subtotal": 598,
+    "discountAmount": 120,
+    "shippingFee": 0,
+    "taxAmount": 0,
+    "totalAmount": 478,
+    "shippingAddress": {
+      "fullName": "fwekgej",
+      "phone": "0661252184",
+      "street": "kfmejngijwrngijre",
+      "city": "Casablanca",
+      "country": "Maroc"
+    },
+    "paymentMethod": "CASH_ON_DELIVERY",
+    "paymentStatus": "PENDING",
+    "shipment": {
+      "carrier": "ShopMe Express Maroc",
+      "trackingNumber": "MA-733070",
+      "status": "Commande confirmée · En préparation"
+    },
+    "items": [
+      {
+        "id": "item-1790895623776",
+        "productId": "prod-1790772687181",
+        "productName": "jjjj",
+        "sku": "SKU-5017-STD",
+        "variantTitle": "Modèle Standard (Pack 2 pcs)",
+        "unitPrice": 239,
+        "quantity": 2,
+        "subtotal": 478,
+        "imageUrl": "/uploads/img_1790772679872_logo_webp.webp"
+      }
+    ],
+    "utmSource": "direct_ads",
+    "utmCampaign": "morocco_conversion",
+    "notes": "Commande Express 1-Clic COD Pack 2. Ville : Casablanca",
+    "id": "ord-1790895624232",
+    "orderNumber": "ORD-2026-2190",
+    "createdAt": "2026-10-01T23:00:24.232Z",
+    "updatedAt": "2026-10-01T23:00:24.232Z"
+  },
+  {
+    "customerId": "cust-1790895454345",
+    "customerName": "efmkwg",
+    "customerEmail": "0661252184@client-shopme.ma",
+    "customerPhone": "0661252184",
+    "status": "PROCESSING",
+    "currency": "MAD",
+    "subtotal": 598,
+    "discountAmount": 120,
+    "shippingFee": 0,
+    "taxAmount": 0,
+    "totalAmount": 478,
+    "shippingAddress": {
+      "fullName": "efmkwg",
+      "phone": "0661252184",
+      "street": "egkmweongowngew",
+      "city": "Casablanca",
+      "country": "Maroc"
+    },
+    "paymentMethod": "CASH_ON_DELIVERY",
+    "paymentStatus": "PENDING",
+    "shipment": {
+      "carrier": "ShopMe Express Maroc",
+      "trackingNumber": "MA-631960",
+      "status": "Commande confirmée · En préparation"
+    },
+    "items": [
+      {
+        "id": "item-1790895453891",
+        "productId": "prod-1790772687181",
+        "productName": "jjjj",
+        "sku": "SKU-5017-STD",
+        "variantTitle": "Modèle Standard (Pack 2 pcs)",
+        "unitPrice": 239,
+        "quantity": 2,
+        "subtotal": 478,
+        "imageUrl": "/uploads/img_1790772679872_logo_webp.webp"
+      }
+    ],
+    "utmSource": "direct_ads",
+    "utmCampaign": "morocco_conversion",
+    "notes": "Commande Express 1-Clic COD Pack 2. Ville : Casablanca",
+    "id": "ord-1790895454346",
+    "orderNumber": "ORD-2026-9941",
+    "createdAt": "2026-10-01T22:57:34.346Z",
+    "updatedAt": "2026-10-01T22:57:34.346Z"
+  }
+]

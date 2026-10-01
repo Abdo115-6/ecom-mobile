@@ -584,6 +584,53 @@ async function startServer() {
     }
   });
 
+  app.post('/api/whatsapp/order-confirmation', async (req, res) => {
+    const order = req.body?.order;
+    if (!order?.customerPhone || !order?.orderNumber) {
+      return res.status(400).json({ success: false, message: 'Commande ou numéro WhatsApp invalide' });
+    }
+
+    const phone = String(order.customerPhone).replace(/[^0-9]/g, '').replace(/^0/, '212');
+    const customerName = order.shippingAddress?.fullName || order.customerName || 'Client';
+    const message = `Bonjour ${customerName}, merci pour votre commande *${order.orderNumber}* chez ShopMe. Total: ${Number(order.totalAmount).toFixed(2)} MAD.\n\nRépondez OUI pour confirmer votre commande ou NON pour l'annuler.`;
+    const token = process.env.WHATSAPP_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    if (!token || !phoneNumberId) {
+      return res.status(503).json({ success: false, message: 'WhatsApp Cloud API non configurée' });
+    }
+
+    const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: message } }),
+    });
+    const result = await response.json();
+    return res.status(response.ok ? 200 : 502).json({ success: response.ok, result });
+  });
+
+  app.get('/api/whatsapp/webhook', (req, res) => {
+    if (req.query['hub.verify_token'] === process.env.WHATSAPP_VERIFY_TOKEN) {
+      return res.status(200).send(req.query['hub.challenge']);
+    }
+    return res.sendStatus(403);
+  });
+
+  app.post('/api/whatsapp/webhook', async (req, res) => {
+    res.sendStatus(200);
+    const message = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const text = String(message?.text?.body || '').trim().toLowerCase();
+    const phone = String(message?.from || '');
+    if (!message || !phone || !['oui', 'yes', 'confirm', 'confirme'].includes(text)) return;
+
+    const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+    const order = orders.find((item) => String(item.customerPhone).replace(/[^0-9]/g, '').endsWith(phone.slice(-9)) && item.status === 'PENDING');
+    if (!order) return;
+    order.status = 'CONFIRMED';
+    order.whatsappConfirmation = { status: 'CONFIRMED', channel: 'WHATSAPP_BOT', replyMessageText: message.text.body, messageTimestamp: new Date().toISOString() };
+    writeJsonFile(ORDERS_FILE, orders);
+  });
+
   app.delete('/api/orders/:id', async (req, res) => {
     const { id } = req.params;
     const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);

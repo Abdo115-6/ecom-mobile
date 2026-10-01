@@ -18,11 +18,19 @@ export class WhatsAppService {
     const phone = dbService.settings.whatsappPhoneNumber.replace(/[^0-9]/g, '');
     const template = dbService.settings.whatsappOrderConfirmationTemplate;
     
-    const formattedMessage = template
-      .replace('{{customer_name}}', order.shippingAddress.fullName)
-      .replace('{{order_number}}', order.orderNumber)
-      .replace('{{total}}', `${order.totalAmount.toFixed(2)} ${order.currency}`)
-      .replace('{{city}}', order.shippingAddress.city);
+    const values: Record<string, string> = {
+      customerName: order.shippingAddress.fullName || order.customerName,
+      customer_name: order.shippingAddress.fullName || order.customerName,
+      orderNumber: order.orderNumber,
+      order_number: order.orderNumber,
+      total: `${order.totalAmount.toFixed(2)} ${order.currency}`,
+      city: order.shippingAddress.city,
+    };
+
+    const formattedMessage = template.replace(
+      /\\{\\{?\\s*(customerName|customer_name|orderNumber|order_number|total|city)\\s*\\}\\}?/g,
+      (_, key: string) => values[key] || '',
+    );
 
     return `https://wa.me/${phone}?text=${encodeURIComponent(formattedMessage)}`;
   }
