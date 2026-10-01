@@ -10,8 +10,8 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In AI Studio, the application server MUST bind to port 3000 on 0.0.0.0.
-const PORT = 3000;
+// In AI Studio, defaults to 3000. In Railway/Cloud Run, honors process.env.PORT.
+const PORT = Number(process.env.PORT) || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
 // PostgreSQL Connection Pool

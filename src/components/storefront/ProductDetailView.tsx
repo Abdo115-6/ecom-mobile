@@ -526,36 +526,51 @@ export const ProductDetailView: React.FC = () => {
                 <span>Lien Direct d'Achat (Prêt à envoyer au client)</span>
               </div>
               <span className="text-[10px] text-blue-700 bg-blue-100/80 font-bold px-2 py-0.5 rounded-full">
-                1-Clic Commande
+                Railway & Mobile Ready
               </span>
             </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+
+            {/* Visible URL Input for Client Sharing */}
+            <div className="flex items-center gap-1.5 bg-white border border-blue-200 rounded-xl p-1 shadow-xs">
+              <input
+                type="text"
+                readOnly
+                value={getProductShareUrl(product.slug, true)}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 bg-transparent px-2.5 py-1.5 text-[11px] font-mono text-slate-800 focus:outline-none select-all truncate"
+                title="Cliquez pour sélectionner l'URL complète"
+              />
               <button
                 type="button"
                 onClick={handleCopyDirectLink}
-                className="flex-1 py-2 px-3 bg-white hover:bg-slate-50 border border-blue-300 text-blue-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                title="Copier le lien direct avec formulaire d'achat ouvert"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 {copiedLink ? (
                   <>
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                    <span className="text-emerald-700">Lien direct copié !</span>
+                    <CheckCircle className="w-3.5 h-3.5 text-white" />
+                    <span>Copié !</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4 text-blue-600" />
-                    <span>Copier le Lien Direct d'Achat</span>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copier</span>
                   </>
                 )}
               </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-slate-500">
+                Ouvre directement la commande express COD pour le client
+              </span>
               <button
                 type="button"
                 onClick={handleShareWhatsApp}
-                className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-98 shrink-0"
+                className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 shrink-0"
                 title="Envoyer le lien direct par message WhatsApp pré-rempli"
               >
-                <MessageCircle className="w-4 h-4 fill-white text-emerald-600" />
-                <span>Envoyer sur WhatsApp</span>
+                <MessageCircle className="w-3.5 h-3.5 fill-white text-emerald-600" />
+                <span>Partager WhatsApp</span>
               </button>
             </div>
           </div>

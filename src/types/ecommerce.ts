@@ -357,4 +357,5 @@ export interface StoreSettings {
   googleAnalyticsId: string;
   tiktokPixelId: string;
   snapchatPixelId: string;
+  publicDomain?: string;
 }

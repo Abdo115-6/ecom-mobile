@@ -119,7 +119,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Safe setCurrentView enforcing protection on admin views and redirecting account
+  // Safe setCurrentView enforcing protection on admin views and syncing clean browser history URLs
   const setCurrentView = (view: ActiveView) => {
     if (view === 'account') {
       setCurrentViewState('home');
@@ -127,13 +127,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (view.startsWith('admin-') && view !== 'admin-login' && !isAdminAuthenticated) {
       setCurrentViewState('admin-login');
-      window.history.pushState(null, '', '/adminonly');
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/adminonly');
+      }
       return;
     }
     setCurrentViewState(view);
-    if (view === 'admin-login' || (view.startsWith('admin-') && isAdminAuthenticated)) {
-      if (!window.location.pathname.includes('adminonly')) {
-        window.history.pushState(null, '', '/adminonly');
+    if (typeof window !== 'undefined') {
+      if (view === 'admin-login' || (view.startsWith('admin-') && isAdminAuthenticated)) {
+        if (!window.location.pathname.includes('adminonly')) {
+          window.history.pushState(null, '', '/adminonly');
+        }
+      } else if (view === 'catalog') {
+        window.history.pushState(null, '', '/catalog');
+      } else if (view === 'cart') {
+        window.history.pushState(null, '', '/cart');
+      } else if (view === 'checkout') {
+        window.history.pushState(null, '', '/checkout');
+      } else if (view === 'wishlist') {
+        window.history.pushState(null, '', '/wishlist');
+      } else if (view === 'track-order') {
+        window.history.pushState(null, '', '/tracking');
+      } else if (view === 'home') {
+        window.history.pushState(null, '', '/');
       }
     }
   };
@@ -153,25 +169,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3200);
   };
 
-  // Generate direct shareable product link
-  const getProductShareUrl = (slug: string, directBuy = false): string => {
-    if (typeof window === 'undefined') return `/?product=${slug}`;
-    const base = window.location.origin;
-    return `${base}/?product=${encodeURIComponent(slug)}${directBuy ? '&buy=1' : ''}`;
+  // Generate direct shareable product link (Adaptive to Railway, custom domains and origin)
+  const getProductShareUrl = (slug: string, directBuy = true): string => {
+    let base = '';
+    const configuredDomain = dbService.settings.publicDomain;
+    if (configuredDomain && configuredDomain.trim()) {
+      base = configuredDomain.trim().replace(/\/+$/, '');
+    } else if (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') {
+      base = window.location.origin;
+    }
+
+    const cleanSlug = encodeURIComponent(slug.trim());
+    return `${base}/product/${cleanSlug}${directBuy ? '?buy=1' : ''}`;
   };
 
-  // Navigate to product and track view_item
+  // Navigate to product and track view_item with distinct clean path-based URL
   const navigateToProduct = (slug: string, directBuy = false) => {
-    setSelectedProductSlug(slug);
+    const cleanSlug = slug.trim();
+    setSelectedProductSlug(cleanSlug);
     setDirectBuyMode(directBuy);
     setCurrentViewState('product-detail');
 
     if (typeof window !== 'undefined') {
-      const url = `/?product=${encodeURIComponent(slug)}${directBuy ? '&buy=1' : ''}`;
+      const url = `/product/${encodeURIComponent(cleanSlug)}${directBuy ? '?buy=1' : ''}`;
       window.history.pushState(null, '', url);
     }
 
-    const prod = dbService.getProductBySlug(slug);
+    const prod = dbService.getProductBySlug(cleanSlug);
     if (prod) {
       trackingService.track('view_item', {
         value: prod.price,
@@ -459,12 +483,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      // Check for direct product links: ?product=slug or ?p=slug or /product/slug or #product=slug
-      let productSlug = params.get('product') || params.get('p');
-      if (!productSlug && path.startsWith('/product/')) {
-        productSlug = path.replace('/product/', '').trim();
-      } else if (!productSlug && hash.startsWith('#product=')) {
-        productSlug = hash.replace('#product=', '').trim();
+      // Check for clean path-based product URL: /product/:slug (Railway standard)
+      let productSlug: string | null = null;
+      if (path.startsWith('/product/')) {
+        const rawPart = path.replace('/product/', '').split(/[?#]/)[0];
+        const trimmed = rawPart.replace(/\/+$/, '');
+        if (trimmed) {
+          try {
+            productSlug = decodeURIComponent(trimmed).trim();
+          } catch {
+            productSlug = trimmed.trim();
+          }
+        }
+      }
+
+      // Also support query param fallback (?product=slug or ?p=slug or #product=slug)
+      if (!productSlug) {
+        const qp = params.get('product') || params.get('p');
+        if (qp) {
+          try {
+            productSlug = decodeURIComponent(qp).trim();
+          } catch {
+            productSlug = qp.trim();
+          }
+        }
+      }
+
+      if (!productSlug && hash.startsWith('#product=')) {
+        const rawHash = hash.replace('#product=', '').split('&')[0];
+        try {
+          productSlug = decodeURIComponent(rawHash).trim();
+        } catch {
+          productSlug = rawHash.trim();
+        }
       }
 
       if (productSlug) {
@@ -472,6 +523,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedProductSlug(productSlug);
         setDirectBuyMode(isBuy);
         setCurrentViewState('product-detail');
+        return;
+      }
+
+      // Top-level store views navigation
+      if (path === '/catalog') {
+        setCurrentViewState('catalog');
+      } else if (path === '/cart') {
+        setCurrentViewState('cart');
+      } else if (path === '/checkout') {
+        setCurrentViewState('checkout');
+      } else if (path === '/wishlist') {
+        setCurrentViewState('wishlist');
+      } else if (path === '/tracking') {
+        setCurrentViewState('track-order');
+      } else if (path === '/' || path === '') {
+        setCurrentViewState('home');
       }
     };
 
