@@ -26,8 +26,6 @@ import {
   CheckCircle2,
   Gift,
   Layers,
-  Share2,
-  Copy,
   Plus,
   Minus,
   Percent,
@@ -44,7 +42,6 @@ export const ProductDetailView: React.FC = () => {
     formatMoney, 
     setLastConfirmedOrder,
     navigateToProduct,
-    getProductShareUrl,
     directBuyMode,
     showToast,
     locale,
@@ -58,7 +55,6 @@ export const ProductDetailView: React.FC = () => {
     product?.variants[0]?.id
   );
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
-  const [copiedLink, setCopiedLink] = useState(false);
   const [customQuantity, setCustomQuantity] = useState<number>(1);
 
   // Dynamic Offer Packs (Custom from merchant or default 1, 2, 3)
@@ -205,42 +201,6 @@ export const ProductDetailView: React.FC = () => {
     ? (activePack.compareAtPrice - activePack.price)
     : 0;
   const packBadge = activePack?.badge || '';
-
-  // Copy Direct Purchase Link
-  const handleCopyDirectLink = () => {
-    if (!product) return;
-    const url = getProductShareUrl(product.slug, true);
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    showToast('✓ Lien direct d\'achat copié ! Vous pouvez l\'envoyer au client.');
-    clientMovementService.trackClick('Copier Lien Achat Direct', 'SHARE', {
-      productSlug: product.slug,
-      productName: product.name
-    });
-    setTimeout(() => setCopiedLink(false), 2500);
-  };
-
-  // Prepare the product link for WhatsApp without starting an order-confirmation flow.
-  const getProductWhatsAppMessage = () => {
-    const url = getProductShareUrl(product.slug, true);
-    return `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc :\n${url}`;
-  };
-
-  const openWhatsAppApp = () => {
-    clientMovementService.trackClick('Partager lien produit WhatsApp', 'WHATSAPP', {
-      productSlug: product.slug,
-      productName: product.name
-    });
-    window.open(`https://wa.me/?text=${encodeURIComponent(getProductWhatsAppMessage())}`, '_blank', 'noopener,noreferrer');
-  };
-
-  const openWhatsAppWeb = () => {
-    clientMovementService.trackClick('Partager lien produit WhatsApp Web', 'WHATSAPP', {
-      productSlug: product.slug,
-      productName: product.name
-    });
-    window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(getProductWhatsAppMessage())}`, '_blank', 'noopener,noreferrer');
-  };
 
   // Delivery info for selected city
   const cityInfo = MOROCCAN_CITIES.find(c => c.name === selectedCity) || MOROCCAN_CITIES[0];
@@ -524,77 +484,6 @@ export const ProductDetailView: React.FC = () => {
               </div>
               <span className="text-xs font-black text-slate-900">{product.rating} / 5</span>
               <span className="text-xs text-slate-500">({product.reviewsCount} avis certifiés au Maroc)</span>
-            </div>
-          </div>
-
-          {/* DIRECT SHAREABLE LINK BOX (User Request: "make for the product url so i send link to client to buy directly the product") */}
-          <div className="p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl shadow-xs space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
-                <Share2 className="w-4 h-4 text-blue-600" />
-                <span>Lien Direct d'Achat (Prêt à envoyer au client)</span>
-              </div>
-              <span className="text-[10px] text-blue-700 bg-blue-100/80 font-bold px-2 py-0.5 rounded-full">
-                Railway & Mobile Ready
-              </span>
-            </div>
-
-            {/* Visible URL Input for Client Sharing */}
-            <div className="flex items-center gap-1.5 bg-white border border-blue-200 rounded-xl p-1 shadow-xs">
-              <input
-                type="text"
-                readOnly
-                value={getProductShareUrl(product.slug, true)}
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 bg-transparent px-2.5 py-1.5 text-[11px] font-mono text-slate-800 focus:outline-none select-all truncate"
-                title="Cliquez pour sélectionner l'URL complète"
-              />
-              <button
-                type="button"
-                onClick={handleCopyDirectLink}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                {copiedLink ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5 text-white" />
-                    <span>Copié !</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copier</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <label htmlFor="product-whatsapp-message" className="sr-only">
-                Message WhatsApp prérempli
-              </label>
-              <textarea
-                id="product-whatsapp-message"
-                readOnly
-                value={getProductWhatsAppMessage()}
-                rows={3}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 focus:outline-none"
-              />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={openWhatsAppApp}
-                  className="rounded-full border border-slate-900 bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 cursor-pointer"
-                >
-                  Ouvrir l&apos;application
-                </button>
-                <button
-                  type="button"
-                  onClick={openWhatsAppWeb}
-                  className="rounded-full border border-slate-900 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50 cursor-pointer"
-                >
-                  Continuer vers WhatsApp Web
-                </button>
-              </div>
             </div>
           </div>
 
