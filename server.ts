@@ -593,10 +593,22 @@ async function startServer() {
     const phone = String(order.customerPhone).replace(/[^0-9]/g, '').replace(/^0/, '212');
     const customerName = order.shippingAddress?.fullName || order.customerName || 'Client';
     const items = Array.isArray(order.items)
-    ? order.items.map((item: any) => `- ${item.productName} x${item.quantity}: ${Number(item.subtotal).toFixed(2)} MAD`).join('\\n')
-    : '';
-  const address = order.shippingAddress || {};
-  const message = `Bonjour ${customerName}, merci pour votre commande *${order.orderNumber}* chez ShopMe.\\n\\nProduits :\\n${items}\\n\\nTotal : ${Number(order.totalAmount).toFixed(2)} MAD\\nNom : ${customerName}\\nTéléphone : ${order.customerPhone}\\nAdresse : ${address.street || ''}, ${address.city || ''}, ${address.country || 'Maroc'}\\n\\nRépondez *OUI* pour confirmer votre commande ou *NON* pour l'annuler.`;
+      ? order.items.map((item: any) => `- ${item.productName} x${item.quantity}: ${Number(item.subtotal).toFixed(2)} MAD`).join('\n')
+      : '';
+    const address = order.shippingAddress || {};
+    const message = [
+      `Bonjour ${customerName}, merci pour votre commande *${order.orderNumber}* chez ShopMe.`,
+      '',
+      'Détails de la commande :',
+      items || '- Aucun article',
+      '',
+      `Total : ${Number(order.totalAmount).toFixed(2)} MAD`,
+      `Nom : ${customerName}`,
+      `Téléphone : ${order.customerPhone}`,
+      `Adresse : ${address.street || ''}, ${address.city || ''}, ${address.country || 'Maroc'}`,
+      '',
+      'Répondez OUI pour confirmer votre commande ou NON pour l\'annuler.',
+    ].join('\n');
     const token = process.env.WHATSAPP_TOKEN;
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
@@ -610,7 +622,27 @@ async function startServer() {
       body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: message } }),
     });
     const result = await response.json();
-    return res.status(response.ok ? 200 : 502).json({ success: response.ok, result });
+    if (response.ok) {
+      const conversationsFile = path.join(dataDir, 'whatsapp-conversations.json');
+      const conversations = readJsonFile<any[]>(conversationsFile, []);
+      conversations.push({
+        phone,
+        orderNumber: order.orderNumber,
+        direction: 'OUTBOUND',
+        text: message,
+        timestamp: new Date().toISOString(),
+      });
+      writeJsonFile(conversationsFile, conversations.slice(-500));
+      order.whatsappConfirmation = {
+        ...(order.whatsappConfirmation || {}),
+        isConfirmed: false,
+        channel: 'WHATSAPP_BOT',
+        customerPhone: phone,
+        sentMessageText: message,
+        messageTimestamp: new Date().toISOString(),
+      };
+    }
+    return res.status(response.ok ? 200 : 502).json({ success: response.ok, result, message: response.ok ? undefined : 'WhatsApp n\'a pas accepté le message. Vérifiez le template WhatsApp approuvé.' });
   });
 
   app.get('/api/whatsapp/conversations', (req, res) => {

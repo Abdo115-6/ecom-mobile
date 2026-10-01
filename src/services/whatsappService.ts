@@ -30,7 +30,7 @@ export class WhatsAppService {
     // Support both {customerName} and {{customer_name}} so placeholders are
     // always rendered before the message is opened or sent.
     const formattedMessage = template.replace(
-      /\\{\\{?\\s*(customerName|customer_name|orderNumber|order_number|total|city)\\s*\\}\\}?/g,
+      /\{\{?\s*(customerName|customer_name|orderNumber|order_number|total|city)\s*\}\}?/g,
       (_, key: string) => values[key] || '',
     );
 
