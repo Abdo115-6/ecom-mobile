@@ -26,7 +26,13 @@ import {
   UserCheck,
   CheckCircle2,
   Gift,
-  Layers
+  Layers,
+  Share2,
+  Copy,
+  Plus,
+  Minus,
+  Percent,
+  CheckCircle
 } from 'lucide-react';
 
 export const ProductDetailView: React.FC = () => {
@@ -39,6 +45,8 @@ export const ProductDetailView: React.FC = () => {
     formatMoney, 
     setLastConfirmedOrder,
     navigateToProduct,
+    getProductShareUrl,
+    directBuyMode,
     showToast,
     locale,
     t 
@@ -51,12 +59,57 @@ export const ProductDetailView: React.FC = () => {
     product?.variants[0]?.id
   );
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [customQuantity, setCustomQuantity] = useState<number>(1);
 
-  // Selected Offer Pack (Pack 1, Pack 2 or Pack 3)
-  const [selectedPack, setSelectedPack] = useState<1 | 2 | 3>(2); // Default to Pack 2 (Best Seller)
+  // Dynamic Offer Packs (Custom from merchant or default 1, 2, 3)
+  const packsList = (product?.promoPacks && product.promoPacks.length > 0)
+    ? product.promoPacks
+    : [
+        {
+          id: 'pack-1',
+          quantity: 1,
+          title: 'Pack 1 Pièce',
+          price: product ? (product.variants[0]?.price || product.price) : 299,
+          compareAtPrice: product?.compareAtPrice,
+          badge: ''
+        },
+        {
+          id: 'pack-2',
+          quantity: 2,
+          title: 'Pack 2 Pièces',
+          price: product ? Math.round((product.variants[0]?.price || product.price) * 2 * 0.8) : 499,
+          compareAtPrice: product ? (product.variants[0]?.price || product.price) * 2 : 598,
+          badge: 'LE PLUS POPULAIRE 🔥 -20%'
+        },
+        {
+          id: 'pack-3',
+          quantity: 3,
+          title: 'Pack 3 Pièces',
+          price: product ? (product.variants[0]?.price || product.price) * 2 : 598,
+          compareAtPrice: product ? (product.variants[0]?.price || product.price) * 3 : 897,
+          badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT'
+        }
+      ];
+
+  const [selectedPackIndex, setSelectedPackIndex] = useState<number>(() => {
+    return packsList.length > 1 ? 1 : 0;
+  });
 
   // Selected variant calculation
   const activeVariant = product?.variants.find(v => v.id === selectedVariantId) || product?.variants[0];
+
+  // Auto-scroll to COD form if directBuyMode is active
+  useEffect(() => {
+    if (directBuyMode) {
+      setTimeout(() => {
+        const el = document.getElementById('direct-cod-form');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 350);
+    }
+  }, [directBuyMode]);
 
   // Direct COD Moroccan Form state
   const [customerName, setCustomerName] = useState('');
@@ -69,9 +122,9 @@ export const ProductDetailView: React.FC = () => {
   // Track product view in client movement service
   useEffect(() => {
     if (product) {
-      clientMovementService.trackProductView(product, selectedPack, activeVariant?.title);
+      clientMovementService.trackProductView(product, packsList[selectedPackIndex]?.quantity || 1, activeVariant?.title);
     }
-  }, [product?.id, selectedPack, activeVariant?.id]);
+  }, [product?.id, selectedPackIndex, activeVariant?.id]);
 
   // Handle Debounced Live Input Mining (Saisie en direct)
   const handleInputChange = (field: 'fullName' | 'phone' | 'city' | 'address', value: string) => {
@@ -85,7 +138,7 @@ export const ProductDetailView: React.FC = () => {
       phone: field === 'phone' ? value : customerPhone,
       city: field === 'city' ? value : selectedCity,
       address: field === 'address' ? value : shippingAddress,
-      pack: selectedPack,
+      pack: packsList[selectedPackIndex]?.quantity || 1,
       variantTitle: activeVariant?.title,
       product
     });
@@ -145,32 +198,40 @@ export const ProductDetailView: React.FC = () => {
   const activeStock = activeVariant ? activeVariant.stockQuantity : product.stockQuantity;
   const activeSku = activeVariant ? activeVariant.sku : product.sku;
 
-  // Pack calculations:
-  // Pack 1: 1 unit @ full price
-  // Pack 2: 2 units with 20% discount on total (Most popular in Morocco)
-  // Pack 3: 3 units (Buy 2 Get 1 Free, so 2 * unitPrice)
-  let packQuantity = 1;
-  let packTotalPrice = unitPrice;
-  let packDiscount = 0;
-  let packBadge = '';
+  // Dynamic Pack calculations from active pack
+  const activePack = packsList[selectedPackIndex] || packsList[0];
+  const packQuantity = activePack ? activePack.quantity : 1;
+  const packTotalPrice = activePack ? activePack.price : unitPrice;
+  const packDiscount = (activePack && activePack.compareAtPrice && activePack.compareAtPrice > activePack.price)
+    ? (activePack.compareAtPrice - activePack.price)
+    : 0;
+  const packBadge = activePack?.badge || '';
 
-  if (selectedPack === 1) {
-    packQuantity = 1;
-    packTotalPrice = unitPrice;
-    packDiscount = 0;
-  } else if (selectedPack === 2) {
-    packQuantity = 2;
-    const regular = unitPrice * 2;
-    packTotalPrice = Math.round(regular * 0.80);
-    packDiscount = regular - packTotalPrice;
-    packBadge = 'LE PLUS POPULAIRE 🔥 -20%';
-  } else if (selectedPack === 3) {
-    packQuantity = 3;
-    const regular = unitPrice * 3;
-    packTotalPrice = unitPrice * 2; // 1 free
-    packDiscount = regular - packTotalPrice;
-    packBadge = 'MEILLEURE OFFRE 🎁 1 GRATUIT';
-  }
+  // Copy Direct Purchase Link
+  const handleCopyDirectLink = () => {
+    if (!product) return;
+    const url = getProductShareUrl(product.slug, true);
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    showToast('✓ Lien direct d\'achat copié ! Vous pouvez l\'envoyer au client.');
+    clientMovementService.trackClick('Copier Lien Achat Direct', 'SHARE', {
+      productSlug: product.slug,
+      productName: product.name
+    });
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // Share to Client via WhatsApp
+  const handleShareWhatsApp = () => {
+    if (!product) return;
+    const url = getProductShareUrl(product.slug, true);
+    const msg = `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc 🇲🇦 :\n👉 ${url}`;
+    clientMovementService.trackClick('Partager WhatsApp Client', 'WHATSAPP', {
+      productSlug: product.slug,
+      productName: product.name
+    });
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
 
   // Delivery info for selected city
   const cityInfo = MOROCCAN_CITIES.find(c => c.name === selectedCity) || MOROCCAN_CITIES[0];
@@ -187,6 +248,12 @@ export const ProductDetailView: React.FC = () => {
   const handleDirectCodOrder = (e: React.FormEvent) => {
     e.preventDefault();
     setOrderError(null);
+
+    clientMovementService.trackClick('Bouton Confirmer Commande COD', 'CTA', {
+      productSlug: product.slug,
+      productName: product.name,
+      city: selectedCity
+    });
 
     if (!customerName.trim()) {
       setOrderError("Veuillez renseigner votre nom complet.");
@@ -208,7 +275,7 @@ export const ProductDetailView: React.FC = () => {
         productId: product.id,
         productName: product.name,
         sku: activeSku,
-        variantTitle: activeVariant ? `${activeVariant.title} (Pack ${selectedPack} pcs)` : `Pack ${selectedPack} pcs`,
+        variantTitle: activeVariant ? `${activeVariant.title} (Pack ${packQuantity} pcs)` : `Pack ${packQuantity} pcs`,
         unitPrice: packTotalPrice / packQuantity,
         quantity: packQuantity,
         subtotal: packTotalPrice,
@@ -247,7 +314,7 @@ export const ProductDetailView: React.FC = () => {
           items: orderItems,
           utmSource: new URLSearchParams(window.location.search).get('utm_source') || 'direct_ads',
           utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'morocco_conversion',
-          notes: `Commande Express 1-Clic COD Pack ${selectedPack}. Ville : ${selectedCity}`
+          notes: `Commande Express 1-Clic COD Pack ${packQuantity}. Ville : ${selectedCity}`
         });
 
         // Fire high-priority conversion tracking for Ads (GA4, Meta CAPI, TikTok, Snapchat)
@@ -264,7 +331,7 @@ export const ProductDetailView: React.FC = () => {
           }],
           metadata: {
             city: selectedCity,
-            pack: selectedPack,
+            pack: packQuantity,
             shippingFee: deliveryFee,
             paymentMethod: 'CASH_ON_DELIVERY'
           }
@@ -285,7 +352,7 @@ export const ProductDetailView: React.FC = () => {
   };
 
   // WhatsApp 1-Click Order Link (ShopMe)
-  const whatsAppOrderText = `Salam ShopMe Maroc, je souhaite commander : *${product.name}*\n- Option : ${activeVariant?.title || 'Standard'}\n- Offre choisie : Pack ${selectedPack} article(s)\n- Total à payer : *${packTotalPrice} DH* (Paiement à la livraison)\n- Ville de livraison : *${selectedCity}*\nMerci de confirmer ma commande !`;
+  const whatsAppOrderText = `Salam ShopMe Maroc, je souhaite commander : *${product.name}*\n- Option : ${activeVariant?.title || 'Standard'}\n- Offre choisie : Pack ${packQuantity} article(s)\n- Total à payer : *${packTotalPrice} DH* (Paiement à la livraison)\n- Ville de livraison : *${selectedCity}*\nMerci de confirmer ma commande !`;
   const whatsAppLink = `https://wa.me/212600000000?text=${encodeURIComponent(whatsAppOrderText)}`;
 
   return (
@@ -409,6 +476,19 @@ export const ProductDetailView: React.FC = () => {
             </div>
           </div>
 
+          {/* Category & Subcategory Breadcrumb */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+            <span className="hover:text-slate-900 cursor-pointer" onClick={() => setCurrentView('catalog')}>Boutique</span>
+            <span>›</span>
+            <span className="font-semibold text-slate-700">{product.categoryName || 'Catalogue'}</span>
+            {product.subcategoryName && (
+              <>
+                <span>›</span>
+                <span className="font-bold text-blue-600">{product.subcategoryName}</span>
+              </>
+            )}
+          </div>
+
           {/* Title & Brand */}
           <div>
             <div className="flex items-center gap-2">
@@ -416,6 +496,11 @@ export const ProductDetailView: React.FC = () => {
                 {product.brand}
               </span>
               <span className="text-xs text-slate-500 font-semibold">Réf: {activeSku}</span>
+              {product.subcategoryName && (
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-semibold rounded-md">
+                  {product.subcategoryName}
+                </span>
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-950 mt-1.5 leading-tight">
               {product.name}
@@ -433,6 +518,48 @@ export const ProductDetailView: React.FC = () => {
             </div>
           </div>
 
+          {/* DIRECT SHAREABLE LINK BOX (User Request: "make for the product url so i send link to client to buy directly the product") */}
+          <div className="p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
+                <Share2 className="w-4 h-4 text-blue-600" />
+                <span>Lien Direct d'Achat (Prêt à envoyer au client)</span>
+              </div>
+              <span className="text-[10px] text-blue-700 bg-blue-100/80 font-bold px-2 py-0.5 rounded-full">
+                1-Clic Commande
+              </span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyDirectLink}
+                className="flex-1 py-2 px-3 bg-white hover:bg-slate-50 border border-blue-300 text-blue-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                title="Copier le lien direct avec formulaire d'achat ouvert"
+              >
+                {copiedLink ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    <span className="text-emerald-700">Lien direct copié !</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-blue-600" />
+                    <span>Copier le Lien Direct d'Achat</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-98 shrink-0"
+                title="Envoyer le lien direct par message WhatsApp pré-rempli"
+              >
+                <MessageCircle className="w-4 h-4 fill-white text-emerald-600" />
+                <span>Envoyer sur WhatsApp</span>
+              </button>
+            </div>
+          </div>
+
           {/* Price Header */}
           <div className="p-4 bg-slate-900 text-white rounded-2xl flex items-baseline justify-between shadow-md">
             <div>
@@ -441,12 +568,17 @@ export const ProductDetailView: React.FC = () => {
                 <span className="text-3xl sm:text-4xl font-black text-white">
                   {formatMoney(unitPrice)}
                 </span>
-                {product.compareAtPrice && (
+                {product.compareAtPrice && product.compareAtPrice > unitPrice && (
                   <span className="text-base text-slate-400 line-through">
                     {formatMoney(product.compareAtPrice)}
                   </span>
                 )}
               </div>
+              {product.compareAtPrice && product.compareAtPrice > unitPrice && (
+                <div className="text-[11px] text-emerald-400 font-bold mt-0.5">
+                  Économie de {formatMoney(product.compareAtPrice - unitPrice)} ({Math.round(((product.compareAtPrice - unitPrice) / product.compareAtPrice) * 100)}% de réduction)
+                </div>
+              )}
             </div>
             <div className="text-right">
               <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-lg inline-block">
@@ -456,13 +588,67 @@ export const ProductDetailView: React.FC = () => {
             </div>
           </div>
 
-          {/* Variants Selector */}
+          {/* Colors & Variants Selector (User Request: "more control in colors and quantity") */}
           {product.variants.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-xs font-bold text-slate-900">
                 <span>Choisissez votre modèle / coloris :</span>
                 <span className="text-blue-600">{activeVariant?.title}</span>
               </div>
+
+              {/* Color Swatches if available */}
+              {product.variants.some(v => v.colorHex || v.colorOption) && (
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500 block">Coloris disponible :</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {product.variants.map(v => {
+                      const isSelected = selectedVariantId === v.id;
+                      const hexColor = v.colorHex || (
+                        v.colorOption?.toLowerCase().includes('noir') ? '#0f172a' :
+                        v.colorOption?.toLowerCase().includes('blanc') ? '#f8fafc' :
+                        v.colorOption?.toLowerCase().includes('bleu') ? '#1e3a8a' :
+                        v.colorOption?.toLowerCase().includes('vert') ? '#047857' :
+                        v.colorOption?.toLowerCase().includes('or') || v.colorOption?.toLowerCase().includes('gold') ? '#d97706' :
+                        v.colorOption?.toLowerCase().includes('argent') ? '#94a3b8' :
+                        v.colorOption?.toLowerCase().includes('camel') ? '#b45309' :
+                        v.colorOption?.toLowerCase().includes('rose') ? '#e11d48' : '#334155'
+                      );
+
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariantId(v.id);
+                            if (v.imageUrl) {
+                              const imgIdx = product.images.findIndex(img => img.imageUrl === v.imageUrl);
+                              if (imgIdx >= 0) setSelectedImageIndex(imgIdx);
+                            }
+                            clientMovementService.trackClick(`Sélection Couleur: ${v.colorOption || v.title}`, 'COLOR', {
+                              productSlug: product.slug,
+                              productName: product.name
+                            });
+                          }}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'border-blue-600 bg-blue-50/80 text-blue-950 ring-2 ring-blue-500/20' 
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                          }`}
+                        >
+                          <span 
+                            className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-xs" 
+                            style={{ backgroundColor: hexColor }} 
+                          />
+                          <span>{v.colorOption || v.title}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Variant Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {product.variants.map(v => (
                   <button
@@ -481,92 +667,105 @@ export const ProductDetailView: React.FC = () => {
                     }`}
                   >
                     <div className="truncate">{v.title}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">{v.stockQuantity > 0 ? 'En stock' : 'Rupture'}</div>
+                    <div className="text-[10px] text-slate-500 font-normal">
+                      {v.stockQuantity > 0 ? `${v.stockQuantity} en stock` : 'Rupture'}
+                    </div>
                   </button>
                 ))}
+              </div>
+
+              {/* Stock Status Indicator */}
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">Disponibilité :</span>
+                {activeStock <= 0 ? (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 font-bold text-[10px]">
+                    Rupture de stock
+                  </span>
+                ) : activeStock <= 5 ? (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                    Plus que {activeStock} exemplaires restants !
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    ✓ En stock ({activeStock} unités prêtes à expédier)
+                  </span>
+                )}
               </div>
             </div>
           )}
 
-          {/* OFFER PACKS SELECTOR (Essential for High Ads Conversion in Morocco) */}
+          {/* DYNAMIC OFFER PACKS SELECTOR (User Request: "more control in prices promo and packs and colors and quntity") */}
           <div className="space-y-2.5 pt-1">
             <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
               <span>Sélectionnez votre offre promotionnelle :</span>
               <span className="text-[11px] text-emerald-600 font-bold">Livraison 0 DH</span>
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              
-              {/* Pack 1 */}
-              <div
-                onClick={() => {
-                  setSelectedPack(1);
-                  handleInputChange('fullName', customerName);
-                }}
-                className={`p-3 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                  selectedPack === 1 
-                    ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20' 
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <div className="text-xs font-extrabold text-slate-900">Pack 1 Pièce</div>
-                <div className="text-base font-black text-slate-900 mt-1">{formatMoney(unitPrice)}</div>
-                <div className="text-[10px] text-slate-500">Prix standard</div>
-              </div>
+            <div className={`grid grid-cols-1 ${packsList.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2.5`}>
+              {packsList.map((pack, idx) => {
+                const isSelected = selectedPackIndex === idx;
+                const savings = pack.compareAtPrice && pack.compareAtPrice > pack.price
+                  ? pack.compareAtPrice - pack.price
+                  : 0;
 
-              {/* Pack 2 (Best Seller) */}
-              <div
-                onClick={() => {
-                  setSelectedPack(2);
-                  handleInputChange('fullName', customerName);
-                }}
-                className={`p-3 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                  selectedPack === 2 
-                    ? 'border-emerald-600 bg-emerald-50/80 shadow-md ring-2 ring-emerald-500/20' 
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase">
-                  Best Seller 🔥
-                </span>
-                <div className="text-xs font-extrabold text-emerald-900">Pack 2 Pièces</div>
-                <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(Math.round(unitPrice * 2 * 0.80))}</div>
-                <div className="text-[10px] text-emerald-600 font-bold">-20% d'économie</div>
-              </div>
-
-              {/* Pack 3 (Buy 2 Get 1 Free) */}
-              <div
-                onClick={() => {
-                  setSelectedPack(3);
-                  handleInputChange('fullName', customerName);
-                }}
-                className={`p-3 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                  selectedPack === 3 
-                    ? 'border-amber-600 bg-amber-50/80 shadow-md ring-2 ring-amber-500/20' 
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-amber-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase">
-                  1 Offert 🎁
-                </span>
-                <div className="text-xs font-extrabold text-amber-900">Pack 3 Pièces</div>
-                <div className="text-base font-black text-amber-800 mt-1">{formatMoney(unitPrice * 2)}</div>
-                <div className="text-[10px] text-amber-600 font-bold">Le 3ème Gratuit</div>
-              </div>
-
+                return (
+                  <div
+                    key={pack.id || `pack-${idx}`}
+                    onClick={() => {
+                      setSelectedPackIndex(idx);
+                      handleInputChange('fullName', customerName);
+                      clientMovementService.trackClick(`Choix ${pack.title}`, 'PACK', {
+                        productSlug: product.slug,
+                        productName: product.name
+                      });
+                    }}
+                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative ${
+                      isSelected 
+                        ? 'border-emerald-600 bg-emerald-50/80 shadow-md ring-2 ring-emerald-500/20' 
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    {pack.badge && (
+                      <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
+                        {pack.badge}
+                      </span>
+                    )}
+                    <div className="text-xs font-extrabold text-slate-900">{pack.title}</div>
+                    <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(pack.price)}</div>
+                    {pack.compareAtPrice && pack.compareAtPrice > pack.price ? (
+                      <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
+                        <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
+                        <span className="text-emerald-700 font-bold">Économie {formatMoney(savings)}</span>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-slate-500 mt-0.5">Offre standard</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* DIRECT EXPRESS CASH ON DELIVERY (COD) ORDER FORM - HIGH CONVERTING */}
-          <div className="bg-gradient-to-b from-white to-slate-50 border-2 border-emerald-500/50 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+          <div id="direct-cod-form" className={`bg-gradient-to-b from-white to-slate-50 border-2 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 transition-all ${
+            directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-emerald-500/50'
+          }`}>
             
             <div className="border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase tracking-wide">
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span>Commander en 1 Clic · Paiement à la Livraison</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase tracking-wide">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Commander en 1 Clic · Paiement à la Livraison</span>
+                </div>
+                {directBuyMode && (
+                  <span className="px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-md animate-pulse">
+                    ⚡ Lien d'achat direct actif
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison.
+                Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.
               </p>
             </div>
 

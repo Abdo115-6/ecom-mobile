@@ -53,12 +53,28 @@ export interface ClientSessionMovement {
   contactNotes?: string;
 }
 
+export interface ClickPixelEvent {
+  id: string;
+  elementName: string;
+  elementType: 'BUTTON' | 'PACK' | 'COLOR' | 'WHATSAPP' | 'CARD' | 'SHARE' | 'CTA';
+  pageUrl: string;
+  productSlug?: string;
+  productName?: string;
+  timestamp: string;
+  coordinates?: { x: number; y: number };
+  deviceType: 'mobile' | 'desktop';
+  city: string;
+}
+
 type MovementListener = (sessions: ClientSessionMovement[]) => void;
+type ClickListener = (clicks: ClickPixelEvent[]) => void;
 
 class ClientMovementService {
   private sessions: ClientSessionMovement[] = [];
+  private clicks: ClickPixelEvent[] = [];
   private currentSessionId: string;
   private listeners: Set<MovementListener> = new Set();
+  private clickListeners: Set<ClickListener> = new Set();
 
   constructor() {
     this.currentSessionId = this.initCurrentSession();
@@ -94,15 +110,24 @@ class ClientMovementService {
       if (data) {
         this.sessions = JSON.parse(data);
       }
+      const clickData = localStorage.getItem('shopme_pixel_clicks_v1');
+      if (clickData) {
+        this.clicks = JSON.parse(clickData);
+      } else {
+        this.seedRealisticClicks();
+      }
     } catch {
       this.sessions = [];
+      this.clicks = [];
     }
   }
 
   private saveToStorage() {
     try {
       localStorage.setItem('shopme_client_movements_v1', JSON.stringify(this.sessions.slice(0, 100)));
+      localStorage.setItem('shopme_pixel_clicks_v1', JSON.stringify(this.clicks.slice(0, 150)));
       this.notifyListeners();
+      this.notifyClickListeners();
     } catch (err) {
       console.warn('Storage save failed', err);
     }
@@ -112,14 +137,130 @@ class ClientMovementService {
     this.listeners.forEach(fn => fn([...this.sessions]));
   }
 
+  private notifyClickListeners() {
+    this.clickListeners.forEach(fn => fn([...this.clicks]));
+  }
+
   public subscribe(listener: MovementListener): () => void {
     this.listeners.add(listener);
     listener([...this.sessions]);
     return () => this.listeners.delete(listener);
   }
 
+  public subscribeClicks(listener: ClickListener): () => void {
+    this.clickListeners.add(listener);
+    listener([...this.clicks]);
+    return () => this.clickListeners.delete(listener);
+  }
+
   public getSessions(): ClientSessionMovement[] {
     return [...this.sessions];
+  }
+
+  public getClicks(): ClickPixelEvent[] {
+    return [...this.clicks];
+  }
+
+  /**
+   * Track high-precision click pixel event
+   */
+  public trackClick(
+    elementName: string,
+    elementType: ClickPixelEvent['elementType'],
+    meta?: {
+      productSlug?: string;
+      productName?: string;
+      city?: string;
+      coordinates?: { x: number; y: number };
+    }
+  ) {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    const session = this.getOrCreateCurrentSession(meta?.city || 'Casablanca');
+    const newClick: ClickPixelEvent = {
+      id: `clk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      elementName,
+      elementType,
+      pageUrl: typeof window !== 'undefined' ? window.location.href : '/',
+      productSlug: meta?.productSlug || session.productId,
+      productName: meta?.productName || session.productName,
+      timestamp: new Date().toISOString(),
+      coordinates: meta?.coordinates,
+      deviceType: isMobile ? 'mobile' : 'desktop',
+      city: meta?.city || session.ipCity || 'Casablanca'
+    };
+
+    this.clicks.unshift(newClick);
+
+    // Also register on current session timeline
+    session.timeline.unshift({
+      action: `Clic Pixel [${elementType}]`,
+      details: `${elementName}${meta?.productName ? ` · ${meta.productName}` : ''}`,
+      timestamp: new Date().toISOString()
+    });
+
+    this.saveToStorage();
+  }
+
+  private seedRealisticClicks() {
+    const now = Date.now();
+    const min = 60 * 1000;
+    this.clicks = [
+      {
+        id: 'clk-seed-1',
+        elementName: 'Bouton Commander en 1 Clic (COD)',
+        elementType: 'CTA',
+        pageUrl: '/?product=parfum-oud-royal-noir-intense-homme&buy=1',
+        productSlug: 'parfum-oud-royal-noir-intense-homme',
+        productName: 'Parfum Oud Royal Noir 100ml Homme',
+        timestamp: new Date(now - 3 * min).toISOString(),
+        deviceType: 'mobile',
+        city: 'Casablanca'
+      },
+      {
+        id: 'clk-seed-2',
+        elementName: 'Sélection Pack 2 (-20% Best Seller)',
+        elementType: 'PACK',
+        pageUrl: '/?product=parfum-oud-royal-noir-intense-homme',
+        productSlug: 'parfum-oud-royal-noir-intense-homme',
+        productName: 'Parfum Oud Royal Noir 100ml Homme',
+        timestamp: new Date(now - 7 * min).toISOString(),
+        deviceType: 'mobile',
+        city: 'Casablanca'
+      },
+      {
+        id: 'clk-seed-3',
+        elementName: 'Commande WhatsApp Directe',
+        elementType: 'WHATSAPP',
+        pageUrl: '/?product=brosse-coiffante-ionique-5-en-1-multifonction',
+        productSlug: 'brosse-coiffante-ionique-5-en-1-multifonction',
+        productName: 'Brosse Coiffante 5-en-1',
+        timestamp: new Date(now - 14 * min).toISOString(),
+        deviceType: 'mobile',
+        city: 'Rabat'
+      },
+      {
+        id: 'clk-seed-4',
+        elementName: 'Copier Lien Direct d\'Achat',
+        elementType: 'SHARE',
+        pageUrl: '/?product=tondeuse-sans-fil-pro-gold-barbe-cheveux',
+        productSlug: 'tondeuse-sans-fil-pro-gold-barbe-cheveux',
+        productName: 'Tondeuse Barbier Pro Gold',
+        timestamp: new Date(now - 22 * min).toISOString(),
+        deviceType: 'desktop',
+        city: 'Marrakech'
+      },
+      {
+        id: 'clk-seed-5',
+        elementName: 'Sélection Pack 3 (1 Gratuit)',
+        elementType: 'PACK',
+        pageUrl: '/?product=sac-cabas-cuir-italien-finition-doree',
+        productSlug: 'sac-cabas-cuir-italien-finition-doree',
+        productName: 'Sac Cabas Cuir Italien',
+        timestamp: new Date(now - 35 * min).toISOString(),
+        deviceType: 'mobile',
+        city: 'Tanger'
+      }
+    ];
   }
 
   /**

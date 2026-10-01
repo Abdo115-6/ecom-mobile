@@ -40,7 +40,10 @@ interface AppContextType {
   currentView: ActiveView;
   setCurrentView: (view: ActiveView) => void;
   selectedProductSlug: string | null;
-  navigateToProduct: (slug: string) => void;
+  navigateToProduct: (slug: string, directBuy?: boolean) => void;
+  getProductShareUrl: (slug: string, directBuy?: boolean) => string;
+  directBuyMode: boolean;
+  setDirectBuyMode: (active: boolean) => void;
   selectedCategorySlug: string | null;
   setSelectedCategorySlug: (slug: string | null) => void;
   searchTerm: string;
@@ -94,6 +97,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentView, setCurrentViewState] = useState<ActiveView>('home');
   const [selectedProductSlug, setSelectedProductSlug] = useState<string | null>(null);
+  const [directBuyMode, setDirectBuyMode] = useState<boolean>(false);
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [lastConfirmedOrder, setLastConfirmedOrder] = useState<Order | null>(null);
@@ -149,10 +153,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3200);
   };
 
+  // Generate direct shareable product link
+  const getProductShareUrl = (slug: string, directBuy = false): string => {
+    if (typeof window === 'undefined') return `/?product=${slug}`;
+    const base = window.location.origin;
+    return `${base}/?product=${encodeURIComponent(slug)}${directBuy ? '&buy=1' : ''}`;
+  };
+
   // Navigate to product and track view_item
-  const navigateToProduct = (slug: string) => {
+  const navigateToProduct = (slug: string, directBuy = false) => {
     setSelectedProductSlug(slug);
-    setCurrentView('product-detail');
+    setDirectBuyMode(directBuy);
+    setCurrentViewState('product-detail');
+
+    if (typeof window !== 'undefined') {
+      const url = `/?product=${encodeURIComponent(slug)}${directBuy ? '&buy=1' : ''}`;
+      window.history.pushState(null, '', url);
+    }
+
     const prod = dbService.getProductBySlug(slug);
     if (prod) {
       trackingService.track('view_item', {
@@ -422,11 +440,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isAdminMode = currentView.startsWith('admin-') && currentView !== 'admin-login' && isAdminAuthenticated;
 
-  // Listen to URL changes for /adminonly & #adminonly
+  // Listen to URL changes for /adminonly, #adminonly, ?product=slug, and ?buy=1
   useEffect(() => {
     const handleUrlRoute = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
+      const search = window.location.search;
+      const params = new URLSearchParams(search);
       const isAdminUrl = path.includes('adminonly') || hash.includes('adminonly') || hash.includes('admin');
 
       if (isAdminUrl) {
@@ -436,6 +456,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           setCurrentViewState('admin-login');
         }
+        return;
+      }
+
+      // Check for direct product links: ?product=slug or ?p=slug or /product/slug or #product=slug
+      let productSlug = params.get('product') || params.get('p');
+      if (!productSlug && path.startsWith('/product/')) {
+        productSlug = path.replace('/product/', '').trim();
+      } else if (!productSlug && hash.startsWith('#product=')) {
+        productSlug = hash.replace('#product=', '').trim();
+      }
+
+      if (productSlug) {
+        const isBuy = params.get('buy') === '1' || params.get('direct') === '1' || params.get('checkout') === '1';
+        setSelectedProductSlug(productSlug);
+        setDirectBuyMode(isBuy);
+        setCurrentViewState('product-detail');
       }
     };
 
@@ -459,6 +495,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView,
         selectedProductSlug,
         navigateToProduct,
+        getProductShareUrl,
+        directBuyMode,
+        setDirectBuyMode,
         selectedCategorySlug,
         setSelectedCategorySlug,
         searchTerm,

@@ -63,6 +63,16 @@ export interface Category {
   subcategories?: Category[];
 }
 
+export interface PromoPack {
+  id: string;
+  quantity: number;
+  title: string;
+  price: number;
+  compareAtPrice?: number;
+  badge?: string;
+  isDefault?: boolean;
+}
+
 export interface ProductVariant {
   id: string;
   productId: string;
@@ -71,6 +81,7 @@ export interface ProductVariant {
   title: string;
   sizeOption?: string;
   colorOption?: string;
+  colorHex?: string;
   price: number;
   compareAtPrice?: number;
   stockQuantity: number;
@@ -104,6 +115,8 @@ export interface Product {
   id: string;
   categoryId: string;
   categoryName?: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
   name: string;
   slug: string;
   sku: string;
@@ -120,6 +133,7 @@ export interface Product {
   seoDescription?: string;
   images: ProductImage[];
   variants: ProductVariant[];
+  promoPacks?: PromoPack[];
   technicalSpecs?: TechnicalSpecs;
   stockQuantity: number; // Aggregate across variants
   rating: number;

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
-import { Product, ProductVariant, ProductImage, ProductStatus, TechnicalSpecs } from '../../types/ecommerce';
+import { Product, ProductVariant, ProductImage, ProductStatus, TechnicalSpecs, PromoPack } from '../../types/ecommerce';
 import { 
   Plus, 
   Search, 
@@ -23,11 +23,19 @@ import {
   CheckCircle2,
   Tag,
   Clock,
-  Box
+  Box,
+  Share2,
+  Copy,
+  ExternalLink,
+  MessageCircle,
+  Percent,
+  Palette,
+  PackagePlus,
+  AlertCircle
 } from 'lucide-react';
 
 export const ProductsAdminView: React.FC = () => {
-  const { currentUser, formatMoney, showToast } = useApp();
+  const { currentUser, formatMoney, showToast, navigateToProduct, getProductShareUrl } = useApp();
   const [products, setProducts] = useState<Product[]>(dbService.products);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -46,6 +54,11 @@ export const ProductsAdminView: React.FC = () => {
   const [formSku, setFormSku] = useState('');
   const [formBrand, setFormBrand] = useState('ShopMe');
   const [formCategoryId, setFormCategoryId] = useState(dbService.categories[0]?.id || '');
+  const [formCategoryName, setFormCategoryName] = useState(dbService.categories[0]?.name || '');
+  const [formSubcategoryId, setFormSubcategoryId] = useState('');
+  const [formSubcategoryName, setFormSubcategoryName] = useState('');
+  const [isCustomSubcategory, setIsCustomSubcategory] = useState(false);
+  const [customSubcategoryInput, setCustomSubcategoryInput] = useState('');
   const [formPrice, setFormPrice] = useState<number>(299.00);
   const [formComparePrice, setFormComparePrice] = useState<number>(399.00);
   const [formCostPrice, setFormCostPrice] = useState<number>(120.00);
@@ -57,6 +70,7 @@ export const ProductsAdminView: React.FC = () => {
   const [formSeoDesc, setFormSeoDesc] = useState('');
   const [formImages, setFormImages] = useState<ProductImage[]>([]);
   const [formVariants, setFormVariants] = useState<ProductVariant[]>([]);
+  const [formPromoPacks, setFormPromoPacks] = useState<PromoPack[]>([]);
 
   // Technical Specs Fields (Informations techniques)
   const [formWeight, setFormWeight] = useState('350 g');
@@ -110,7 +124,14 @@ export const ProductsAdminView: React.FC = () => {
     setFormSlug('');
     setFormSku(`SKU-${Date.now().toString().slice(-6)}`);
     setFormBrand('ShopMe');
-    setFormCategoryId(categories[0]?.id || '');
+    const firstCat = categories[0];
+    setFormCategoryId(firstCat?.id || '');
+    setFormCategoryName(firstCat?.name || '');
+    const firstSub = firstCat?.subcategories?.[0];
+    setFormSubcategoryId(firstSub?.id || '');
+    setFormSubcategoryName(firstSub?.name || '');
+    setIsCustomSubcategory(false);
+    setCustomSubcategoryInput('');
     setFormPrice(299.00);
     setFormComparePrice(399.00);
     setFormCostPrice(120.00);
@@ -143,7 +164,8 @@ export const ProductsAdminView: React.FC = () => {
         sku: `SKU-${Date.now().toString().slice(-4)}-STD`,
         title: 'Modèle Standard',
         sizeOption: 'Standard',
-        colorOption: 'Noir',
+        colorOption: 'Noir Profond',
+        colorHex: '#0f172a',
         price: 299.00,
         compareAtPrice: 399.00,
         stockQuantity: 15
@@ -155,10 +177,16 @@ export const ProductsAdminView: React.FC = () => {
         title: 'Édition Prestige',
         sizeOption: 'Luxe',
         colorOption: 'Argent / Doré',
+        colorHex: '#d97706',
         price: 349.00,
         compareAtPrice: 449.00,
         stockQuantity: 10
       }
+    ]);
+    setFormPromoPacks([
+      { id: 'pack-1', quantity: 1, title: 'Pack 1 Pièce', price: 299, compareAtPrice: 399, badge: '' },
+      { id: 'pack-2', quantity: 2, title: 'Pack 2 Pièces', price: 499, compareAtPrice: 598, badge: 'LE PLUS POPULAIRE 🔥 -20%' },
+      { id: 'pack-3', quantity: 3, title: 'Pack 3 Pièces', price: 598, compareAtPrice: 897, badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT' },
     ]);
     setIsModalOpen(true);
   };
@@ -170,6 +198,11 @@ export const ProductsAdminView: React.FC = () => {
     setFormSku(p.sku);
     setFormBrand(p.brand);
     setFormCategoryId(p.categoryId);
+    setFormCategoryName(p.categoryName || '');
+    setFormSubcategoryId(p.subcategoryId || '');
+    setFormSubcategoryName(p.subcategoryName || '');
+    setIsCustomSubcategory(false);
+    setCustomSubcategoryInput('');
     setFormPrice(p.price);
     setFormComparePrice(p.compareAtPrice || 0);
     setFormCostPrice(p.costPrice || 0);
@@ -181,6 +214,11 @@ export const ProductsAdminView: React.FC = () => {
     setFormSeoDesc(p.seoDescription || '');
     setFormImages(p.images || []);
     setFormVariants(p.variants || []);
+    setFormPromoPacks(p.promoPacks && p.promoPacks.length > 0 ? p.promoPacks : [
+      { id: 'pack-1', quantity: 1, title: 'Pack 1 Pièce', price: p.price, compareAtPrice: p.compareAtPrice, badge: '' },
+      { id: 'pack-2', quantity: 2, title: 'Pack 2 Pièces', price: Math.round(p.price * 2 * 0.8), compareAtPrice: p.price * 2, badge: 'LE PLUS POPULAIRE 🔥 -20%' },
+      { id: 'pack-3', quantity: 3, title: 'Pack 3 Pièces', price: p.price * 2, compareAtPrice: p.price * 3, badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT' },
+    ]);
 
     // Load technical specs
     setFormWeight(p.technicalSpecs?.weight || '350 g');
@@ -193,12 +231,28 @@ export const ProductsAdminView: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleCopyProductLink = (p: Product) => {
+    const url = getProductShareUrl(p.slug, true);
+    navigator.clipboard.writeText(url);
+    showToast(`✓ Lien direct copié pour "${p.name}" (prêt à envoyer)`);
+  };
+
+  const handleShareProductWhatsApp = (p: Product) => {
+    const url = getProductShareUrl(p.slug, true);
+    const msg = `Salam ! Voici le lien direct pour commander *${p.name}* (${p.price} DH) avec paiement à la livraison partout au Maroc 🇲🇦 :\n👉 ${url}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formSku.trim()) return;
 
     const cat = categories.find(c => c.id === formCategoryId);
     const slug = formSlug || formName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const effectiveSubcategoryName = isCustomSubcategory 
+      ? customSubcategoryInput.trim() 
+      : (cat?.subcategories?.find(s => s.id === formSubcategoryId)?.name || formSubcategoryName || '');
 
     const technicalSpecs: TechnicalSpecs = {
       weight: formWeight.trim(),
@@ -209,6 +263,11 @@ export const ProductsAdminView: React.FC = () => {
       batteryLife: formBatteryLife.trim()
     };
 
+    // Calculate total stock from variants if variants exist
+    const totalVariantStock = formVariants.length > 0 
+      ? formVariants.reduce((sum, v) => sum + (Number(v.stockQuantity) || 0), 0)
+      : Number(formStock);
+
     const saved: Product = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
       name: formName,
@@ -217,10 +276,12 @@ export const ProductsAdminView: React.FC = () => {
       brand: formBrand,
       categoryId: formCategoryId,
       categoryName: cat?.name || 'Général',
+      subcategoryId: isCustomSubcategory ? `subcat-${Date.now()}` : (formSubcategoryId || undefined),
+      subcategoryName: effectiveSubcategoryName || undefined,
       price: Number(formPrice),
       compareAtPrice: formComparePrice > 0 ? Number(formComparePrice) : undefined,
       costPrice: formCostPrice > 0 ? Number(formCostPrice) : undefined,
-      stockQuantity: Number(formStock),
+      stockQuantity: totalVariantStock,
       shortDescription: formShortDesc,
       description: formDesc,
       status: formStatus,
@@ -239,6 +300,7 @@ export const ProductsAdminView: React.FC = () => {
         }
       ],
       variants: formVariants,
+      promoPacks: formPromoPacks,
       technicalSpecs,
       rating: editingProduct?.rating || 5.0,
       reviewsCount: editingProduct?.reviewsCount || 0,
@@ -499,7 +561,12 @@ export const ProductsAdminView: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-3 px-4 font-mono text-[11px] text-slate-300">{p.sku}</td>
-                  <td className="py-3 px-4 text-slate-300">{p.categoryName}</td>
+                  <td className="py-3 px-4 text-slate-300">
+                    <div className="font-semibold text-white">{p.categoryName}</div>
+                    {p.subcategoryName && (
+                      <div className="text-[10px] text-blue-400 font-medium">↳ {p.subcategoryName}</div>
+                    )}
+                  </td>
                   <td className="py-3 px-4 font-black text-white">{formatMoney(p.price)}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
@@ -536,14 +603,49 @@ export const ProductsAdminView: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {/* Direct Buy Link for Client */}
                       <button
+                        type="button"
+                        onClick={() => handleCopyProductLink(p)}
+                        className="p-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Copier le lien direct d'achat pour envoyer au client"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Share WhatsApp */}
+                      <button
+                        type="button"
+                        onClick={() => handleShareProductWhatsApp(p)}
+                        className="p-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Envoyer le lien par WhatsApp au client"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* View in Storefront */}
+                      <button
+                        type="button"
+                        onClick={() => navigateToProduct(p.slug)}
+                        className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Voir la page produit sur la boutique"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Edit */}
+                      <button
+                        type="button"
                         onClick={() => openEditModal(p)}
                         className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors cursor-pointer"
-                        title="Modifier le produit, les variantes et la galerie"
+                        title="Modifier le produit, les prix, variantes et la galerie"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
+
+                      {/* Delete */}
                       <button
+                        type="button"
                         onClick={() => handleDeleteProduct(p)}
                         className="p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 rounded-lg transition-colors cursor-pointer"
                         title="Supprimer le produit"
@@ -622,13 +724,74 @@ export const ProductsAdminView: React.FC = () => {
                     <label className="text-xs font-semibold text-slate-300 block mb-1">Catégorie *</label>
                     <select
                       value={formCategoryId}
-                      onChange={(e) => setFormCategoryId(e.target.value)}
+                      onChange={(e) => {
+                        const newCatId = e.target.value;
+                        setFormCategoryId(newCatId);
+                        const selectedCat = categories.find(c => c.id === newCatId);
+                        setFormCategoryName(selectedCat?.name || '');
+                        if (selectedCat?.subcategories && selectedCat.subcategories.length > 0) {
+                          setFormSubcategoryId(selectedCat.subcategories[0].id);
+                          setFormSubcategoryName(selectedCat.subcategories[0].name);
+                          setIsCustomSubcategory(false);
+                        } else {
+                          setFormSubcategoryId('');
+                          setFormSubcategoryName('');
+                        }
+                      }}
                       className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none cursor-pointer"
                     >
                       {categories.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Sous-Catégorie Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-300">Sous-Catégorie</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomSubcategory(!isCustomSubcategory)}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer"
+                      >
+                        {isCustomSubcategory ? "← Choisir liste" : "+ Saisie libre"}
+                      </button>
+                    </div>
+
+                    {isCustomSubcategory ? (
+                      <input
+                        type="text"
+                        value={customSubcategoryInput}
+                        onChange={(e) => {
+                          setCustomSubcategoryInput(e.target.value);
+                          setFormSubcategoryName(e.target.value);
+                        }}
+                        placeholder="Ex: Smartwatches, Écouteurs sans fil, Parfums Oud..."
+                        className="w-full p-2.5 bg-slate-800 border border-blue-500/50 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <select
+                        value={formSubcategoryId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'CUSTOM') {
+                            setIsCustomSubcategory(true);
+                          } else {
+                            setFormSubcategoryId(val);
+                            const found = categories.find(c => c.id === formCategoryId)?.subcategories?.find(s => s.id === val);
+                            setFormSubcategoryName(found?.name || '');
+                          }
+                        }}
+                        className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="">(Aucune sous-catégorie)</option>
+                        {(categories.find(c => c.id === formCategoryId)?.subcategories || []).map(sub => (
+                          <option key={sub.id} value={sub.id}>{sub.name}</option>
+                        ))}
+                        <option value="CUSTOM">+ Autre sous-catégorie personnalisée...</option>
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -668,10 +831,25 @@ export const ProductsAdminView: React.FC = () => {
 
               {/* SECTION 2: Prix & Inventaire */}
               <div className="space-y-3 border-t border-slate-800 pt-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  <Tag className="w-4 h-4 text-emerald-400" />
-                  <span>2. Prix & Inventaire</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    <Tag className="w-4 h-4 text-emerald-400" />
+                    <span>2. Contrôle des Prix & Rentabilité</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    {formComparePrice > formPrice && (
+                      <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 font-bold rounded-md">
+                        Remise : -{Math.round(((formComparePrice - formPrice) / formComparePrice) * 100)}%
+                      </span>
+                    )}
+                    {formCostPrice > 0 && formPrice > formCostPrice && (
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 font-bold rounded-md">
+                        Marge nette : +{formPrice - formCostPrice} DH ({Math.round(((formPrice - formCostPrice) / formPrice) * 100)}%)
+                      </span>
+                    )}
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-slate-300 block mb-1">Prix de vente (DH) *</label>
@@ -681,12 +859,15 @@ export const ProductsAdminView: React.FC = () => {
                       min={0}
                       step="any"
                       value={formPrice}
-                      onChange={(e) => setFormPrice(Number(e.target.value))}
+                      onChange={(e) => {
+                        const newPrice = Number(e.target.value);
+                        setFormPrice(newPrice);
+                      }}
                       className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-black"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">Prix barré (DH)</label>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">Prix barré / Promo (DH)</label>
                     <input
                       type="number"
                       min={0}
@@ -718,6 +899,158 @@ export const ProductsAdminView: React.FC = () => {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* SECTION 3: Packs Promotionnels & Offres Quantité (Packs COD) */}
+              <div className="space-y-3 border-t border-slate-800 pt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      <PackagePlus className="w-4 h-4 text-amber-400" />
+                      <span>3. Packs Promotionnels & Offres Quantité ({formPromoPacks.length} packs configurés)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Configurez les offres 1 pièce, Pack Duo (-20%) et Pack Trio (1 offert) pour inciter les clients à commander plus.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormPromoPacks([
+                          { id: 'pack-1', quantity: 1, title: 'Pack 1 Pièce (Standard)', price: formPrice, compareAtPrice: formComparePrice || Math.round(formPrice * 1.3), badge: '' },
+                          { id: 'pack-2', quantity: 2, title: 'Pack Duo 2 Pièces (Recommandé)', price: Math.round(formPrice * 2 * 0.8), compareAtPrice: formPrice * 2, badge: 'LE PLUS POPULAIRE 🔥 -20%' },
+                          { id: 'pack-3', quantity: 3, title: 'Pack Trio 3 Pièces (Offre Famille)', price: formPrice * 2, compareAtPrice: formPrice * 3, badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT' },
+                        ]);
+                        showToast('✓ Packs automatiques recommandés générés');
+                      }}
+                      className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl text-[11px] font-bold border border-amber-500/30 cursor-pointer"
+                    >
+                      ⚡ Auto-Générer Packs
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextQty = formPromoPacks.length + 1;
+                        setFormPromoPacks([
+                          ...formPromoPacks,
+                          {
+                            id: `pack-${Date.now()}`,
+                            quantity: nextQty,
+                            title: `Pack Spécial ${nextQty} Pièces`,
+                            price: Math.round(formPrice * nextQty * 0.85),
+                            compareAtPrice: formPrice * nextQty,
+                            badge: `-15% Réduction`
+                          }
+                        ]);
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-[11px] font-semibold flex items-center gap-1 border border-slate-700 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Ajouter un Pack</span>
+                    </button>
+                  </div>
+                </div>
+
+                {formPromoPacks.length === 0 ? (
+                  <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 text-center text-xs text-slate-400">
+                    Aucun pack promotionnel défini. Cliquez sur "Auto-Générer Packs" pour créer les offres 1, 2 et 3 pièces.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {formPromoPacks.map((pack, idx) => (
+                      <div key={pack.id} className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/80 space-y-2 text-xs">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <div className="w-20 shrink-0">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Quantité</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={pack.quantity}
+                              onChange={(e) => {
+                                const updated = [...formPromoPacks];
+                                updated[idx].quantity = Number(e.target.value);
+                                setFormPromoPacks(updated);
+                              }}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center"
+                            />
+                          </div>
+
+                          <div className="flex-1">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Titre du Pack</label>
+                            <input
+                              type="text"
+                              value={pack.title}
+                              onChange={(e) => {
+                                const updated = [...formPromoPacks];
+                                updated[idx].title = e.target.value;
+                                setFormPromoPacks(updated);
+                              }}
+                              placeholder="Ex: Pack Duo 2 Pièces (Recommandé)"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium"
+                            />
+                          </div>
+
+                          <div className="w-28 shrink-0">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Prix Pack (DH)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={pack.price}
+                              onChange={(e) => {
+                                const updated = [...formPromoPacks];
+                                updated[idx].price = Number(e.target.value);
+                                setFormPromoPacks(updated);
+                              }}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-black"
+                            />
+                          </div>
+
+                          <div className="w-28 shrink-0">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Prix Barré (DH)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={pack.compareAtPrice || 0}
+                              onChange={(e) => {
+                                const updated = [...formPromoPacks];
+                                updated[idx].compareAtPrice = Number(e.target.value);
+                                setFormPromoPacks(updated);
+                              }}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-400"
+                            />
+                          </div>
+
+                          <div className="flex-1">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Badge Promo (Affiché sur bouton)</label>
+                            <input
+                              type="text"
+                              value={pack.badge || ''}
+                              onChange={(e) => {
+                                const updated = [...formPromoPacks];
+                                updated[idx].badge = e.target.value;
+                                setFormPromoPacks(updated);
+                              }}
+                              placeholder="Ex: LE PLUS POPULAIRE 🔥 -20%"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px]"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setFormPromoPacks(formPromoPacks.filter((_, i) => i !== idx))}
+                            className="self-end sm:self-center p-2 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                            title="Supprimer ce pack"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* SECTION 3: Informations Techniques (User Request: "Informations techniques") */}
@@ -1002,8 +1335,16 @@ export const ProductsAdminView: React.FC = () => {
                           />
                         </div>
 
-                        <div className="w-full sm:w-28">
-                          <label className="text-[10px] text-slate-400 block mb-0.5">Couleur</label>
+                        <div className="w-full sm:w-36">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-[10px] text-slate-400">Couleur</label>
+                            {v.colorHex && (
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full inline-block border border-slate-600 shadow-xs" 
+                                style={{ backgroundColor: v.colorHex }}
+                              />
+                            )}
+                          </div>
                           <input
                             type="text"
                             value={v.colorOption || ''}
@@ -1012,9 +1353,34 @@ export const ProductsAdminView: React.FC = () => {
                               updated[i].colorOption = e.target.value;
                               setFormVariants(updated);
                             }}
-                            placeholder="Ex: Noir, Argent..."
+                            placeholder="Ex: Noir, Or, Argent..."
                             className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
                           />
+                          {/* Quick Swatch Palette */}
+                          <div className="flex items-center gap-1 mt-1">
+                            {[
+                              { name: 'Noir', hex: '#0f172a' },
+                              { name: 'Or', hex: '#d97706' },
+                              { name: 'Argent', hex: '#94a3b8' },
+                              { name: 'Bleu', hex: '#1e3a8a' },
+                              { name: 'Vert', hex: '#059669' },
+                              { name: 'Blanc', hex: '#f8fafc' },
+                            ].map((sw) => (
+                              <button
+                                key={sw.name}
+                                type="button"
+                                title={`Appliquer couleur ${sw.name}`}
+                                onClick={() => {
+                                  const updated = [...formVariants];
+                                  updated[i].colorOption = sw.name;
+                                  updated[i].colorHex = sw.hex;
+                                  setFormVariants(updated);
+                                }}
+                                className="w-3.5 h-3.5 rounded-full border border-slate-700 hover:scale-125 transition-transform cursor-pointer shrink-0"
+                                style={{ backgroundColor: sw.hex }}
+                              />
+                            ))}
+                          </div>
                         </div>
 
                         <div className="w-full sm:w-24">
@@ -1033,7 +1399,12 @@ export const ProductsAdminView: React.FC = () => {
                         </div>
 
                         <div className="w-full sm:w-20">
-                          <label className="text-[10px] text-slate-400 block mb-0.5">Stock</label>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-[10px] text-slate-400">Stock</label>
+                            {v.stockQuantity < 5 && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" title="Stock faible" />
+                            )}
+                          </div>
                           <input
                             type="number"
                             value={v.stockQuantity}
@@ -1043,7 +1414,9 @@ export const ProductsAdminView: React.FC = () => {
                               setFormVariants(updated);
                             }}
                             placeholder="Stock"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold"
+                            className={`w-full bg-slate-900 border rounded-lg p-2 font-bold ${
+                              v.stockQuantity < 5 ? 'border-amber-500/50 text-amber-300' : 'border-slate-700 text-white'
+                            }`}
                           />
                         </div>
 
