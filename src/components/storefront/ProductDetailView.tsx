@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { dataMiningService } from '../../services/dataMiningService';
-import { whatsappService } from '../../services/whatsappService';
 import { trackingService } from '../../services/trackingService';
 import { MOROCCAN_CITIES, RECENT_MOROCCAN_BUYERS } from '../../services/moroccoData';
 import { clientMovementService } from '../../services/clientMovementService';
@@ -221,16 +220,26 @@ export const ProductDetailView: React.FC = () => {
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  // Share to Client via WhatsApp
-  const handleShareWhatsApp = () => {
-    if (!product) return;
+  // Prepare the product link for WhatsApp without starting an order-confirmation flow.
+  const getProductWhatsAppMessage = () => {
     const url = getProductShareUrl(product.slug, true);
-    const msg = `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc 🇲🇦 :\n👉 ${url}`;
-    clientMovementService.trackClick('Partager WhatsApp Client', 'WHATSAPP', {
+    return `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc :\n${url}`;
+  };
+
+  const openWhatsAppApp = () => {
+    clientMovementService.trackClick('Partager lien produit WhatsApp', 'WHATSAPP', {
       productSlug: product.slug,
       productName: product.name
     });
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(getProductWhatsAppMessage())}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const openWhatsAppWeb = () => {
+    clientMovementService.trackClick('Partager lien produit WhatsApp Web', 'WHATSAPP', {
+      productSlug: product.slug,
+      productName: product.name
+    });
+    window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(getProductWhatsAppMessage())}`, '_blank', 'noopener,noreferrer');
   };
 
   // Delivery info for selected city
@@ -559,19 +568,33 @@ export const ProductDetailView: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[10px] text-slate-500">
-                Ouvre directement la commande express COD pour le client
-              </span>
-              <button
-                type="button"
-                onClick={handleShareWhatsApp}
-                className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 shrink-0"
-                title="Envoyer le lien direct par message WhatsApp pré-rempli"
-              >
-                <MessageCircle className="w-3.5 h-3.5 fill-white text-emerald-600" />
-                <span>Partager WhatsApp</span>
-              </button>
+            <div className="space-y-2 pt-1">
+              <label htmlFor="product-whatsapp-message" className="sr-only">
+                Message WhatsApp prérempli
+              </label>
+              <textarea
+                id="product-whatsapp-message"
+                readOnly
+                value={getProductWhatsAppMessage()}
+                rows={3}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 focus:outline-none"
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={openWhatsAppApp}
+                  className="rounded-full border border-slate-900 bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 cursor-pointer"
+                >
+                  Ouvrir l&apos;application
+                </button>
+                <button
+                  type="button"
+                  onClick={openWhatsAppWeb}
+                  className="rounded-full border border-slate-900 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50 cursor-pointer"
+                >
+                  Continuer vers WhatsApp Web
+                </button>
+              </div>
             </div>
           </div>
 

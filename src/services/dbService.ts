@@ -1068,7 +1068,7 @@ class DatabaseStore {
       confirmedAt: now.toISOString(),
       customerPhone: order.customerPhone,
       sentMessageText: `Salam ${order.shippingAddress.fullName} ! Merci pour votre commande #${order.orderNumber} sur ShopMe Maroc 🇲🇦.\n📦 Articles : ${itemsSummary}\n💰 Total : ${order.totalAmount.toFixed(2)} MAD (Paiement à la livraison)\n📍 Adresse : ${order.shippingAddress.street}, ${order.shippingAddress.city}\n\nVeuillez confirmer l'expédition en répondant à ce message.`,
-      replyMessageText: reply,
+      replyMessageText: customReply.trim(),
       messageTimestamp: timeStr,
       replyTimestamp: timeStr,
       channel: 'WHATSAPP_BOT'
