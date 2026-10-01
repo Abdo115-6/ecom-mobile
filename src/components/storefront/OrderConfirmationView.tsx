@@ -1,8 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
-import { CheckCircle2, MessageCircle, Package, Truck, ArrowRight, Home } from 'lucide-react';
-import { whatsappService } from '../../services/whatsappService';
+import { CheckCircle2, Package, Truck, Home } from 'lucide-react';
 
 export const OrderConfirmationView: React.FC = () => {
   const { lastConfirmedOrder, setLastConfirmedOrder, setCurrentView, formatMoney, t } = useApp();
@@ -20,8 +19,6 @@ export const OrderConfirmationView: React.FC = () => {
       </div>
     );
   }
-
-  const whatsappLink = whatsappService.generateOrderConfirmationLink(lastConfirmedOrder);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-6 pb-24 animate-in fade-in zoom-in-95 duration-200">
@@ -47,80 +44,6 @@ export const OrderConfirmationView: React.FC = () => {
           <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg text-xs">
             {lastConfirmedOrder.status}
           </span>
-        </div>
-
-        {/* WhatsApp Notification & Confirmation CTA */}
-        <div className={`p-4 rounded-2xl border transition-all ${
-          lastConfirmedOrder.whatsappConfirmation?.isConfirmed || lastConfirmedOrder.status === 'CONFIRMED'
-            ? 'bg-emerald-50 border-emerald-300'
-            : 'bg-emerald-50/60 border-emerald-200'
-        }`}>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-3 text-center sm:text-left">
-              <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <MessageCircle className="w-6 h-6 fill-white text-emerald-600" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5 justify-center sm:justify-start">
-                  <span>Confirmation de commande par WhatsApp</span>
-                  {(lastConfirmedOrder.whatsappConfirmation?.isConfirmed || lastConfirmedOrder.status === 'CONFIRMED') && (
-                    <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">
-                      ✓ Validée
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-600 mt-0.5">
-                  {lastConfirmedOrder.whatsappConfirmation?.isConfirmed || lastConfirmedOrder.status === 'CONFIRMED'
-                    ? "Votre commande est officiellement confirmée ! Le livreur vous contactera par téléphone pour convenir de l'heure de livraison."
-                    : "Recevez les informations de suivi et confirmez l'envoi express de votre colis par message."}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto shrink-0">
-              <a
-                href={whatsappLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  dbService.confirmOrderViaWhatsApp(lastConfirmedOrder.id);
-                  setLastConfirmedOrder({
-                    ...lastConfirmedOrder,
-                    status: 'CONFIRMED',
-                    whatsappConfirmation: {
-                      isConfirmed: true,
-                      confirmedAt: new Date().toISOString(),
-                      customerPhone: lastConfirmedOrder.customerPhone,
-                      sentMessageText: "Confirmation commande ShopMe",
-                      replyMessageText: "Salam ShopMe, je confirme ma commande ! Merci 🙏",
-                      messageTimestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                      replyTimestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                      channel: 'WHATSAPP_BOT'
-                    }
-                  });
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <span>Envoyer Accord WhatsApp</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
-
-              {(!lastConfirmedOrder.whatsappConfirmation?.isConfirmed && lastConfirmedOrder.status !== 'CONFIRMED') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const updated = dbService.confirmOrderViaWhatsApp(lastConfirmedOrder.id);
-                    if (updated) {
-                      setLastConfirmedOrder({ ...updated });
-                    }
-                  }}
-                  className="w-full sm:w-auto px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  ✓ Simuler Accord 1-Clic
-                </button>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Items Summary */}
