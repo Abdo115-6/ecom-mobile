@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
-import { MessageCircle, Check, Send, Phone, FileText, Bell } from 'lucide-react';
+import { MessageCircle, Check, Send, Phone, FileText, Bell, RefreshCw } from 'lucide-react';
 
 export const WhatsAppAdminView: React.FC = () => {
   const { currentUser, showToast } = useApp();
@@ -13,6 +13,19 @@ export const WhatsAppAdminView: React.FC = () => {
     dbService.settings.whatsappShippingTemplate
   );
   const [testRecipient, setTestRecipient] = useState('+212600112233');
+  const [conversations, setConversations] = useState<Array<{ phone: string; direction: string; text: string; timestamp: string }>>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+
+  const loadConversations = async () => {
+    setIsLoadingConversations(true);
+    try {
+      const response = await fetch('/api/whatsapp/conversations');
+      const data = await response.json();
+      if (data.success) setConversations(data.conversations || []);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +61,27 @@ export const WhatsAppAdminView: React.FC = () => {
         <p className="text-xs text-slate-400 mt-0.5">
           Configuration des notifications de commande, expédition et modèles de conversation
         </p>
+      </div>
+
+      <div className="bg-slate-800/80 border border-slate-700/80 rounded-3xl p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-white">
+            <MessageCircle className="w-4 h-4 text-emerald-400" />
+            <span>Conversation WhatsApp réelle</span>
+          </div>
+          <button type="button" onClick={loadConversations} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-emerald-400 text-xs font-bold">
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingConversations ? 'animate-spin' : ''}`} /> Actualiser
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400">Les réponses du client et celles du bot apparaissent ici après réception du webhook WhatsApp.</p>
+        <div className="max-h-64 overflow-y-auto space-y-2">
+          {conversations.length === 0 ? <p className="text-xs text-slate-500">Aucun message reçu pour le moment.</p> : conversations.map((conversation, index) => (
+            <div key={`${conversation.timestamp}-${index}`} className={`rounded-xl p-3 text-xs ${conversation.direction === 'INBOUND' ? 'bg-slate-900 text-white' : 'bg-emerald-500/10 text-emerald-200'}`}>
+              <div className="flex justify-between gap-3 mb-1 text-[10px] text-slate-400"><span>{conversation.direction === 'INBOUND' ? 'Client' : 'Bot'} · {conversation.phone}</span><span>{new Date(conversation.timestamp).toLocaleString('fr-FR')}</span></div>
+              <p>{conversation.text}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
