@@ -84,6 +84,27 @@ function writeJsonFile<T>(filePath: string, data: T) {
   }
 }
 
+async function ensureInitialData() {
+  if (!fs.existsSync(PRODUCTS_FILE) || !fs.existsSync(CATEGORIES_FILE) || !fs.existsSync(SETTINGS_FILE)) {
+    try {
+      const { products, categories, settings } = await import('./scripts/catalogue.mjs');
+      if (!fs.existsSync(CATEGORIES_FILE)) {
+        writeJsonFile(CATEGORIES_FILE, categories);
+      }
+      if (!fs.existsSync(PRODUCTS_FILE)) {
+        const cleanedProducts = (products as any[]).map(({ daysAgo, ...p }: any) => p);
+        writeJsonFile(PRODUCTS_FILE, cleanedProducts);
+      }
+      if (!fs.existsSync(SETTINGS_FILE)) {
+        writeJsonFile(SETTINGS_FILE, settings);
+      }
+      console.log('✓ Initialized local catalogue JSON fallback files (products, categories, settings)');
+    } catch (err) {
+      console.warn('Notice: could not pre-seed catalogue JSON files:', err);
+    }
+  }
+}
+
 // Initialize PostgreSQL Tables if database is reachable
 async function initPostgresTables() {
   try {
@@ -192,6 +213,7 @@ async function initPostgresTables() {
 
 async function startServer() {
   await initPostgresTables();
+  await ensureInitialData();
 
   const app = express();
 
@@ -664,10 +686,10 @@ async function startServer() {
   wa.startRetryLoop();
 
   // Bot mode: link your own WhatsApp by QR code (no Meta account)
-  if ((process.env.WHATSAPP_PROVIDER || '').toLowerCase() === 'baileys') {
+  if (wa.getProvider() === 'baileys') {
     bot.startBaileys((from, text) => {
       wa.handleIncomingMessage(from, text)
-        .then(r => console.log(`[whatsapp] reply from ${from}: ${r}`))
+        .then(r => console.log(`[whatsapp] reply from ${from}: ${JSON.stringify(r)}`))
         .catch(e => console.error('[whatsapp] incoming error:', e));
     }).catch(e => console.error('[whatsapp-bot] start error:', e));
   }
@@ -743,8 +765,52 @@ async function startServer() {
     return res.json({ success: notification.status === 'SENT', notification });
   });
 
+  // Admin: send direct message to customer from Admin Panel
+  app.post('/api/whatsapp/send-message', async (req, res) => {
+    try {
+      const { orderId, text } = req.body;
+      if (!orderId || !text) {
+        return res.status(400).json({ success: false, message: 'orderId et text requis' });
+      }
+      const updatedOrder = await wa.sendAdminMessage(orderId, text);
+      return res.json({ success: true, order: updatedOrder });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Simulation endpoint for Admin testing WhatsApp Bot conversation & AI
+  app.post('/api/whatsapp/simulate-incoming', async (req, res) => {
+    try {
+      const { orderId, phone, text } = req.body;
+      if (!text) {
+        return res.status(400).json({ success: false, message: 'text requis' });
+      }
+      let targetPhone = phone;
+      if (!targetPhone && orderId) {
+        const order = readJsonFile<any[]>(ORDERS_FILE, []).find(o => o.id === orderId);
+        if (order) targetPhone = order.customerPhone;
+      }
+      if (!targetPhone) {
+        return res.status(400).json({ success: false, message: 'phone ou orderId requis' });
+      }
+      const result = await wa.handleIncomingMessage(targetPhone, text);
+      const allOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+      const order = allOrders.find(o => orderId ? o.id === orderId : wa.samePhone(o.customerPhone, targetPhone));
+      return res.json({ success: true, result, order });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.get('/api/whatsapp/status', (_req, res) => {
-    res.json({ success: true, configured: wa.isConfigured(), provider: (process.env.WHATSAPP_PROVIDER || 'cloud'), bot: bot.getStatus() });
+    res.json({
+      success: true,
+      configured: wa.isConfigured(),
+      provider: wa.getProvider(),
+      bot: bot.getStatus(),
+      qr: bot.getQr(),
+    });
   });
 
   // 5b. Categories API (CRUD)

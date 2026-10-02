@@ -208,34 +208,31 @@ export const OrdersAdminView: React.FC = () => {
                           <MessageCircle className="w-3.5 h-3.5 fill-emerald-400 text-slate-900" />
                           <span>✓ Confirmée WA</span>
                         </button>
+                      ) : order.whatsappConfirmation?.needsHumanIntervention ? (
+                        <button
+                          onClick={() => setWhatsappModalOrder(order)}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold text-[10px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 animate-pulse"
+                          title="Le client attend une réponse humaine ! Cliquez pour répondre"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                          <span>⚠️ Réponse Requise</span>
+                        </button>
                       ) : (
                         <div className="flex flex-col gap-1 items-start">
-                        <div className="text-[10px] font-semibold text-slate-400">
-                          {order.whatsappNotification?.status === 'SENT' && '📨 Envoyé · en attente de réponse'}
-                          {order.whatsappNotification?.status === 'FAILED' && (
-                            <span className="text-red-400" title={order.whatsappNotification.lastError}>⚠ Échec d'envoi ({order.whatsappNotification.attempts})</span>
-                          )}
-                          {order.whatsappNotification?.status === 'SKIPPED' && (
-                            <span className="text-amber-400" title={order.whatsappNotification.lastError}>⏸ Non envoyé (WhatsApp non configuré)</span>
-                          )}
-                          {!order.whatsappNotification && '⏳ Envoi automatique en cours'}
-                        </div>
-                        {order.whatsappNotification?.status !== 'SENT' && (
                           <button
-                            onClick={() => handleResendWhatsApp(order.id)}
-                            className="px-2 py-0.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-lg font-bold text-[10px] cursor-pointer"
+                            onClick={() => setWhatsappModalOrder(order)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-bold text-[10px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                            title="Ouvrir l'écran de conversation WhatsApp"
                           >
-                            Renvoyer
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>💬 Conversation WA</span>
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleConfirmViaWhatsApp(order.id)}
-                          className="px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 rounded-xl font-bold text-[10px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
-                          title="Valider l'accord client sur WhatsApp"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Valider WA</span>
-                        </button>
+                          <div className="text-[9px] text-slate-400">
+                            {order.whatsappNotification?.status === 'SENT' && '📨 Envoyé · en attente OUI'}
+                            {order.whatsappNotification?.status === 'FAILED' && (
+                              <span className="text-red-400" title={order.whatsappNotification.lastError}>⚠ Échec envoi</span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </td>
@@ -475,6 +472,10 @@ export const OrdersAdminView: React.FC = () => {
         <WhatsAppConfirmationModal
           order={whatsappModalOrder}
           onClose={() => setWhatsappModalOrder(null)}
+          onOrderUpdated={(updated) => {
+            setOrders([...dbService.orders]);
+            setWhatsappModalOrder(updated);
+          }}
           onPrintTicket={(o) => {
             setWhatsappModalOrder(null);
             setTicketOrder(o);

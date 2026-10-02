@@ -212,6 +212,13 @@ export interface OrderItem {
   imageUrl: string;
 }
 
+export interface WhatsAppMessage {
+  id: string;
+  sender: 'STORE_BOT' | 'CUSTOMER' | 'AI_BOT' | 'ADMIN';
+  text: string;
+  timestamp: string;
+}
+
 export interface WhatsAppConfirmation {
   isConfirmed: boolean;
   confirmedAt?: string;
@@ -221,6 +228,9 @@ export interface WhatsAppConfirmation {
   messageTimestamp: string;
   replyTimestamp: string;
   channel: 'WHATSAPP_BOT' | 'WHATSAPP_AGENT';
+  needsHumanIntervention?: boolean;
+  humanInterventionReason?: string;
+  conversation?: WhatsAppMessage[];
 }
 
 export interface WhatsAppNotification {

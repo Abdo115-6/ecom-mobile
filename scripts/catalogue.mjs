@@ -85,7 +85,7 @@ export const settings = {
   cityShippingRates: { Casablanca: 25, Rabat: 30, Marrakech: 40, Fes: 40, Tanger: 45, Agadir: 55 },
   whatsappPhoneNumber: '+212600112233',
   whatsappOrderConfirmationTemplate:
-    'Bonjour {customerName}, merci pour votre commande *{orderNumber}* chez ShopMe. Total: {total} MAD.',
-  whatsappShippingTemplate: 'Bonjour {customerName}, votre commande *{orderNumber}* est en route.',
+    'Salam {{customer_name}} ! 👋\nMerci pour votre commande sur *ShopMe Maroc* 🇲🇦.\n\n📋 *Détails de votre commande #{{order_number}}* :\n• {{items}}\n\n💰 *Total à régler* : *{{total}}* (Paiement Cash à la livraison)\n📍 *Adresse* : {{address}}\n📞 *Téléphone* : {{phone}}\n🚚 *Expédition* : Livraison express 24h-48h avec ouverture du colis avant paiement.\n\n👉 *Veuillez répondre « OUI » ou « CONFIRMER » pour valider l\'expédition.*',
+  whatsappShippingTemplate: 'Bonjour {{customer_name}}, votre commande *{{order_number}}* est en route.',
   metaPixelId: '', googleAnalyticsId: '', tiktokPixelId: '', snapchatPixelId: '',
 };

@@ -1044,18 +1044,47 @@ class DatabaseStore {
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const reply = customReply || "Salam ShopMe ! Oui je confirme ma commande avec grand plaisir. Merci d'envoyer le livreur au plus vite 🙏✅";
 
-    const itemsSummary = order.items.map(i => `${i.productName} (x${i.quantity})`).join(', ');
+    const itemsSummary = order.items.map(i => `${i.productName} (x${i.quantity})`).join('\n• ');
+    const initialSent = order.whatsappConfirmation?.sentMessageText || 
+      `Salam ${order.shippingAddress.fullName} ! 👋\nMerci pour votre commande sur *ShopMe Maroc* 🇲🇦.\n\n📋 *Détails de votre commande #${order.orderNumber}* :\n• ${itemsSummary}\n\n💰 *Total à régler* : *${order.totalAmount.toFixed(2)} MAD* (Paiement cash à la livraison)\n📍 *Adresse* : ${order.shippingAddress.street}, ${order.shippingAddress.city}\n📞 *Téléphone* : ${order.customerPhone}\n🚚 *Expédition* : Livraison express 24h-48h avec ouverture et vérification du colis avant paiement.\n\n👉 *Veuillez répondre « OUI » ou « CONFIRMER » pour valider l'expédition express.*`;
+
+    const conv = Array.isArray(order.whatsappConfirmation?.conversation) ? [...order.whatsappConfirmation.conversation] : [];
+    if (conv.length === 0) {
+      conv.push({
+        id: `msg-init-${Date.now()}`,
+        sender: 'STORE_BOT',
+        text: initialSent,
+        timestamp: timeStr
+      });
+    }
+
+    conv.push({
+      id: `msg-cust-${Date.now()}`,
+      sender: 'CUSTOMER',
+      text: reply,
+      timestamp: timeStr
+    });
+
+    const botAck = `✅ Parfait ${order.shippingAddress.fullName} ! Votre commande *#${order.orderNumber}* est validée. Notre équipe prépare votre colis pour expédition à ${order.shippingAddress.city}. Le livreur vous contactera par téléphone avant la livraison. Merci pour votre confiance ! 🚀`;
+    conv.push({
+      id: `msg-bot-ack-${Date.now()}`,
+      sender: 'STORE_BOT',
+      text: botAck,
+      timestamp: timeStr
+    });
 
     order.status = 'CONFIRMED';
     order.whatsappConfirmation = {
       isConfirmed: true,
       confirmedAt: now.toISOString(),
       customerPhone: order.customerPhone,
-      sentMessageText: `Salam ${order.shippingAddress.fullName} ! Merci pour votre commande #${order.orderNumber} sur ShopMe Maroc 🇲🇦.\n📦 Articles : ${itemsSummary}\n💰 Total : ${order.totalAmount.toFixed(2)} MAD (Paiement à la livraison)\n📍 Adresse : ${order.shippingAddress.street}, ${order.shippingAddress.city}\n\nVeuillez confirmer l'expédition en répondant à ce message.`,
+      sentMessageText: initialSent,
       replyMessageText: reply,
       messageTimestamp: timeStr,
       replyTimestamp: timeStr,
-      channel: 'WHATSAPP_BOT'
+      channel: 'WHATSAPP_BOT',
+      needsHumanIntervention: false,
+      conversation: conv
     };
     order.updatedAt = now.toISOString();
 
@@ -1073,6 +1102,92 @@ class DatabaseStore {
     }
 
     return order;
+  }
+
+  async sendAdminWhatsAppMessage(orderId: string, text: string, user?: User): Promise<Order | undefined> {
+    const order = this.orders.find(o => o.id === orderId);
+    if (!order) return undefined;
+
+    const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const conv = Array.isArray(order.whatsappConfirmation?.conversation) ? [...order.whatsappConfirmation.conversation] : [];
+
+    conv.push({
+      id: `msg-admin-${Date.now()}`,
+      sender: 'ADMIN',
+      text,
+      timestamp: timeStr
+    });
+
+    order.whatsappConfirmation = {
+      ...order.whatsappConfirmation,
+      isConfirmed: order.whatsappConfirmation?.isConfirmed || false,
+      customerPhone: order.customerPhone,
+      sentMessageText: order.whatsappConfirmation?.sentMessageText || text,
+      replyMessageText: order.whatsappConfirmation?.replyMessageText || '',
+      messageTimestamp: order.whatsappConfirmation?.messageTimestamp || timeStr,
+      replyTimestamp: order.whatsappConfirmation?.replyTimestamp || '',
+      channel: 'WHATSAPP_AGENT',
+      needsHumanIntervention: false,
+      humanInterventionReason: undefined,
+      conversation: conv
+    };
+    order.updatedAt = new Date().toISOString();
+
+    if (user) {
+      this.addAuditLog(user, 'UPDATE', 'Order', order.id, `Message WhatsApp agent envoyé au client #${order.orderNumber}`);
+    }
+    this.saveToStorage();
+
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/whatsapp/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, text })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.order?.whatsappConfirmation) {
+            order.whatsappConfirmation = data.order.whatsappConfirmation;
+            this.saveToStorage();
+          }
+        }
+      } catch (e) {
+        console.warn('sendAdminWhatsAppMessage fetch error:', e);
+      }
+    }
+
+    return order;
+  }
+
+  async simulateCustomerWhatsAppReply(orderId: string, text: string): Promise<Order | undefined> {
+    const order = this.orders.find(o => o.id === orderId);
+    if (!order) return undefined;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/whatsapp/simulate-incoming', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, phone: order.customerPhone, text })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.order) {
+            const idx = this.orders.findIndex(o => o.id === order.id);
+            if (idx >= 0) {
+              this.orders[idx] = { ...this.orders[idx], ...data.order };
+              this.saveToStorage();
+              return this.orders[idx];
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('simulateCustomerWhatsAppReply fetch error:', e);
+      }
+    }
+
+    return this.confirmOrderViaWhatsApp(orderId, text);
   }
 
   // --- Products ---
@@ -1174,12 +1289,40 @@ class DatabaseStore {
   // --- Orders ---
   createOrder(orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>): Order {
     const orderNumber = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    const itemsSummary = (orderData.items || []).map(i => {
+      const v = i.variantTitle ? ` (${i.variantTitle})` : '';
+      return `${i.productName}${v} x${i.quantity} [${Number(i.unitPrice || i.subtotal || 0).toFixed(0)} MAD]`;
+    }).join('\n• ');
+
+    const initialSentMsg = `Salam ${orderData.shippingAddress.fullName} ! 👋\nMerci pour votre commande sur *ShopMe Maroc* 🇲🇦.\n\n📋 *Détails de votre commande #${orderNumber}* :\n• ${itemsSummary}\n\n💰 *Total à régler* : *${orderData.totalAmount.toFixed(2)} MAD* (Paiement cash à la livraison)\n📍 *Adresse* : ${orderData.shippingAddress.street}, ${orderData.shippingAddress.city}\n📞 *Téléphone* : ${orderData.customerPhone}\n🚚 *Expédition* : Livraison express 24h-48h avec ouverture et vérification du colis avant paiement.\n\n👉 Répondez *OUI* pour confirmer votre commande ✅ ou *NON* pour l'annuler ❌.`;
+
     const newOrder: Order = {
       ...orderData,
       id: "ord-" + Date.now(),
       orderNumber,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      whatsappConfirmation: {
+        isConfirmed: false,
+        customerPhone: orderData.customerPhone,
+        sentMessageText: initialSentMsg,
+        replyMessageText: '',
+        messageTimestamp: timeStr,
+        replyTimestamp: '',
+        channel: 'WHATSAPP_BOT',
+        needsHumanIntervention: false,
+        conversation: [
+          {
+            id: `msg-${Date.now()}`,
+            sender: 'STORE_BOT',
+            text: initialSentMsg,
+            timestamp: timeStr,
+          }
+        ]
+      }
     };
 
     // Deduct stock and record movement

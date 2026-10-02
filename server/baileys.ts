@@ -18,6 +18,10 @@ let started = false;
 let onIncoming: IncomingHandler | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 
+// In-memory store for message retry and end-to-end encryption key resolution
+const msgStore = new Map<string, any>();
+const msgRetryCounterMap = new Map<string, number>();
+
 const sessionDir = () => path.resolve(process.env.WHATSAPP_SESSION_DIR || path.join(process.cwd(), 'data', 'wa-session'));
 
 export function getStatus() {
@@ -56,9 +60,23 @@ async function connect() {
     version,
     auth,
     logger: pino({ level: 'silent' }),
-    browser: Browsers?.macOS ? Browsers.macOS('Desktop') : ['ShopMe', 'Desktop', '1.0'],
-    markOnlineOnConnect: false,
+    browser: Browsers?.macOS ? Browsers.macOS('Desktop') : ['ShopMe', 'Chrome', '1.0.0'],
+    markOnlineOnConnect: true,
     syncFullHistory: false,
+    generateHighQualityLinkPreview: false,
+    msgRetryCounterCache: {
+      get: (key: string) => msgRetryCounterMap.get(key),
+      set: (key: string, value: number) => { msgRetryCounterMap.set(key, value); },
+      del: (key: string) => { msgRetryCounterMap.delete(key); },
+    },
+    getMessage: async (key: any) => {
+      const id = key?.id;
+      if (id && msgStore.has(id)) {
+        const item = msgStore.get(id);
+        return item?.message || undefined;
+      }
+      return undefined;
+    },
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -69,13 +87,13 @@ async function connect() {
       state = 'qr';
       const QRCode = (await import('qrcode')).default;
       qrDataUrl = await QRCode.toDataURL(qr, { width: 320, margin: 1 });
-      console.log('[whatsapp-bot] QR prêt: ouvrez /api/whatsapp/qr pour le scanner');
+      console.log('[whatsapp-bot] QR prêt: scannez dans le panneau admin');
     }
     if (connection === 'open') {
       state = 'open';
       qrDataUrl = null;
       me = String(sock.user?.id || '').split(':')[0].split('@')[0] || null;
-      console.log(`[whatsapp-bot] connecté (${me})`);
+      console.log(`[whatsapp-bot] connecté avec succès (+${me})`);
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
@@ -96,22 +114,34 @@ async function connect() {
     if (type !== 'notify') return;
     for (const m of messages || []) {
       try {
+        if (m.key?.id) {
+          msgStore.set(m.key.id, m);
+          if (msgStore.size > 1000) {
+            const firstKey = msgStore.keys().next().value;
+            if (firstKey) msgStore.delete(firstKey);
+          }
+        }
+
         if (!m.message || m.key?.fromMe) continue;
         const jid: string = m.key.remoteJid || '';
         if (jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
+
         // Newer WhatsApp versions may use @lid ids; prefer the real phone jid when provided.
         const phoneJid: string = m.key.senderPn || m.key.remoteJidAlt || jid;
         if (phoneJid.endsWith('@lid')) {
-          console.warn('[whatsapp-bot] message reçu avec un identifiant @lid non résolu: mise à jour de Baileys nécessaire');
-          continue;
+          console.warn('[whatsapp-bot] message reçu avec @lid, essai avec remoteJid');
         }
+
         const text =
           m.message.conversation ||
           m.message.extendedTextMessage?.text ||
           m.message.buttonsResponseMessage?.selectedDisplayText ||
           '';
+
         if (!text) continue;
-        await onIncoming?.(phoneJid.split('@')[0].split(':')[0], text);
+        const senderPhone = (phoneJid || jid).split('@')[0].split(':')[0];
+        console.log(`[whatsapp-bot] Message reçu de ${senderPhone}: "${text}"`);
+        await onIncoming?.(senderPhone, text);
       } catch (e) {
         console.error('[whatsapp-bot] incoming error:', e);
       }
@@ -119,18 +149,23 @@ async function connect() {
   });
 }
 
-// Spread messages out (3-6s apart) so bursts of orders don't look like spam.
+// Spread messages out (1.5-3s apart) so bursts of orders don't trigger rate limits
 let queue: Promise<unknown> = Promise.resolve();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function sendTextBaileys(phone: string, text: string): Promise<string | undefined> {
   const job = queue.then(async () => {
-    if (!isConnected() || !sock) throw new Error('WhatsApp non connecté: scannez le QR sur /api/whatsapp/qr');
+    if (!isConnected() || !sock) throw new Error('WhatsApp non connecté: scannez le QR dans l\'admin');
     const found = await sock.onWhatsApp(phone);
     const entry = Array.isArray(found) ? found[0] : undefined;
     if (!entry?.exists) throw new Error(`Le numéro ${phone} n'est pas inscrit sur WhatsApp`);
+    
     const sent = await sock.sendMessage(entry.jid, { text });
-    await sleep(3000 + Math.random() * 3000);
+    if (sent?.key?.id) {
+      msgStore.set(sent.key.id, sent);
+    }
+    
+    await sleep(1500 + Math.random() * 1500);
     return sent?.key?.id as string | undefined;
   });
   queue = job.catch(() => null);
@@ -140,6 +175,8 @@ export function sendTextBaileys(phone: string, text: string): Promise<string | u
 export async function logoutBaileys() {
   try { await sock?.logout(); } catch { /* already closed */ }
   fs.rmSync(sessionDir(), { recursive: true, force: true });
+  msgStore.clear();
+  msgRetryCounterMap.clear();
   state = 'idle';
   qrDataUrl = null;
   me = null;
