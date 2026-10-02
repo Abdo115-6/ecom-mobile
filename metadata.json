@@ -1,0 +1,6 @@
+{
+  "name": "ShopMe – Mobile-First E-Commerce & Marketing Intelligence",
+  "description": "Plateforme e-commerce mobile-first avec Back Office RBAC, gestion des produits et galerie WebP, PostgreSQL backend, tracking multi-plateforme (GA4, Meta CAPI, TikTok) et tickets d'expédition avec QR Code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

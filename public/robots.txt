@@ -1,0 +1,24 @@
+User-agent: *
+Disallow: /adminonly
+Disallow: /admin*
+Disallow: /*admin*
+Disallow: /api/admin*
+Disallow: /#admin*
+
+User-agent: Googlebot
+Disallow: /adminonly
+Disallow: /admin*
+
+User-agent: Bingbot
+Disallow: /adminonly
+Disallow: /admin*
+
+User-agent: Baiduspider
+Disallow: /adminonly
+Disallow: /admin*
+
+User-agent: Yandex
+Disallow: /adminonly
+Disallow: /admin*
+
+Sitemap: https://shopme.ma/sitemap.xml

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: aura-commerce
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render Postgres is referenced with `fromDatabase` (not `fromService`).
+      # `connectionString` resolves to postgresql://user:pass@host:port/db over
+      # Render's private network; server.ts parses it into its pool config.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aura-db
+          property: connectionString
+      # WhatsApp automatic order confirmation (set values in the Render dashboard)
+      - key: WHATSAPP_PROVIDER
+        value: cloud
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_TEMPLATE_NAME
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+
+databases:
+  - name: aura-db
+    plan: free
+    postgresMajorVersion: "17"

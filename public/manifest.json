@@ -1,0 +1,22 @@
+{
+  "short_name": "Aura Commerce",
+  "name": "Aura Commerce - Mobile Store & Back Office",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Plateforme e-commerce mobile-first avec marketing tracking et back office RBAC."
+}
