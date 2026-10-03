@@ -56,6 +56,13 @@ const MainRouter: React.FC = () => {
   const { currentView, isAdminMode, toastMessage, setCurrentView } = useApp();
   const [specsModalOpen, setSpecsModalOpen] = useState(false);
 
+  // Scroll to top on every view navigation (near navbar, not footer)
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [currentView]);
+
   // Dynamic meta robots shield to hide admin views from search engines and fetchers
   React.useEffect(() => {
     let metaRobots = document.querySelector('meta[name="robots"]') as HTMLMetaElement;

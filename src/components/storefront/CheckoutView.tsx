@@ -153,6 +153,7 @@ export const CheckoutView: React.FC = () => {
     setLastConfirmedOrder(order);
     clearCart();
     setIsSubmitting(false);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     setCurrentView('order-confirmation');
   };
 

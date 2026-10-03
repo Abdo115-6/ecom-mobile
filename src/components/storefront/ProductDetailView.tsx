@@ -343,6 +343,7 @@ export const ProductDetailView: React.FC = () => {
         setIsSubmittingOrder(false);
         setLastConfirmedOrder(createdOrder);
         showToast("🎉 Commande validée avec succès ! Notre équipe ShopMe vous contactera pour la livraison.");
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
         setCurrentView('order-confirmation');
       } catch (err) {
         setIsSubmittingOrder(false);
