@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
+import { clientMovementService } from '../../services/clientMovementService';
 import { 
   Settings, 
   Save, 
@@ -11,7 +12,8 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
 
 export const SettingsAdminView: React.FC = () => {
@@ -71,6 +73,14 @@ export const SettingsAdminView: React.FC = () => {
       tiktokPixelId
     }, currentUser);
     showToast("Paramètres et frais de livraison enregistrés avec succès !");
+  };
+
+  const handleCleanDatabaseForProduction = () => {
+    if (window.confirm("Êtes-vous sûr de vouloir nettoyer la base de données ?\n\nToutes les commandes de test, les conversations WhatsApp et les paniers abandonnés seront remis à zéro pour le lancement officiel.")) {
+      dbService.clearAllForProduction(currentUser);
+      clientMovementService.clearAllData();
+      showToast("✓ Base de données 100% nettoyée et prête pour le lancement en ligne !");
+    }
   };
 
   return (
@@ -304,6 +314,37 @@ export const SettingsAdminView: React.FC = () => {
         </div>
 
       </form>
+
+      {/* Production Launch: Database Cleaner Box */}
+      <div className="bg-slate-900 border border-rose-500/30 rounded-3xl p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-rose-500/15 text-rose-400 rounded-2xl border border-rose-500/30 shrink-0">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Nettoyage de la Base de Données (Mise en Ligne)</span>
+                <span className="text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30">
+                  PRODUCTION READY
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Remet à zéro toutes les commandes de test, les conversations et les prospects pour lancer le site avec des statistiques propres.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCleanDatabaseForProduction}
+            className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-2xl text-xs transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Nettoyer la Base Maintenant</span>
+          </button>
+        </div>
+      </div>
 
     </div>
   );

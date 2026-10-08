@@ -754,93 +754,20 @@ const INITIAL_USERS: User[] = [
   }
 ];
 
-const INITIAL_CUSTOMERS: Customer[] = [
-  {
-    id: "cust-1",
-    email: "karim.benj@example.com",
-    firstName: "Karim",
-    lastName: "Benjelloun",
-    phone: "+212 661 234567",
-    isGuest: false,
-    totalSpent: 2840.00,
-    ordersCount: 4,
-    rfmRecencyScore: 5,
-    rfmFrequencyScore: 4,
-    rfmMonetaryScore: 5,
-    segmentLabel: "Champions",
-    createdAt: "2026-04-12T10:00:00Z"
-  },
-  {
-    id: "cust-2",
-    email: "sara.alaoui@example.com",
-    firstName: "Sara",
-    lastName: "Alaoui",
-    phone: "+212 665 987654",
-    isGuest: false,
-    totalSpent: 1120.00,
-    ordersCount: 2,
-    rfmRecencyScore: 4,
-    rfmFrequencyScore: 3,
-    rfmMonetaryScore: 3,
-    segmentLabel: "Loyal Customers",
-    createdAt: "2026-07-22T14:30:00Z"
-  },
-  {
-    id: "cust-3",
-    email: "mehdi.tazi@example.com",
-    firstName: "Mehdi",
-    lastName: "Tazi",
-    phone: "+212 663 112233",
-    isGuest: true,
-    totalSpent: 199.00,
-    ordersCount: 1,
-    rfmRecencyScore: 5,
-    rfmFrequencyScore: 1,
-    rfmMonetaryScore: 1,
-    segmentLabel: "New Customers",
-    createdAt: "2026-09-29T15:00:00Z"
-  }
-];
+const INITIAL_CUSTOMERS: Customer[] = [];
 
 const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
-    id: "aud-1",
-    userId: "usr-1",
-    userName: "Amine El Idrissi",
+    id: "aud-init",
+    userId: "usr-abdo",
+    userName: "Abdo Store Admin",
     userRole: "SUPER_ADMIN",
-    action: "UPDATE",
-    entityName: "Product",
-    entityId: "prod-1",
-    summary: "Prix promo mis à jour de 999 DH à 899 DH",
-    oldValue: "price: 999.00",
-    newValue: "price: 899.00",
-    ipAddress: "196.200.142.12",
-    createdAt: "2026-09-28T14:30:00Z"
-  },
-  {
-    id: "aud-2",
-    userId: "usr-2",
-    userName: "Nadia Tazi",
-    userRole: "PRODUCT_MANAGER",
     action: "CREATE",
-    entityName: "ProductVariant",
-    entityId: "var-3-16pro",
-    summary: "Création variante iPhone 16 Pro pour Coque Kevlar",
-    newValue: "sku: CASE-KEV-16P, stock: 18",
-    ipAddress: "196.200.142.18",
-    createdAt: "2026-09-29T11:00:00Z"
-  },
-  {
-    id: "aud-3",
-    userId: "usr-1",
-    userName: "Amine El Idrissi",
-    userRole: "SUPER_ADMIN",
-    action: "APPROVE",
-    entityName: "Review",
-    entityId: "rev-1",
-    summary: "Approbation avis client 5 étoiles sur Casque Aura ANC Ultra",
-    ipAddress: "196.200.142.12",
-    createdAt: "2026-09-29T12:00:00Z"
+    entityName: "Store",
+    entityId: "store-shopme",
+    summary: "Boutique ShopMe initialisée et prête pour le lancement en ligne",
+    ipAddress: "127.0.0.1",
+    createdAt: new Date().toISOString()
   }
 ];
 
@@ -1339,6 +1266,14 @@ class DatabaseStore {
 
     this.orders.unshift(newOrder);
     this.saveToStorage();
+
+    // Trigger Baileys AI WhatsApp Bot for automatic confirmation from +212 668-381916
+    if (typeof window !== 'undefined') {
+      import('./baileysBotService').then(({ baileysBotService }) => {
+        baileysBotService.handleNewOrder(newOrder);
+      }).catch(err => console.warn('Baileys bot trigger notice:', err));
+    }
+
     if (typeof window !== 'undefined') {
       fetch('/api/orders', {
         method: 'POST',
@@ -1347,6 +1282,17 @@ class DatabaseStore {
       }).catch(err => console.warn('Backend createOrder notice:', err));
     }
     return newOrder;
+  }
+
+  deleteOrder(orderId: string, user: User) {
+    const order = this.orders.find(o => o.id === orderId);
+    const orderNum = order ? order.orderNumber : orderId;
+    this.orders = this.orders.filter(o => o.id !== orderId);
+    this.addAuditLog(user, 'DELETE', 'Order', orderId, `Suppression de la commande #${orderNum}`);
+    this.saveToStorage();
+    if (typeof window !== 'undefined') {
+      fetch(`/api/orders/${orderId}`, { method: 'DELETE' }).catch(err => console.warn('Backend deleteOrder notice:', err));
+    }
   }
 
   updateOrderStatus(orderId: string, status: Order['status'], user: User) {
@@ -1433,6 +1379,45 @@ class DatabaseStore {
       createdAt: new Date().toISOString()
     };
     this.auditLogs.unshift(log);
+  }
+
+  // --- Clean Database for Production Launch ---
+  clearAllForProduction(user?: User) {
+    this.orders = [];
+    this.customers = [];
+    this.inventoryMovements = [];
+    this.reviews = [];
+    const actingUser = user || this.users[0];
+    this.auditLogs = [
+      {
+        id: "aud-launch-" + Date.now(),
+        userId: actingUser.id,
+        userName: `${actingUser.firstName} ${actingUser.lastName}`,
+        userRole: actingUser.role,
+        action: "UPDATE",
+        entityName: "Database",
+        entityId: "prod-db-clean",
+        summary: "Base de données nettoyée avec succès pour la mise en ligne du site",
+        ipAddress: "127.0.0.1",
+        createdAt: new Date().toISOString()
+      }
+    ];
+    this.saveToStorage();
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('shopme_orders');
+        localStorage.removeItem('shopme_customers');
+        localStorage.removeItem('shopme_inventory_movements');
+        localStorage.removeItem('shopme_reviews');
+        localStorage.removeItem('shopme_baileys_conversations');
+        localStorage.removeItem('shopme_client_movements_v1');
+        localStorage.removeItem('shopme_pixel_clicks_v1');
+      } catch (e) {
+        console.warn('Storage cleanup notice:', e);
+      }
+      fetch('/api/admin/clean-database', { method: 'POST' }).catch(() => {});
+    }
   }
 
   // --- Delivery Fee Calculation ---

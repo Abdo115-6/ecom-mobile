@@ -91,6 +91,19 @@ class ClientMovementService {
     this.notifyListeners();
   }
 
+  public clearAllData() {
+    this.sessions = [];
+    this.clicks = [];
+    try {
+      localStorage.removeItem('shopme_client_movements_v1');
+      localStorage.removeItem('shopme_pixel_clicks_v1');
+    } catch {
+      // ignore
+    }
+    this.notifyListeners();
+    this.notifyClickListeners();
+  }
+
   private initCurrentSession(): string {
     try {
       let s = sessionStorage.getItem('shopme_client_session_id');
@@ -114,7 +127,7 @@ class ClientMovementService {
       if (clickData) {
         this.clicks = JSON.parse(clickData);
       } else {
-        this.seedRealisticClicks();
+        this.clicks = [];
       }
     } catch {
       this.sessions = [];

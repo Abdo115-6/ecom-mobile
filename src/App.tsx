@@ -29,6 +29,7 @@ import { MarketingAdminView } from './components/admin/MarketingAdminView';
 import { TrackingInspectorView } from './components/admin/TrackingInspectorView';
 import { DataMiningView } from './components/admin/DataMiningView';
 import { WhatsAppAdminView } from './components/admin/WhatsAppAdminView';
+import { CalculationAdminView } from './components/admin/CalculationAdminView';
 import { UsersAdminView } from './components/admin/UsersAdminView';
 import { AuditLogsView } from './components/admin/AuditLogsView';
 import { SettingsAdminView } from './components/admin/SettingsAdminView';
@@ -115,6 +116,7 @@ const MainRouter: React.FC = () => {
           {currentView === 'admin-tracking' && <TrackingInspectorView />}
           {currentView === 'admin-datamining' && <DataMiningView />}
           {currentView === 'admin-whatsapp' && <WhatsAppAdminView />}
+          {currentView === 'admin-calculation' && <CalculationAdminView />}
           {currentView === 'admin-users' && <UsersAdminView />}
           {currentView === 'admin-audit' && <AuditLogsView />}
           {currentView === 'admin-settings' && <SettingsAdminView />}

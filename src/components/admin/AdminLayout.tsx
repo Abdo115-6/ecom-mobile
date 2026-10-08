@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   LogOut,
   ChevronDown,
-  Lock
+  Lock,
+  Calculator
 } from 'lucide-react';
 import { RoleName } from '../../types/ecommerce';
 
@@ -50,6 +51,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { id: 'admin-products', label: 'Produits & Variantes', icon: <Package className="w-4 h-4" />, category: 'Catalogue' },
     { id: 'admin-categories', label: 'Catégories', icon: <FolderTree className="w-4 h-4" />, category: 'Catalogue' },
     { id: 'admin-inventory', label: 'Stock & Mouvements', icon: <Boxes className="w-4 h-4" />, category: 'Catalogue', badge: 'Audit IN/OUT' },
+    { id: 'admin-calculation', label: 'Calculation (Rentabilité)', icon: <Calculator className="w-4 h-4 text-emerald-400" />, category: 'Catalogue', badge: 'Marge & Profit' },
     
     // Sales
     { id: 'admin-orders', label: 'Commandes', icon: <ShoppingCart className="w-4 h-4" />, category: 'Ventes' },
@@ -60,7 +62,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { id: 'admin-marketing', label: 'Coupons & Bannières', icon: <Tag className="w-4 h-4" />, category: 'Marketing' },
     { id: 'admin-tracking', label: 'Tracking & Déduplication', icon: <Activity className="w-4 h-4 text-emerald-400" />, category: 'Marketing', badge: 'Live CAPI' },
     { id: 'admin-datamining', label: 'Data Mining & Mouvements Clients', icon: <BrainCircuit className="w-4 h-4 text-amber-400" />, category: 'Intelligence & BI', badge: '⚡ Leads Perdus' },
-    { id: 'admin-whatsapp', label: 'WhatsApp Business', icon: <MessageCircle className="w-4 h-4 text-emerald-500" />, category: 'Canaux' },
+    { id: 'admin-whatsapp', label: 'WhatsApp Bot Baileys (IA)', icon: <MessageCircle className="w-4 h-4 text-emerald-400" />, category: 'Canaux', badge: 'QR Bot 🇲🇦' },
 
     // System & RBAC
     { id: 'admin-users', label: 'Utilisateurs & Rôles', icon: <ShieldAlert className="w-4 h-4" />, category: 'Administration' },

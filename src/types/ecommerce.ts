@@ -381,3 +381,37 @@ export interface StoreSettings {
   snapchatPixelId: string;
   publicDomain?: string;
 }
+
+export interface BaileysMessage {
+  id: string;
+  sender: 'bot' | 'client' | 'admin';
+  text: string;
+  timestamp: string;
+  status: 'sent' | 'delivered' | 'read';
+}
+
+export interface BaileysConversation {
+  id: string;
+  customerPhone: string;
+  customerName: string;
+  customerCity: string;
+  customerAddress: string;
+  orderId: string;
+  orderNumber: string;
+  orderTotal: number;
+  orderItemsSummary: string;
+  status: 'WAITING_CONFIRMATION' | 'CONFIRMED' | 'IN_DISCUSSION' | 'CANCELLED';
+  messages: BaileysMessage[];
+  lastActivity: string;
+  confirmedAt?: string;
+}
+
+export interface BaileysBotStatus {
+  status: 'DISCONNECTED' | 'SCAN_QR' | 'CONNECTING' | 'CONNECTED';
+  phoneNumber: string;
+  qrCodeDataUrl?: string;
+  pairingCode?: string;
+  connectedAt?: string;
+  uptimeSeconds: number;
+  autoConfirmationEnabled: boolean;
+}

@@ -4,9 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
-import * as wa from './server/whatsapp';
-import * as bot from './server/baileys';
+import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 
 dotenv.config();
 
@@ -64,6 +62,7 @@ const ORDERS_FILE = path.join(dataDir, 'orders.json');
 const SETTINGS_FILE = path.join(dataDir, 'settings.json');
 const LEADS_FILE = path.join(dataDir, 'leads.json');
 const CATEGORIES_FILE = path.join(dataDir, 'categories.json');
+const BAILEYS_FILE = path.join(dataDir, 'baileys_conversations.json');
 
 function readJsonFile<T>(filePath: string, fallback: T): T {
   try {
@@ -81,27 +80,6 @@ function writeJsonFile<T>(filePath: string, data: T) {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error(`Error writing ${filePath}:`, err);
-  }
-}
-
-async function ensureInitialData() {
-  if (!fs.existsSync(PRODUCTS_FILE) || !fs.existsSync(CATEGORIES_FILE) || !fs.existsSync(SETTINGS_FILE)) {
-    try {
-      const { products, categories, settings } = await import('./scripts/catalogue.mjs');
-      if (!fs.existsSync(CATEGORIES_FILE)) {
-        writeJsonFile(CATEGORIES_FILE, categories);
-      }
-      if (!fs.existsSync(PRODUCTS_FILE)) {
-        const cleanedProducts = (products as any[]).map(({ daysAgo, ...p }: any) => p);
-        writeJsonFile(PRODUCTS_FILE, cleanedProducts);
-      }
-      if (!fs.existsSync(SETTINGS_FILE)) {
-        writeJsonFile(SETTINGS_FILE, settings);
-      }
-      console.log('✓ Initialized local catalogue JSON fallback files (products, categories, settings)');
-    } catch (err) {
-      console.warn('Notice: could not pre-seed catalogue JSON files:', err);
-    }
   }
 }
 
@@ -170,10 +148,6 @@ async function initPostgresTables() {
       );
     `);
 
-    // 2b. WhatsApp notification / confirmation state on orders
-    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_notification JSONB`);
-    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_confirmation JSONB`);
-
     // 3. Store Settings & Delivery Fees Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS store_settings (
@@ -213,15 +187,11 @@ async function initPostgresTables() {
 
 async function startServer() {
   await initPostgresTables();
-  await ensureInitialData();
 
   const app = express();
 
   // Middleware for large file uploads (WebP, PNG, JPG from laptop)
-  app.use(express.json({
-    limit: '50mb',
-    verify: (req: any, _res, buf) => { req.rawBody = buf; }
-  }));
+  app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Ensure uploads directory exists in public/uploads
@@ -540,8 +510,6 @@ async function startServer() {
             utmSource: row.utm_source,
             utmCampaign: row.utm_campaign,
             notes: row.notes,
-            whatsappNotification: row.whatsapp_notification || undefined,
-            whatsappConfirmation: row.whatsapp_confirmation || undefined,
             createdAt: row.created_at,
             updatedAt: row.updated_at
           }));
@@ -563,13 +531,10 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Données de commande invalides' });
       }
 
-      // Save to local file (ignore duplicate POSTs of the same order)
+      // Save to local file
       const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
-      const isNew = !currentOrders.some(o => o.id === order.id);
-      if (isNew) {
-        currentOrders.unshift(order);
-        writeJsonFile(ORDERS_FILE, currentOrders);
-      }
+      currentOrders.unshift(order);
+      writeJsonFile(ORDERS_FILE, currentOrders);
 
       // Save to Postgres
       if (isPgConnected) {
@@ -615,8 +580,14 @@ async function startServer() {
         }
       }
 
-      // Automatic WhatsApp message with the order number, asking the client to confirm
-      if (isNew) wa.notifyNewOrder(order);
+      // Automatically trigger WhatsApp order confirmation to customer phone number via Baileys
+      try {
+        baileysManager.sendOrderConfirmation(order).catch(waErr => {
+          console.warn('[Baileys] Automatic confirmation dispatch notice:', waErr);
+        });
+      } catch (waErr) {
+        console.warn('[Baileys] Auto-dispatch notice:', waErr);
+      }
 
       return res.json({ success: true, order });
     } catch (err: any) {
@@ -640,10 +611,7 @@ async function startServer() {
     if (isPgConnected) {
       try {
         const client = await pgPool.connect();
-        await client.query(
-          'UPDATE orders SET status = COALESCE($1, status), whatsapp_confirmation = COALESCE($3::jsonb, whatsapp_confirmation), updated_at = NOW() WHERE id = $2',
-          [status || order?.status || null, id, whatsappConfirmation ? JSON.stringify(whatsappConfirmation) : null]
-        );
+        await client.query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status || order?.status, id]);
         client.release();
       } catch (err) {
         console.warn('Postgres update order error:', err);
@@ -653,164 +621,166 @@ async function startServer() {
     return res.json({ success: true, id, status, whatsappConfirmation });
   });
 
-  // 5a. WhatsApp automation: store adapter, webhooks, resend, health
-  wa.init({
-    getOrders: async () => readJsonFile<any[]>(ORDERS_FILE, []),
-    getTemplate: () => readJsonFile<any>(SETTINGS_FILE, null)?.whatsappOrderConfirmationTemplate,
-    patchOrder: async (id, patch: any) => {
-      const all = readJsonFile<any[]>(ORDERS_FILE, []);
-      const order = all.find(o => o.id === id);
-      if (!order) return undefined;
-      Object.assign(order, patch, { updatedAt: new Date().toISOString() });
-      writeJsonFile(ORDERS_FILE, all);
+  app.delete('/api/orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+    const filtered = currentOrders.filter(o => o.id !== id);
+    writeJsonFile(ORDERS_FILE, filtered);
+
+    if (isPgConnected) {
+      try {
+        const client = await pgPool.connect();
+        await client.query('DELETE FROM orders WHERE id = $1', [id]);
+        client.release();
+      } catch (err) {
+        console.warn('Postgres delete order error:', err);
+      }
+    }
+
+    return res.json({ success: true, message: `Commande ${id} supprimée avec succès` });
+  });
+
+  // ==========================================
+  // BAILEYS WHATSAPP BOT API (+212 668-381916)
+  // ==========================================
+  app.get('/api/whatsapp/baileys/status', async (req, res) => {
+    try {
+      const liveStatus = baileysManager.getStatus();
+      return res.json({
+        success: true,
+        ...liveStatus,
+        phoneNumber: DISPLAY_PHONE_NUMBER,
+        autoConfirmationEnabled: true
+      });
+    } catch (err: any) {
+      return res.json({
+        success: false,
+        status: 'DISCONNECTED',
+        phoneNumber: DISPLAY_PHONE_NUMBER,
+        error: err.message
+      });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/request-pairing-code', async (req, res) => {
+    try {
+      const { phoneNumber } = req.body || {};
+      const code = await baileysManager.requestPairingCode(phoneNumber || TARGET_PHONE_NUMBER);
+      return res.json({
+        success: true,
+        pairingCode: code,
+        phoneNumber: DISPLAY_PHONE_NUMBER,
+        message: 'Code officiel WhatsApp généré avec succès'
+      });
+    } catch (err: any) {
+      console.error('API requestPairingCode error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Impossible de générer le code d appairage'
+      });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/refresh-qr', async (req, res) => {
+    try {
+      const qrDataUrl = await baileysManager.refreshQr();
+      return res.json({
+        success: true,
+        qrCodeDataUrl: qrDataUrl,
+        message: 'Nouveau QR Code WhatsApp généré en direct'
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/connect', async (req, res) => {
+    try {
+      await baileysManager.start();
+      return res.json({ success: true, message: 'Démarrage de la connexion WhatsApp...' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/disconnect', async (req, res) => {
+    try {
+      await baileysManager.disconnect();
+      return res.json({ success: true, message: 'Bot WhatsApp déconnecté' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/send-order-confirmation', async (req, res) => {
+    try {
+      const order = req.body.order || req.body;
+      if (!order || (!order.customerPhone && !order.shippingAddress?.phone)) {
+        return res.status(400).json({ success: false, message: 'Données de commande invalides ou téléphone manquant' });
+      }
+      const sent = await baileysManager.sendOrderConfirmation(order);
+      return res.json({ success: true, delivered: sent, message: 'Message de confirmation WhatsApp envoyé au client' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/whatsapp/baileys/send-message', async (req, res) => {
+    try {
+      const { phone, text } = req.body;
+      if (!phone || !text) {
+        return res.status(400).json({ success: false, message: 'Téléphone et texte requis' });
+      }
+      const sent = await baileysManager.sendMessage(phone, text);
+      return res.json({ success: sent });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/whatsapp/baileys/conversations', (req, res) => {
+    const conversations = readJsonFile<any[]>(BAILEYS_FILE, []);
+    return res.json({ success: true, conversations });
+  });
+
+  app.post('/api/whatsapp/baileys/conversations', (req, res) => {
+    const { conversations } = req.body;
+    if (Array.isArray(conversations)) {
+      writeJsonFile(BAILEYS_FILE, conversations);
+      return res.json({ success: true, count: conversations.length });
+    }
+    return res.status(400).json({ success: false, message: 'Invalid conversations format' });
+  });
+
+  // Database production cleanup endpoint
+  app.post('/api/admin/clean-database', async (req, res) => {
+    try {
+      // Clear orders and baileys conversations
+      writeJsonFile(ORDERS_FILE, []);
+      writeJsonFile(BAILEYS_FILE, []);
+
+      // If Postgres is connected, truncate production tables
       if (isPgConnected) {
         try {
           const client = await pgPool.connect();
-          await client.query(
-            `UPDATE orders SET status = $1,
-               whatsapp_notification = COALESCE($3::jsonb, whatsapp_notification),
-               whatsapp_confirmation = COALESCE($4::jsonb, whatsapp_confirmation),
-               updated_at = NOW() WHERE id = $2`,
-            [order.status, id,
-             patch.whatsappNotification ? JSON.stringify(patch.whatsappNotification) : null,
-             patch.whatsappConfirmation ? JSON.stringify(patch.whatsappConfirmation) : null]
-          );
+          await client.query('TRUNCATE TABLE orders;');
+          await client.query('TRUNCATE TABLE client_leads;');
           client.release();
-        } catch (err) {
-          console.warn('Postgres whatsapp patch error:', err);
+          console.log('[Database] Postgres orders and leads tables truncated for production launch');
+        } catch (pgErr) {
+          console.warn('[Database] Postgres cleanup notice:', pgErr);
         }
       }
-      return order;
-    }
-  });
-  wa.startRetryLoop();
 
-  // Bot mode: link your own WhatsApp by QR code (no Meta account)
-  if (wa.getProvider() === 'baileys') {
-    bot.startBaileys((from, text) => {
-      wa.handleIncomingMessage(from, text)
-        .then(r => console.log(`[whatsapp] reply from ${from}: ${JSON.stringify(r)}`))
-        .catch(e => console.error('[whatsapp] incoming error:', e));
-    }).catch(e => console.error('[whatsapp-bot] start error:', e));
-  }
-
-  const qrAllowed = (req: any) => {
-    const key = process.env.WHATSAPP_QR_KEY;
-    if (key) return req.query.key === key;
-    return !isProd; // in production a key is mandatory
-  };
-
-  app.get('/api/whatsapp/qr', (req, res) => {
-    if (!qrAllowed(req)) return res.status(403).send('Définissez WHATSAPP_QR_KEY puis ouvrez /api/whatsapp/qr?key=VOTRE_CLE');
-    const st = bot.getStatus();
-    const qr = bot.getQr();
-    const body = st.connected
-      ? `<h2>✅ WhatsApp connecté</h2><p>Compte : +${st.account}</p>`
-      : qr
-      ? `<h2>Scannez avec WhatsApp</h2><p>WhatsApp &gt; Paramètres &gt; Appareils connectés &gt; Connecter un appareil</p><img src="${qr}" width="320" height="320"/>`
-      : `<h2>Connexion en cours…</h2><p>État : ${st.state}. La page se rafraîchit toute seule.</p>`;
-    res.send(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="${st.connected ? 30 : 3}"><title>WhatsApp</title><body style="font-family:sans-serif;text-align:center;padding:40px">${body}</body>`);
-  });
-
-  app.post('/api/whatsapp/logout', async (req, res) => {
-    if (!qrAllowed(req)) return res.sendStatus(403);
-    await bot.logoutBaileys();
-    res.json({ success: true });
-  });
-
-  // Meta Cloud API webhook verification (called once when you register the URL)
-  app.get('/api/whatsapp/webhook', (req, res) => {
-    const token = wa.getVerifyToken();
-    if (req.query['hub.mode'] === 'subscribe' && token && req.query['hub.verify_token'] === token) {
-      return res.status(200).send(String(req.query['hub.challenge']));
-    }
-    return res.sendStatus(403);
-  });
-
-  // Meta Cloud API: incoming customer messages
-  app.post('/api/whatsapp/webhook', async (req: any, res) => {
-    const secret = process.env.WHATSAPP_APP_SECRET;
-    if (secret) {
-      const sig = String(req.headers['x-hub-signature-256'] || '');
-      const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('hex');
-      const ok = sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-      if (!ok) return res.sendStatus(401);
-    }
-    res.sendStatus(200); // acknowledge immediately, Meta retries on slow replies
-    try {
-      for (const m of wa.extractCloudMessages(req.body)) {
-        const result = await wa.handleIncomingMessage(m.from, m.text);
-        console.log(`[whatsapp] reply from ${m.from}: ${result}`);
-      }
-    } catch (err) {
-      console.error('[whatsapp] webhook error:', err);
-    }
-  });
-
-  // Generic gateway/bot: POST {from, text} with header x-webhook-secret
-  app.post('/api/whatsapp/incoming', async (req, res) => {
-    const secret = process.env.WHATSAPP_GATEWAY_TOKEN;
-    if (secret && req.headers['x-webhook-secret'] !== secret) return res.sendStatus(401);
-    const { from, text } = req.body || {};
-    if (!from || !text) return res.status(400).json({ success: false, message: 'from et text requis' });
-    const result = await wa.handleIncomingMessage(String(from), String(text));
-    return res.json({ success: true, result });
-  });
-
-  // Admin: re-send the confirmation message for one order
-  app.post('/api/orders/:id/whatsapp/resend', async (req, res) => {
-    const order = readJsonFile<any[]>(ORDERS_FILE, []).find(o => o.id === req.params.id);
-    if (!order) return res.status(404).json({ success: false, message: 'Commande introuvable' });
-    const notification = await wa.notifyOrder(order);
-    return res.json({ success: notification.status === 'SENT', notification });
-  });
-
-  // Admin: send direct message to customer from Admin Panel
-  app.post('/api/whatsapp/send-message', async (req, res) => {
-    try {
-      const { orderId, text } = req.body;
-      if (!orderId || !text) {
-        return res.status(400).json({ success: false, message: 'orderId et text requis' });
-      }
-      const updatedOrder = await wa.sendAdminMessage(orderId, text);
-      return res.json({ success: true, order: updatedOrder });
+      console.log('[Database] Cleaned up orders and test data for production launch');
+      return res.json({
+        success: true,
+        message: 'Base de données nettoyée avec succès pour le lancement en ligne'
+      });
     } catch (err: any) {
-      return res.status(500).json({ success: false, message: err.message });
+      console.error('[Database] Cleanup error:', err);
+      return res.status(500).json({ success: false, error: err.message });
     }
-  });
-
-  // Simulation endpoint for Admin testing WhatsApp Bot conversation & AI
-  app.post('/api/whatsapp/simulate-incoming', async (req, res) => {
-    try {
-      const { orderId, phone, text } = req.body;
-      if (!text) {
-        return res.status(400).json({ success: false, message: 'text requis' });
-      }
-      let targetPhone = phone;
-      if (!targetPhone && orderId) {
-        const order = readJsonFile<any[]>(ORDERS_FILE, []).find(o => o.id === orderId);
-        if (order) targetPhone = order.customerPhone;
-      }
-      if (!targetPhone) {
-        return res.status(400).json({ success: false, message: 'phone ou orderId requis' });
-      }
-      const result = await wa.handleIncomingMessage(targetPhone, text);
-      const allOrders = readJsonFile<any[]>(ORDERS_FILE, []);
-      const order = allOrders.find(o => orderId ? o.id === orderId : wa.samePhone(o.customerPhone, targetPhone));
-      return res.json({ success: true, result, order });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  });
-
-  app.get('/api/whatsapp/status', (_req, res) => {
-    res.json({
-      success: true,
-      configured: wa.isConfigured(),
-      provider: wa.getProvider(),
-      bot: bot.getStatus(),
-      qr: bot.getQr(),
-    });
   });
 
   // 5b. Categories API (CRUD)
@@ -1127,6 +1097,9 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 ShopMe Full-Stack Server running at http://0.0.0.0:${PORT}`);
     console.log(`📦 PostgreSQL Config: ${pgConfig.user}@${pgConfig.host}:${pgConfig.port}/${pgConfig.database} (${process.env.DATABASE_URL ? 'via DATABASE_URL' : 'via PG* vars'})`);
+
+    // Start Baileys WhatsApp bot connection in background
+    baileysManager.start().catch(err => console.warn('[Baileys] Background start notice:', err));
   });
 }
 

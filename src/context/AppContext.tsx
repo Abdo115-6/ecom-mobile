@@ -31,6 +31,7 @@ export type ActiveView =
   | 'admin-tracking'
   | 'admin-datamining'
   | 'admin-whatsapp'
+  | 'admin-calculation'
   | 'admin-users'
   | 'admin-audit'
   | 'admin-settings';

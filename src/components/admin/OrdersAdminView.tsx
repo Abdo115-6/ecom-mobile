@@ -18,7 +18,10 @@ import {
   User,
   QrCode,
   Printer,
-  CheckCheck
+  CheckCheck,
+  Trash2,
+  AlertTriangle,
+  Send
 } from 'lucide-react';
 import { whatsappService } from '../../services/whatsappService';
 
@@ -30,6 +33,20 @@ export const OrdersAdminView: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [ticketOrder, setTicketOrder] = useState<Order | null>(null);
   const [whatsappModalOrder, setWhatsappModalOrder] = useState<Order | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+
+  const confirmDeleteOrder = () => {
+    if (!orderToDelete) return;
+    const targetId = orderToDelete.id;
+    const orderNum = orderToDelete.orderNumber;
+    dbService.deleteOrder(targetId, currentUser);
+    setOrders(prev => prev.filter(o => o.id !== targetId));
+    if (selectedOrder && selectedOrder.id === targetId) {
+      setSelectedOrder(null);
+    }
+    setOrderToDelete(null);
+    showToast(`✓ Commande #${orderNum} supprimée avec succès`);
+  };
 
   const filteredOrders = orders.filter(o => {
     if (statusFilter !== 'all' && o.status !== statusFilter) return false;
@@ -257,6 +274,18 @@ export const OrdersAdminView: React.FC = () => {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         
+                        {/* Direct WhatsApp Message Button (+212 668-381916) */}
+                        <a
+                          href={`https://api.whatsapp.com/send?phone=${order.customerPhone.replace(/[^0-9]/g, '')}&text=${encodeURIComponent(`Salam ${order.customerName || 'Client'} ! 👋\nMerci pour votre commande sur ShopMe Maroc 🇲🇦\n\n📦 *Récapitulatif Commande #${order.orderNumber}* :\n💰 *Total à régler à la livraison* : ${order.totalAmount.toFixed(2)} DH (Paiement Cash après inspection de votre colis)\n📍 *Adresse de livraison* : ${order.shippingAddress.street || order.shippingAddress.city}, ${order.shippingAddress.city}\n\n👉 Veuillez répondre par *OUI* pour confirmer l'expédition express sous 24h-48h 🚚.`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 bg-[#00a884]/20 hover:bg-[#00a884]/35 text-[#00a884] rounded-lg transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs"
+                          title="Envoyer la confirmation WhatsApp depuis +212 668-381916"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span className="hidden xl:inline">Envoyer WA</span>
+                        </a>
+
                         {/* WhatsApp Conversation Screen button */}
                         <button
                           onClick={() => setWhatsappModalOrder(order)}
@@ -284,6 +313,15 @@ export const OrdersAdminView: React.FC = () => {
                           title="Inspecter la commande"
                         >
                           <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Delete Order Button (User Request: "add button delete action in commands in adminonly") */}
+                        <button
+                          onClick={() => setOrderToDelete(order)}
+                          className="p-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 rounded-lg transition-colors cursor-pointer"
+                          title="Supprimer définitivement cette commande"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -448,6 +486,15 @@ export const OrdersAdminView: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setOrderToDelete(selectedOrder)}
+                className="py-2.5 px-3 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Supprimer cette commande"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Supprimer</span>
+              </button>
+
+              <button
                 onClick={() => setSelectedOrder(null)}
                 className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
               >
@@ -481,6 +528,45 @@ export const OrdersAdminView: React.FC = () => {
             setTicketOrder(o);
           }}
         />
+      )}
+
+      {/* Delete Confirmation Modal (User Request: "add button delete action in commands in adminonly") */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-500/40 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Supprimer la commande ?</h3>
+                <p className="text-xs text-slate-400 font-mono">#{orderToDelete.orderNumber} ({orderToDelete.customerName})</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer définitivement cette commande ? Cette opération est irréversible et supprimera le dossier de commande.
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteOrder}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Oui, Supprimer</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
