@@ -22,12 +22,14 @@ interface WhatsAppConfirmationModalProps {
   order: Order | null;
   onClose: () => void;
   onPrintTicket?: (order: Order) => void;
+  onOrderUpdated?: (order: Order) => void;
 }
 
 export const WhatsAppConfirmationModal: React.FC<WhatsAppConfirmationModalProps> = ({
   order,
   onClose,
-  onPrintTicket
+  onPrintTicket,
+  onOrderUpdated
 }) => {
   if (!order) return null;
 

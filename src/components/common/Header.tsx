@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Locale } from '../../services/i18nService';
 import { CurrencyCode } from '../../services/currencyService';
+import { dbService } from '../../services/dbService';
 
 interface HeaderProps {
   onOpenSpecs: () => void;
@@ -38,8 +39,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
     searchTerm,
     setSearchTerm,
     currentUser,
-    switchUserRole
+    switchUserRole,
+    selectedCategorySlug,
+    setSelectedCategorySlug
   } = useApp();
+
+  const categories = dbService.categories;
 
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -113,37 +118,36 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
           </button>
 
           {/* Storefront Quick Categories Navigation */}
-          <nav className="hidden lg:flex items-center gap-2 ml-6 text-xs font-bold text-slate-600">
+          <nav className="hidden lg:flex items-center gap-1.5 ml-6 text-xs font-bold text-slate-600">
             <button
-              onClick={() => setCurrentView('catalog')}
-              className="px-3 py-1.5 rounded-lg hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              onClick={() => {
+                setSelectedCategorySlug(null);
+                setCurrentView('catalog');
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                !selectedCategorySlug && currentView === 'catalog'
+                  ? 'text-slate-900 bg-slate-100'
+                  : 'hover:text-slate-900 hover:bg-slate-50'
+              }`}
             >
               Tous les Produits
             </button>
-            <button
-              onClick={() => {
-                setCurrentView('catalog');
-              }}
-              className="px-3 py-1.5 rounded-lg hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-            >
-              Mode Homme 👔
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('catalog');
-              }}
-              className="px-3 py-1.5 rounded-lg hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              Mode Femme 👗
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('catalog');
-              }}
-              className="px-3 py-1.5 rounded-lg hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
-            >
-              Parfums & Oud ✨
-            </button>
+            {categories.slice(0, 5).map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setSelectedCategorySlug(cat.slug);
+                  setCurrentView('catalog');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  selectedCategorySlug === cat.slug && currentView === 'catalog'
+                    ? 'text-blue-600 bg-blue-50'
+                    : 'hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
           </nav>
         </div>
 
@@ -223,6 +227,44 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
           </div>
         </form>
       )}
+      {/* Categories Bar in Navbar (User Request: "and the categoris do it in the navbar") */}
+      <div className="bg-white/95 border-t border-slate-200/80 px-3 sm:px-4 py-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="max-w-7xl mx-auto flex items-center gap-1.5 sm:gap-2 text-xs font-bold whitespace-nowrap">
+          <button
+            onClick={() => {
+              setSelectedCategorySlug(null);
+              if (currentView !== 'home' && currentView !== 'catalog') {
+                setCurrentView('home');
+              }
+            }}
+            className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer text-[11px] sm:text-xs font-bold ${
+              !selectedCategorySlug
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+            }`}
+          >
+            Tous les Produits
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => {
+                setSelectedCategorySlug(selectedCategorySlug === cat.slug ? null : cat.slug);
+                if (currentView !== 'home' && currentView !== 'catalog') {
+                  setCurrentView('home');
+                }
+              }}
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer text-[11px] sm:text-xs font-bold flex items-center gap-1.5 ${
+                selectedCategorySlug === cat.slug
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+              }`}
+            >
+              <span>{cat.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </header>
   );
 };

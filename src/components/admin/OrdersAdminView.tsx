@@ -519,7 +519,7 @@ export const OrdersAdminView: React.FC = () => {
         <WhatsAppConfirmationModal
           order={whatsappModalOrder}
           onClose={() => setWhatsappModalOrder(null)}
-          onOrderUpdated={(updated) => {
+          onOrderUpdated={(updated: Order) => {
             setOrders([...dbService.orders]);
             setWhatsappModalOrder(updated);
           }}

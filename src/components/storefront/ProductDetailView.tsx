@@ -144,20 +144,6 @@ export const ProductDetailView: React.FC = () => {
     });
   };
 
-  // Countdown Urgency Timer (Flash sale for ads traffic)
-  const [timeLeft, setTimeLeft] = useState({ hours: 4, minutes: 27, seconds: 43 });
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return { hours: 3, minutes: 59, seconds: 59 };
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   // Floating Recent Moroccan Buyer Toast
   const [buyerIndex, setBuyerIndex] = useState(0);
   const [showBuyerToast, setShowBuyerToast] = useState(true);
@@ -386,12 +372,6 @@ export const ProductDetailView: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           <span>Retour à la boutique</span>
         </button>
-
-        {/* Live Views Counter */}
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-900 rounded-full text-xs font-bold animate-pulse">
-          <Flame className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
-          <span>🔥 18 personnes consultent ce produit en ce moment au Maroc</span>
-        </div>
       </div>
 
       {/* Main Product Layout */}
@@ -462,21 +442,6 @@ export const ProductDetailView: React.FC = () => {
         {/* Right Column: Title, Urgency, Packs & Direct COD Order Form (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
           
-          {/* Urgency Flash Countdown Banner */}
-          <div className="p-3.5 bg-gradient-to-r from-rose-600 via-rose-700 to-amber-600 text-white rounded-2xl shadow-md flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 animate-spin text-amber-200" />
-              <span className="text-xs font-black uppercase tracking-wide">Offre Spéciale Aujourd'hui :</span>
-            </div>
-            <div className="flex items-center gap-1 font-mono text-xs font-black bg-black/30 px-2.5 py-1 rounded-lg">
-              <span>{String(timeLeft.hours).padStart(2, '0')}h</span>
-              <span>:</span>
-              <span>{String(timeLeft.minutes).padStart(2, '0')}m</span>
-              <span>:</span>
-              <span>{String(timeLeft.seconds).padStart(2, '0')}s</span>
-            </div>
-          </div>
-
           {/* Category & Subcategory Breadcrumb */}
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
             <span className="hover:text-slate-900 cursor-pointer" onClick={() => setCurrentView('catalog')}>Boutique</span>
@@ -491,7 +456,7 @@ export const ProductDetailView: React.FC = () => {
           </div>
 
           {/* Title & Brand */}
-          <div>
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-bold rounded-md uppercase tracking-wider">
                 {product.brand}
@@ -503,104 +468,49 @@ export const ProductDetailView: React.FC = () => {
                 </span>
               )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-950 mt-1.5 leading-tight">
+
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-950 leading-tight">
               {product.name}
             </h1>
-            
-            {/* Rating */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex items-center gap-0.5 text-amber-400">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400" />
-                ))}
-              </div>
-              <span className="text-xs font-black text-slate-900">{product.rating} / 5</span>
-              <span className="text-xs text-slate-500">({product.reviewsCount} avis certifiés au Maroc)</span>
-            </div>
-          </div>
 
-          {/* DIRECT SHAREABLE LINK BOX (User Request: "make for the product url so i send link to client to buy directly the product") */}
-          <div className="p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl shadow-xs space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
-                <Share2 className="w-4 h-4 text-blue-600" />
-                <span>Lien Direct d'Achat (Prêt à envoyer au client)</span>
-              </div>
-              <span className="text-[10px] text-blue-700 bg-blue-100/80 font-bold px-2 py-0.5 rounded-full">
-                Railway & Mobile Ready
-              </span>
-            </div>
-
-            {/* Visible URL Input for Client Sharing */}
-            <div className="flex items-center gap-1.5 bg-white border border-blue-200 rounded-xl p-1 shadow-xs">
-              <input
-                type="text"
-                readOnly
-                value={getProductShareUrl(product.slug, true)}
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 bg-transparent px-2.5 py-1.5 text-[11px] font-mono text-slate-800 focus:outline-none select-all truncate"
-                title="Cliquez pour sélectionner l'URL complète"
-              />
-              <button
-                type="button"
-                onClick={handleCopyDirectLink}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                {copiedLink ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5 text-white" />
-                    <span>Copié !</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copier</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[10px] text-slate-500">
-                Ouvre directement la commande express COD pour le client
-              </span>
-              <button
-                type="button"
-                onClick={handleShareWhatsApp}
-                className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 shrink-0"
-                title="Envoyer le lien direct par message WhatsApp pré-rempli"
-              >
-                <MessageCircle className="w-3.5 h-3.5 fill-white text-emerald-600" />
-                <span>Partager WhatsApp</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Price Header */}
-          <div className="p-4 bg-slate-900 text-white rounded-2xl flex items-baseline justify-between shadow-md">
-            <div>
-              <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Prix Promotionnel Actuel</div>
-              <div className="flex items-baseline gap-3 mt-0.5">
-                <span className="text-3xl sm:text-4xl font-black text-white">
+            {/* Price Directly Under Title (User Request: "do price under title directly") */}
+            <div className="pt-1 pb-1">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <span className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight">
                   {formatMoney(unitPrice)}
                 </span>
                 {product.compareAtPrice && product.compareAtPrice > unitPrice && (
-                  <span className="text-base text-slate-400 line-through">
+                  <span className="text-lg sm:text-xl text-slate-400 line-through font-semibold">
                     {formatMoney(product.compareAtPrice)}
                   </span>
                 )}
+                {product.compareAtPrice && product.compareAtPrice > unitPrice && (
+                  <span className="px-2.5 py-0.5 bg-rose-600 text-white text-xs font-black rounded-lg shadow-xs">
+                    -{Math.round(((product.compareAtPrice - unitPrice) / product.compareAtPrice) * 100)}%
+                  </span>
+                )}
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                  ✓ Livraison Gratuite au Maroc
+                </span>
               </div>
               {product.compareAtPrice && product.compareAtPrice > unitPrice && (
-                <div className="text-[11px] text-emerald-400 font-bold mt-0.5">
-                  Économie de {formatMoney(product.compareAtPrice - unitPrice)} ({Math.round(((product.compareAtPrice - unitPrice) / product.compareAtPrice) * 100)}% de réduction)
+                <div className="text-xs text-emerald-600 font-bold mt-1">
+                  Économie : {formatMoney(product.compareAtPrice - unitPrice)}
                 </div>
               )}
             </div>
-            <div className="text-right">
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-lg inline-block">
-                ✓ Livraison Gratuite
-              </span>
-              <div className="text-[10px] text-slate-400 mt-1">Paiement à la livraison</div>
+
+            {/* Rating & Reassurance */}
+            <div className="flex items-center gap-3 pt-1 text-xs text-slate-500">
+              <div className="flex items-center gap-1 text-amber-400">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                ))}
+                <span className="text-xs font-black text-slate-900 ml-1">{product.rating}</span>
+                <span className="text-slate-400">({product.reviewsCount} avis)</span>
+              </div>
+              <span className="text-slate-300">•</span>
+              <span className="text-slate-600 font-medium">Paiement Cash à la livraison</span>
             </div>
           </div>
 
