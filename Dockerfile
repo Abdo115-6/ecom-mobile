@@ -1,4 +1,5 @@
-FROM node:20-alpine AS build
+# Use AWS Public ECR mirror for node:20-alpine to prevent Docker Hub 429 Too Many Requests rate limits
+FROM public.ecr.aws/docker/library/node:20-alpine AS build
 RUN apk add --no-cache git
 WORKDIR /app
 COPY package*.json ./
@@ -6,7 +7,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runtime
+FROM public.ecr.aws/docker/library/node:20-alpine AS runtime
 RUN apk add --no-cache git
 WORKDIR /app
 ENV NODE_ENV=production
