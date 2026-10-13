@@ -93,12 +93,20 @@ export const HomeView: React.FC = () => {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer"
                 />
 
-                {/* Discount Tag */}
-                {product.compareAtPrice && product.compareAtPrice > product.price && (
+                {/* Kind Tag (Digital / Service) or Discount */}
+                {(product.productKind === 'DIGITAL' || product.categoryId === 'cat-digital') ? (
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider flex items-center gap-1 shadow-xs">
+                    ⚡ {product.digitalSpecs?.digitalType === 'GAME_KEY' ? 'CLÉ JEU' : product.digitalSpecs?.digitalType === 'ACCOUNT' ? 'COMPTE' : product.digitalSpecs?.digitalType === 'SOFTWARE' ? 'LOGICIEL' : 'DIGITAL'}
+                  </div>
+                ) : (product.productKind === 'SERVICE' || product.categoryId === 'cat-services') ? (
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded-md tracking-wider flex items-center gap-1 shadow-xs">
+                    🛠️ SERVICE
+                  </div>
+                ) : product.compareAtPrice && product.compareAtPrice > product.price ? (
                   <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-slate-900 text-white text-[10px] font-black rounded-md tracking-wider">
                     -{Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}%
                   </div>
-                )}
+                ) : null}
 
                 {/* Wishlist */}
                 <button

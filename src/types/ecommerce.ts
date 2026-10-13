@@ -60,6 +60,8 @@ export interface Category {
   imageUrl: string;
   displayOrder: number;
   isActive: boolean;
+  productKind?: ProductKind;
+  badge?: string;
   subcategories?: Category[];
 }
 
@@ -98,6 +100,67 @@ export interface ProductImage {
   isPrimary: boolean;
 }
 
+export type ProductKind = 'PHYSICAL' | 'DIGITAL' | 'SERVICE';
+
+export type DigitalType = 
+  | 'SUBSCRIPTION' 
+  | 'GAME_KEY' 
+  | 'ACCOUNT' 
+  | 'GAME_TOPUP' 
+  | 'SOFTWARE' 
+  | 'GIFT_CARD';
+
+export type SharingMethod = 
+  | 'FULL_ACCESS' 
+  | 'SHARED_ACCOUNT' 
+  | 'FAMILY_INVITE' 
+  | 'LICENSE_KEY' 
+  | 'DIRECT_TOPUP';
+
+export interface DurationOption {
+  id: string;
+  label: string;
+  durationValue: string;
+  price: number;
+  compareAtPrice?: number;
+  badge?: string;
+  isDefault?: boolean;
+}
+
+export interface TopUpDenomination {
+  id: string;
+  amountLabel: string;
+  bonus?: string;
+  price: number;
+  compareAtPrice?: number;
+  discountBadge?: string;
+  imageUrl?: string;
+  isPopular?: boolean;
+}
+
+export interface DigitalSpecs {
+  digitalType: DigitalType;
+  sharingMethod: SharingMethod;
+  deliveryTime: string;
+  warrantyPeriod: string;
+  regionRestriction: string;
+  supportedDevices: string[];
+  durationOptions?: DurationOption[];
+  topUpDenominations?: TopUpDenomination[];
+  includedFeatures?: string[];
+  keysPool?: string[];
+  instantDeliveryNotice?: string;
+}
+
+export interface ServiceSpecs {
+  serviceType: string;
+  turnaroundTime: string;
+  revisions: string;
+  deliverables: string[];
+  clientRequirements: string;
+  guaranteeText?: string;
+}
+
 export interface TechnicalSpecs {
   weight?: string;
   dimensions?: string;
@@ -113,6 +176,7 @@ export type ProductStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 
 export interface Product {
   id: string;
+  productKind?: ProductKind;
   categoryId: string;
   categoryName?: string;
   subcategoryId?: string;
@@ -135,6 +199,8 @@ export interface Product {
   variants: ProductVariant[];
   promoPacks?: PromoPack[];
   technicalSpecs?: TechnicalSpecs;
+  digitalSpecs?: DigitalSpecs;
+  serviceSpecs?: ServiceSpecs;
   stockQuantity: number; // Aggregate across variants
   rating: number;
   reviewsCount: number;
@@ -198,7 +264,7 @@ export type OrderStatus =
   | 'CANCELLED' 
   | 'REFUNDED';
 
-export type PaymentMethod = 'CASH_ON_DELIVERY' | 'CREDIT_CARD' | 'BANK_TRANSFER';
+export type PaymentMethod = 'CASH_ON_DELIVERY' | 'CREDIT_CARD' | 'BANK_TRANSFER' | 'INSTANT_DELIVERY' | 'DIRECT_TRANSFER';
 
 export interface OrderItem {
   id: string;

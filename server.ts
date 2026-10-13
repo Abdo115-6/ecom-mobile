@@ -236,39 +236,62 @@ async function startServer() {
     });
   });
 
-  // 2. Upload PNG / JPG from laptop & Convert/Save WebP image
+  // 2. Upload PNG / JPG / GIF / WebP & Videos (MP4, WebM) from laptop
   app.post('/api/upload', async (req, res) => {
     try {
       const { filename, dataUrl, format } = req.body;
 
       if (!dataUrl) {
-        return res.status(400).json({ success: false, message: 'Aucune donnée d\'image fournie' });
+        return res.status(400).json({ success: false, message: 'Aucune donnée fournie' });
       }
 
-      // Extract base64 payload
-      const matches = dataUrl.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+      // Extract base64 payload for any media (image, gif, video)
+      const matches = dataUrl.match(/^data:([a-zA-Z0-9-+\/]+);base64,(.+)$/);
       if (!matches || matches.length !== 3) {
         return res.status(400).json({ success: false, message: 'Format base64 invalide' });
       }
 
-      const mimeType = matches[1];
+      const mimeType = matches[1].toLowerCase();
       const buffer = Buffer.from(matches[2], 'base64');
 
-      // Determine extension: keep webp or png or jpg
+      // Determine extension and media category
       let ext = 'webp';
+      let isVideo = false;
+      let isGif = false;
+
       if (format) {
         ext = format.toLowerCase();
+      } else if (mimeType.includes('gif')) {
+        ext = 'gif';
+        isGif = true;
+      } else if (mimeType.includes('mp4')) {
+        ext = 'mp4';
+        isVideo = true;
+      } else if (mimeType.includes('webm')) {
+        ext = 'webm';
+        isVideo = true;
+      } else if (mimeType.includes('quicktime') || mimeType.includes('mov')) {
+        ext = 'mov';
+        isVideo = true;
       } else if (mimeType.includes('png')) {
         ext = 'png';
       } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
         ext = 'jpg';
+      } else if (mimeType.includes('webp')) {
+        ext = 'webp';
       }
 
-      const sanitizedName = (filename || 'product_image')
+      if (mimeType.startsWith('video/')) {
+        isVideo = true;
+      }
+
+      const prefix = isVideo ? 'vid' : (isGif || ext === 'gif' ? 'gif' : 'img');
+      const sanitizedName = (filename || (isVideo ? 'product_video' : (isGif ? 'product_gif' : 'product_image')))
+        .replace(/\.[^/.]+$/, "")
         .replace(/[^a-zA-Z0-9_-]/g, '_')
         .substring(0, 40);
 
-      const generatedFileName = `img_${Date.now()}_${sanitizedName}.${ext}`;
+      const generatedFileName = `${prefix}_${Date.now()}_${sanitizedName}.${ext}`;
       const filePath = path.join(uploadsDir, generatedFileName);
 
       fs.writeFileSync(filePath, buffer);
@@ -277,14 +300,17 @@ async function startServer() {
 
       return res.json({
         success: true,
-        imageUrl: publicUrl,
+        url: publicUrl,
+        imageUrl: publicUrl, // backward compatibility
+        mediaUrl: publicUrl,
+        mediaType: isVideo ? 'video' : (isGif || ext === 'gif' ? 'gif' : 'image'),
         filename: generatedFileName,
         sizeKb: Math.round(buffer.length / 1024),
-        mimeType: `image/${ext}`
+        mimeType: mimeType
       });
     } catch (err: any) {
       console.error('Upload error:', err);
-      return res.status(500).json({ success: false, message: err.message || 'Erreur lors de l\'enregistrement de l\'image' });
+      return res.status(500).json({ success: false, message: err.message || 'Erreur lors de l\'enregistrement du média' });
     }
   });
 

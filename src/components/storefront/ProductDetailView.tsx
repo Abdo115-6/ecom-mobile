@@ -6,6 +6,7 @@ import { whatsappService } from '../../services/whatsappService';
 import { trackingService } from '../../services/trackingService';
 import { MOROCCAN_CITIES, RECENT_MOROCCAN_BUYERS } from '../../services/moroccoData';
 import { clientMovementService } from '../../services/clientMovementService';
+import { RichProductDescription } from '../common/RichProductDescription';
 import { 
   Star, 
   ShoppingBag, 
@@ -32,7 +33,12 @@ import {
   Plus,
   Minus,
   Percent,
-  CheckCircle
+  CheckCircle,
+  Zap,
+  Key,
+  Laptop,
+  Mail,
+  FileText
 } from 'lucide-react';
 
 export const ProductDetailView: React.FC = () => {
@@ -111,13 +117,24 @@ export const ProductDetailView: React.FC = () => {
     }
   }, [directBuyMode]);
 
-  // Direct COD Moroccan Form state
+  // Direct Moroccan Order Form state
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [selectedCity, setSelectedCity] = useState('Casablanca');
   const [shippingAddress, setShippingAddress] = useState('');
+  const [playerIdOrAccount, setPlayerIdOrAccount] = useState('');
+  const [serviceRequirements, setServiceRequirements] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+
+  // Digital duration option & top up denomination state
+  const [selectedDurationId, setSelectedDurationId] = useState<string | undefined>(
+    product?.digitalSpecs?.durationOptions?.find(d => d.isDefault)?.id || product?.digitalSpecs?.durationOptions?.[0]?.id
+  );
+  const [selectedDenomId, setSelectedDenomId] = useState<string | undefined>(
+    product?.digitalSpecs?.topUpDenominations?.find(d => d.isPopular)?.id || product?.digitalSpecs?.topUpDenominations?.[0]?.id
+  );
 
   // Track product view in client movement service
   useEffect(() => {
@@ -179,15 +196,30 @@ export const ProductDetailView: React.FC = () => {
     );
   }
 
-  // Selected variant unit price & stock calculation
-  const unitPrice = activeVariant ? activeVariant.price : product.price;
+  const isDigital = product.productKind === 'DIGITAL' || product.categoryId === 'cat-digital';
+  const isService = product.productKind === 'SERVICE' || product.categoryId === 'cat-services';
+
+  const selectedDuration = product.digitalSpecs?.durationOptions?.find(d => d.id === selectedDurationId);
+  const selectedDenomination = product.digitalSpecs?.topUpDenominations?.find(d => d.id === selectedDenomId);
+
+  // Dynamic unit price: respects digital duration option, denomination, or variant
+  const unitPrice = selectedDuration 
+    ? selectedDuration.price 
+    : selectedDenomination 
+    ? selectedDenomination.price 
+    : (activeVariant ? activeVariant.price : product.price);
+
+  const activeCompareAt = selectedDuration?.compareAtPrice 
+    || selectedDenomination?.compareAtPrice 
+    || (activeVariant?.compareAtPrice ?? product.compareAtPrice);
+
   const activeStock = activeVariant ? activeVariant.stockQuantity : product.stockQuantity;
   const activeSku = activeVariant ? activeVariant.sku : product.sku;
 
   // Dynamic Pack calculations from active pack
-  const activePack = packsList[selectedPackIndex] || packsList[0];
+  const activePack = (isDigital || isService) ? null : (packsList[selectedPackIndex] || packsList[0]);
   const packQuantity = activePack ? activePack.quantity : 1;
-  const packTotalPrice = activePack ? activePack.price : unitPrice;
+  const packTotalPrice = (isDigital || isService) ? unitPrice : (activePack ? activePack.price : unitPrice);
   const packDiscount = (activePack && activePack.compareAtPrice && activePack.compareAtPrice > activePack.price)
     ? (activePack.compareAtPrice - activePack.price)
     : 0;
@@ -211,7 +243,11 @@ export const ProductDetailView: React.FC = () => {
   const handleShareWhatsApp = () => {
     if (!product) return;
     const url = getProductShareUrl(product.slug, true);
-    const msg = `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc 🇲🇦 :\n👉 ${url}`;
+    const msg = isDigital
+      ? `Salam ! Voici le lien direct pour commander l'accès/clé *${product.name}* (Livraison Digitale Instantanée ⚡) :\n👉 ${url}`
+      : isService
+      ? `Salam ! Voici le lien direct pour réserver la prestation *${product.name}* 🛠️ :\n👉 ${url}`
+      : `Salam ! Voici le lien direct pour commander *${product.name}* avec paiement à la livraison (COD) partout au Maroc 🇲🇦 :\n👉 ${url}`;
     clientMovementService.trackClick('Partager WhatsApp Client', 'WHATSAPP', {
       productSlug: product.slug,
       productName: product.name
@@ -222,8 +258,8 @@ export const ProductDetailView: React.FC = () => {
   // Delivery info for selected city
   const cityInfo = MOROCCAN_CITIES.find(c => c.name === selectedCity) || MOROCCAN_CITIES[0];
 
-  // Delivery fee calculation from admin settings
-  const deliveryFee = dbService.calculateDeliveryFee(selectedCity, packTotalPrice);
+  // Delivery fee calculation from admin settings (Free 0 DH for digital & services)
+  const deliveryFee = (isDigital || isService) ? 0 : dbService.calculateDeliveryFee(selectedCity, packTotalPrice);
   const finalOrderTotal = packTotalPrice + deliveryFee;
 
   // Companion & Reviews
@@ -254,6 +290,15 @@ export const ProductDetailView: React.FC = () => {
 
     setIsSubmittingOrder(true);
 
+    // Effective item title
+    const effectiveTitle = isDigital && selectedDuration 
+      ? `${product.name} (Durée : ${selectedDuration.label})` 
+      : isDigital && selectedDenomination 
+      ? `${product.name} (Option : ${selectedDenomination.amountLabel})` 
+      : activeVariant 
+      ? `${product.name} - ${activeVariant.title}` 
+      : `${product.name} (Pack ${packQuantity} pcs)`;
+
     // Build Moroccan order
     const orderItems = [
       {
@@ -261,9 +306,9 @@ export const ProductDetailView: React.FC = () => {
         productId: product.id,
         productName: product.name,
         sku: activeSku,
-        variantTitle: activeVariant ? `${activeVariant.title} (Pack ${packQuantity} pcs)` : `Pack ${packQuantity} pcs`,
-        unitPrice: packTotalPrice / packQuantity,
-        quantity: packQuantity,
+        variantTitle: effectiveTitle,
+        unitPrice: (isDigital || isService) ? unitPrice : (packTotalPrice / packQuantity),
+        quantity: (isDigital || isService) ? 1 : packQuantity,
         subtotal: packTotalPrice,
         imageUrl: product.images[0]?.imageUrl || ''
       }
@@ -274,25 +319,31 @@ export const ProductDetailView: React.FC = () => {
         const createdOrder = dbService.createOrder({
           customerId: "cust-" + Date.now(),
           customerName: customerName.trim(),
-          customerEmail: `${customerPhone.replace(/[^0-9]/g, '')}@client-shopme.ma`,
+          customerEmail: customerEmail.trim() || `${customerPhone.replace(/[^0-9]/g, '')}@client-shopme.ma`,
           customerPhone: customerPhone.trim(),
           status: 'PROCESSING',
           currency: 'MAD',
-          subtotal: unitPrice * packQuantity,
-          discountAmount: packDiscount,
-          shippingFee: deliveryFee,
+          subtotal: packTotalPrice,
+          discountAmount: (isDigital || isService) ? 0 : packDiscount,
+          shippingFee: (isDigital || isService) ? 0 : deliveryFee,
           taxAmount: 0,
           totalAmount: finalOrderTotal,
           shippingAddress: {
             fullName: customerName.trim(),
             phone: customerPhone.trim(),
-            street: shippingAddress.trim() || 'Adresse confirmée par téléphone',
-            city: selectedCity,
+            street: (isDigital || isService) 
+              ? (customerEmail.trim() ? `Email: ${customerEmail.trim()}${playerIdOrAccount ? ` | ID: ${playerIdOrAccount}` : ''}` : 'Livraison Digitale Directe') 
+              : (shippingAddress.trim() || 'Adresse confirmée par téléphone'),
+            city: (isDigital || isService) ? 'Maroc (Livraison Directe)' : selectedCity,
             country: 'Maroc'
           },
-          paymentMethod: 'CASH_ON_DELIVERY',
+          paymentMethod: isDigital ? 'INSTANT_DELIVERY' : isService ? 'DIRECT_TRANSFER' : 'CASH_ON_DELIVERY',
           paymentStatus: 'PENDING',
-          shipment: {
+          shipment: (isDigital || isService) ? {
+            carrier: isDigital ? '⚡ ShopMe Livraison Digitale' : '🛠️ ShopMe Prestations Pro',
+            trackingNumber: `DIG-${Math.floor(100000 + Math.random() * 900000)}`,
+            status: isDigital ? 'Prêt pour activation immédiate' : 'Prise en charge par un expert'
+          } : {
             carrier: 'ShopMe Express Maroc',
             trackingNumber: `MA-${Math.floor(100000 + Math.random() * 900000)}`,
             status: 'Commande confirmée · En préparation'
@@ -300,7 +351,11 @@ export const ProductDetailView: React.FC = () => {
           items: orderItems,
           utmSource: new URLSearchParams(window.location.search).get('utm_source') || 'direct_ads',
           utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'morocco_conversion',
-          notes: `Commande Express 1-Clic COD Pack ${packQuantity}. Ville : ${selectedCity}`
+          notes: isDigital 
+            ? `⚡ PRODUIT DIGITAL: ${product.digitalSpecs?.digitalType || 'Digital'}. Email: ${customerEmail}. WhatsApp: ${customerPhone}.${playerIdOrAccount ? ` ID/Compte: ${playerIdOrAccount}` : ''}${selectedDuration ? ` Durée: ${selectedDuration.label}` : ''}`
+            : isService
+            ? `🛠️ SERVICE: ${product.serviceSpecs?.serviceType || 'Service'}. Email: ${customerEmail}. WhatsApp: ${customerPhone}. Besoins: ${serviceRequirements || 'Non spécifiés'}`
+            : `Commande Express 1-Clic COD Pack ${packQuantity}. Ville : ${selectedCity}`
         });
 
         // Fire high-priority conversion tracking for Ads (GA4, Meta CAPI, TikTok, Snapchat)
@@ -421,21 +476,61 @@ export const ProductDetailView: React.FC = () => {
 
           {/* Reassurance Badges */}
           <div className="grid grid-cols-3 gap-2.5 pt-2 text-center">
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-              <Truck className="w-5 h-5 text-blue-600 mx-auto" />
-              <div className="text-[11px] font-extrabold text-slate-900">Livraison 24h-48h</div>
-              <div className="text-[9px] text-slate-500">Partout au Maroc</div>
-            </div>
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-              <ShieldCheck className="w-5 h-5 text-emerald-600 mx-auto" />
-              <div className="text-[11px] font-extrabold text-slate-900">Paiement Cash</div>
-              <div className="text-[9px] text-slate-500">À la réception</div>
-            </div>
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-              <RotateCcw className="w-5 h-5 text-purple-600 mx-auto" />
-              <div className="text-[11px] font-extrabold text-slate-900">Testez le Colis</div>
-              <div className="text-[9px] text-slate-500">Avant de payer</div>
-            </div>
+            {isDigital ? (
+              <>
+                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
+                  <Zap className="w-5 h-5 text-emerald-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">En 2 Minutes</div>
+                  <div className="text-[9px] text-slate-500">Livraison WhatsApp & Email</div>
+                </div>
+                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Anti-Coupure</div>
+                  <div className="text-[9px] text-slate-500">Garantie & SAV 24/7</div>
+                </div>
+                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
+                  <Sparkles className="w-5 h-5 text-blue-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Sans VPN</div>
+                  <div className="text-[9px] text-slate-500">100% Officiel Maroc</div>
+                </div>
+              </>
+            ) : isService ? (
+              <>
+                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
+                  <Clock className="w-5 h-5 text-purple-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">24h - 48h</div>
+                  <div className="text-[9px] text-slate-500">Délai d'exécution</div>
+                </div>
+                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
+                  <ShieldCheck className="w-5 h-5 text-purple-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Satisfait / Repris</div>
+                  <div className="text-[9px] text-slate-500">Révisions incluses</div>
+                </div>
+                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
+                  <UserCheck className="w-5 h-5 text-purple-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Expert Dédié</div>
+                  <div className="text-[9px] text-slate-500">Accompagnement Pro</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
+                  <Truck className="w-5 h-5 text-blue-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Livraison 24h-48h</div>
+                  <div className="text-[9px] text-slate-500">Partout au Maroc</div>
+                </div>
+                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Paiement Cash</div>
+                  <div className="text-[9px] text-slate-500">À la réception</div>
+                </div>
+                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
+                  <RotateCcw className="w-5 h-5 text-purple-600 mx-auto" />
+                  <div className="text-[11px] font-extrabold text-slate-900">Testez le Colis</div>
+                  <div className="text-[9px] text-slate-500">Avant de payer</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -457,13 +552,23 @@ export const ProductDetailView: React.FC = () => {
 
           {/* Title & Brand */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-bold rounded-md uppercase tracking-wider">
                 {product.brand}
               </span>
               <span className="text-xs text-slate-500 font-semibold">Réf: {activeSku}</span>
+              {isDigital && (
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-md flex items-center gap-1 border border-emerald-300">
+                  ⚡ {product.digitalSpecs?.digitalType === 'GAME_KEY' ? 'CLÉ CD JEU' : product.digitalSpecs?.digitalType === 'ACCOUNT' ? 'COMPTE PRIVÉ' : product.digitalSpecs?.digitalType === 'SOFTWARE' ? 'LOGICIEL' : product.digitalSpecs?.digitalType === 'SUBSCRIPTION' ? 'ABONNEMENT' : 'DIGITAL'}
+                </span>
+              )}
+              {isService && (
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-black rounded-md flex items-center gap-1 border border-purple-300">
+                  🛠️ PRESTATION SERVICE
+                </span>
+              )}
               {product.subcategoryName && (
-                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-semibold rounded-md">
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-md">
                   {product.subcategoryName}
                 </span>
               )}
@@ -621,68 +726,155 @@ export const ProductDetailView: React.FC = () => {
             </div>
           )}
 
-          {/* DYNAMIC OFFER PACKS SELECTOR (User Request: "more control in prices promo and packs and colors and quntity") */}
-          <div className="space-y-2.5 pt-1">
-            <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
-              <span>Sélectionnez votre offre promotionnelle :</span>
-              <span className="text-[11px] text-emerald-600 font-bold">Livraison 0 DH</span>
-            </label>
+          {/* DURATION SELECTOR (FOR DIGITAL SUBSCRIPTIONS / KEYS / SOFTWARE) */}
+          {isDigital && product.digitalSpecs?.durationOptions && product.digitalSpecs.durationOptions.length > 0 && (
+            <div className="space-y-2.5 pt-1">
+              <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
+                <span>Choisissez votre formule / durée :</span>
+                <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5" />
+                  Livraison Moins 2 Min
+                </span>
+              </label>
 
-            <div className={`grid grid-cols-1 ${packsList.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2.5`}>
-              {packsList.map((pack, idx) => {
-                const isSelected = selectedPackIndex === idx;
-                const savings = pack.compareAtPrice && pack.compareAtPrice > pack.price
-                  ? pack.compareAtPrice - pack.price
-                  : 0;
-
-                return (
-                  <div
-                    key={pack.id || `pack-${idx}`}
-                    onClick={() => {
-                      setSelectedPackIndex(idx);
-                      handleInputChange('fullName', customerName);
-                      clientMovementService.trackClick(`Choix ${pack.title}`, 'PACK', {
-                        productSlug: product.slug,
-                        productName: product.name
-                      });
-                    }}
-                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                      isSelected 
-                        ? 'border-emerald-600 bg-emerald-50/80 shadow-md ring-2 ring-emerald-500/20' 
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    {pack.badge && (
-                      <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
-                        {pack.badge}
-                      </span>
-                    )}
-                    <div className="text-xs font-extrabold text-slate-900">{pack.title}</div>
-                    <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(pack.price)}</div>
-                    {pack.compareAtPrice && pack.compareAtPrice > pack.price ? (
-                      <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
-                        <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
-                        <span className="text-emerald-700 font-bold">Économie {formatMoney(savings)}</span>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-500 mt-0.5">Offre standard</div>
-                    )}
-                  </div>
-                );
-              })}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {product.digitalSpecs.durationOptions.map((opt) => {
+                  const isSelected = (selectedDurationId || product.digitalSpecs?.durationOptions?.[0]?.id) === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedDurationId(opt.id)}
+                      className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        isSelected 
+                          ? 'border-emerald-600 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/20' 
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      {opt.badge && (
+                        <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
+                          {opt.badge}
+                        </span>
+                      )}
+                      <div className="text-xs font-black text-slate-900 line-clamp-1">{opt.label}</div>
+                      <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(opt.price)}</div>
+                      {opt.compareAtPrice && opt.compareAtPrice > opt.price && (
+                        <div className="text-[10px] text-slate-400 line-through">
+                          {formatMoney(opt.compareAtPrice)}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* DIRECT EXPRESS CASH ON DELIVERY (COD) ORDER FORM - HIGH CONVERTING */}
+          {/* TOP-UP DENOMINATIONS (FOR GAME TOP-UP / GIFT CARDS) */}
+          {isDigital && product.digitalSpecs?.topUpDenominations && product.digitalSpecs.topUpDenominations.length > 0 && (
+            <div className="space-y-2.5 pt-1">
+              <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
+                <span>Sélectionnez votre recharge :</span>
+                <span className="text-[11px] text-emerald-600 font-bold">Crédit Direct Garanti</span>
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {product.digitalSpecs.topUpDenominations.map((denom) => {
+                  const isSelected = (selectedDenomId || product.digitalSpecs?.topUpDenominations?.[0]?.id) === denom.id;
+                  return (
+                    <button
+                      key={denom.id}
+                      type="button"
+                      onClick={() => setSelectedDenomId(denom.id)}
+                      className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        isSelected 
+                          ? 'border-emerald-600 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/20' 
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      {denom.discountBadge && (
+                        <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
+                          {denom.discountBadge}
+                        </span>
+                      )}
+                      <div className="text-xs font-black text-slate-900 line-clamp-1">{denom.amountLabel}</div>
+                      {denom.bonus && <div className="text-[10px] text-emerald-600 font-bold">{denom.bonus}</div>}
+                      <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(denom.price)}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC OFFER PACKS SELECTOR (FOR PHYSICAL PRODUCTS ONLY) */}
+          {!isDigital && !isService && (
+            <div className="space-y-2.5 pt-1">
+              <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
+                <span>Sélectionnez votre offre promotionnelle :</span>
+                <span className="text-[11px] text-emerald-600 font-bold">Livraison 0 DH</span>
+              </label>
+
+              <div className={`grid grid-cols-1 ${packsList.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2.5`}>
+                {packsList.map((pack, idx) => {
+                  const isSelected = selectedPackIndex === idx;
+                  const savings = pack.compareAtPrice && pack.compareAtPrice > pack.price
+                    ? pack.compareAtPrice - pack.price
+                    : 0;
+
+                  return (
+                    <div
+                      key={pack.id || `pack-${idx}`}
+                      onClick={() => {
+                        setSelectedPackIndex(idx);
+                        handleInputChange('fullName', customerName);
+                        clientMovementService.trackClick(`Choix ${pack.title}`, 'PACK', {
+                          productSlug: product.slug,
+                          productName: product.name
+                        });
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative ${
+                        isSelected 
+                          ? 'border-emerald-600 bg-emerald-50/80 shadow-md ring-2 ring-emerald-500/20' 
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      {pack.badge && (
+                        <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
+                          {pack.badge}
+                        </span>
+                      )}
+                      <div className="text-xs font-extrabold text-slate-900">{pack.title}</div>
+                      <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(pack.price)}</div>
+                      {pack.compareAtPrice && pack.compareAtPrice > pack.price ? (
+                        <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
+                          <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
+                          <span className="text-emerald-700 font-bold">Économie {formatMoney(savings)}</span>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-500 mt-0.5">Offre standard</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DIRECT EXPRESS ORDER FORM (TAILORED FOR DIGITAL, SERVICE, AND PHYSICAL) */}
           <div id="direct-cod-form" className={`bg-gradient-to-b from-white to-slate-50 border-2 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 transition-all ${
-            directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-emerald-500/50'
+            directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : isDigital ? 'border-emerald-500/60' : isService ? 'border-purple-500/60' : 'border-emerald-500/50'
           }`}>
             
             <div className="border-b border-slate-200 pb-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase tracking-wide">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Commander en 1 Clic · Paiement à la Livraison</span>
+                <div className={`flex items-center gap-2 font-black text-sm uppercase tracking-wide ${
+                  isDigital ? 'text-emerald-700' : isService ? 'text-purple-700' : 'text-emerald-700'
+                }`}>
+                  {isDigital ? <Zap className="w-4 h-4 text-emerald-600" /> : isService ? <Sparkles className="w-4 h-4 text-purple-600" /> : <Sparkles className="w-4 h-4 text-emerald-600" />}
+                  <span>
+                    {isDigital ? 'Passer Commande · Livraison Digitale Instantanée' : isService ? 'Réserver la Prestation · Prise en Charge Rapide' : 'Commander en 1 Clic · Paiement à la Livraison'}
+                  </span>
                 </div>
                 {directBuyMode && (
                   <span className="px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-md animate-pulse">
@@ -691,7 +883,11 @@ export const ProductDetailView: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.
+                {isDigital 
+                  ? 'Livraison sans frais (0 DH). Vous recevrez vos clés / accès directement par WhatsApp & Email sous 2 minutes.' 
+                  : isService 
+                  ? 'Pas de frais de dossier (0 DH). Un expert ShopMe vous contactera directement par WhatsApp pour convenir des détails.' 
+                  : 'Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.'}
               </p>
             </div>
 
@@ -707,7 +903,7 @@ export const ProductDetailView: React.FC = () => {
               {/* Customer Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Nom & Prénom</span>
+                  <span>{isService ? 'Nom & Prénom / Société' : 'Nom & Prénom'}</span>
                   <span className="text-[11px] text-slate-400 font-normal">الاسم الكامل</span>
                 </label>
                 <div className="relative">
@@ -723,11 +919,11 @@ export const ProductDetailView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Customer Phone (Morocco) */}
+              {/* Customer Phone & WhatsApp (Morocco) */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Numéro de Téléphone</span>
-                  <span className="text-[11px] text-slate-400 font-normal">رقم الهاتف للاتصال</span>
+                  <span>{isDigital ? 'Numéro WhatsApp (Pour envoi direct)' : 'Numéro de Téléphone'}</span>
+                  <span className="text-[11px] text-slate-400 font-normal">رقم الواتساب / الهاتف</span>
                 </label>
                 <div className="relative">
                   <input
@@ -741,73 +937,138 @@ export const ProductDetailView: React.FC = () => {
                   <PhoneCall className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 </div>
                 <div className="text-[10px] text-slate-500">
-                  Notre équipe vous contactera par téléphone ou WhatsApp pour confirmer l'adresse exacte.
+                  {isDigital 
+                    ? '⚡ Vous recevrez immédiatement les codes et instructions sur ce numéro WhatsApp.' 
+                    : isService 
+                    ? 'Notre équipe d\'experts vous contactera directement pour coordonner la prestation.' 
+                    : 'Notre équipe vous contactera par téléphone ou WhatsApp pour confirmer l\'adresse exacte.'}
                 </div>
               </div>
 
-              {/* City Selection */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Ville de Livraison</span>
-                  <span className="text-[11px] text-slate-400 font-normal">المدينة</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-8 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
-                  >
-                    {MOROCCAN_CITIES.map(c => (
-                      <option key={c.name} value={c.name}>
-                        {c.name} - {c.arabicName} ({c.deliveryNote})
-                      </option>
-                    ))}
-                  </select>
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {/* Digital & Service specific fields: Email */}
+              {(isDigital || isService) && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                    <span>Adresse Email (Pour réception de la licence / facture)</span>
+                    <span className="text-[11px] text-slate-400 font-normal">البريد الإلكتروني</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="votre-email@gmail.com"
+                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                    />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Street Address */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Adresse ou Quartier (Optionnel)</span>
-                  <span className="text-[11px] text-slate-400 font-normal">العنوان</span>
-                </label>
-                <input
-                  type="text"
-                  value={shippingAddress}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  placeholder="Ex: Quartier Maârif, Rue 14..."
-                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                />
-              </div>
+              {/* Digital Player ID / Account Tag if needed */}
+              {isDigital && (product.digitalSpecs?.digitalType === 'GAME_TOPUP' || product.digitalSpecs?.digitalType === 'ACCOUNT') && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                    <span>ID Joueur / Riot ID / Tag du compte (Optionnel ou Requis pour recharge)</span>
+                    <span className="text-[11px] text-slate-400 font-normal">معرف اللاعب</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={playerIdOrAccount}
+                      onChange={(e) => setPlayerIdOrAccount(e.target.value)}
+                      placeholder="Ex: Player#EUW ou ID numérique..."
+                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                    />
+                    <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+              )}
+
+              {/* Service Requirements / Description */}
+              {isService && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                    <span>Détails ou instructions sur votre besoin</span>
+                    <span className="text-[11px] text-slate-400 font-normal">تفاصيل المشروع</span>
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      rows={2}
+                      value={serviceRequirements}
+                      onChange={(e) => setServiceRequirements(e.target.value)}
+                      placeholder="Précisez brièvement vos attentes ou URL du projet..."
+                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-all"
+                    />
+                    <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  </div>
+                </div>
+              )}
+
+              {/* Physical Only: City and Street Address */}
+              {!isDigital && !isService && (
+                <>
+                  {/* City Selection */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                      <span>Ville de Livraison</span>
+                      <span className="text-[11px] text-slate-400 font-normal">المدينة</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedCity}
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-8 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                      >
+                        {MOROCCAN_CITIES.map(c => (
+                          <option key={c.name} value={c.name}>
+                            {c.name} - {c.arabicName} ({c.deliveryNote})
+                          </option>
+                        ))}
+                      </select>
+                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+
+                  {/* Street Address */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                      <span>Adresse ou Quartier (Optionnel)</span>
+                      <span className="text-[11px] text-slate-400 font-normal">العنوان</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingAddress}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Ex: Quartier Maârif, Rue 14..."
+                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Order Recap Banner with Dynamic Delivery Fee */}
               <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-600">
                   <span>Article :</span>
-                  <span className="font-bold text-slate-900">{product.name} ({packQuantity} pcs)</span>
+                  <span className="font-bold text-slate-900">
+                    {product.name} {selectedDuration ? `(${selectedDuration.label})` : selectedDenomination ? `(${selectedDenomination.amountLabel})` : isDigital || isService ? '' : `(${packQuantity} pcs)`}
+                  </span>
                 </div>
-                {packDiscount > 0 && (
+                {packDiscount > 0 && !isDigital && !isService && (
                   <div className="flex justify-between text-emerald-700 font-bold">
                     <span>Remise Pack :</span>
                     <span>-{formatMoney(packDiscount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-slate-700">
-                  <span>Frais de livraison ({selectedCity}) :</span>
-                  {deliveryFee === 0 ? (
-                    <span className="font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-md">
-                      GRATUITE (0 DH)
-                    </span>
-                  ) : (
-                    <span className="font-bold text-slate-900 font-mono">
-                      +{formatMoney(deliveryFee)}
-                    </span>
-                  )}
+                  <span>{isDigital ? 'Livraison Instantanée WhatsApp & Email :' : isService ? 'Frais de prise en charge :' : `Frais de livraison (${selectedCity}) :`}</span>
+                  <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                    GRATUITE (0 DH)
+                  </span>
                 </div>
                 <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200/80 text-sm font-black text-slate-900">
-                  <span>Total Cash on Delivery à régler :</span>
+                  <span>{isDigital ? 'Total Net à régler :' : isService ? 'Total Prestation :' : 'Total Cash on Delivery à régler :'}</span>
                   <span className="text-xl text-emerald-700 font-mono">{formatMoney(finalOrderTotal)}</span>
                 </div>
               </div>
@@ -815,11 +1076,27 @@ export const ProductDetailView: React.FC = () => {
               {/* Big High-Converting Pulsing Order Button */}
               <button
                 type="submit"
-                disabled={isSubmittingOrder || activeStock <= 0}
-                className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-black text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 animate-pulse hover:animate-none"
+                disabled={isSubmittingOrder || (!isDigital && !isService && activeStock <= 0)}
+                className={`w-full py-4 px-6 text-white font-black text-sm sm:text-base rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-98 animate-pulse hover:animate-none ${
+                  isDigital 
+                    ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30' 
+                    : isService 
+                    ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-purple-600/30' 
+                    : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30'
+                }`}
               >
                 {isSubmittingOrder ? (
                   <span className="inline-block w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                ) : isDigital ? (
+                  <>
+                    <Zap className="w-5 h-5" />
+                    <span>⚡ RECEVOIR MES ACCÈS IMMÉDIATEMENT (0 DH LIVRAISON)</span>
+                  </>
+                ) : isService ? (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    <span>🚀 CONFIRMER MA COMMANDE DE SERVICE</span>
+                  </>
                 ) : (
                   <>
                     <ShoppingBag className="w-5 h-5" />
@@ -830,7 +1107,13 @@ export const ProductDetailView: React.FC = () => {
 
               <div className="text-[10px] text-slate-500 text-center flex items-center justify-center gap-1.5 pt-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Paiement en espèces seulement après ouverture et vérification de votre colis</span>
+                <span>
+                  {isDigital 
+                    ? 'Accès garanti 100% fonctionnel · Remplacement immédiat en cas de blocage' 
+                    : isService 
+                    ? 'Intervention de techniciens qualifiés · Suivi direct par WhatsApp' 
+                    : 'Paiement en espèces seulement après ouverture et vérification de votre colis'}
+                </span>
               </div>
             </form>
 
@@ -898,46 +1181,146 @@ export const ProductDetailView: React.FC = () => {
         </section>
       )}
 
-      {/* Description & Full Details */}
+      {/* Description & Full Details avec Médias Riches (Images, GIFs, Vidéos) pour Mobile */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4 shadow-sm">
-        <h2 className="text-base sm:text-lg font-black text-slate-900">Détails & Caractéristiques du Produit</h2>
-        <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
-          <p>{product.description}</p>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h2 className="text-base sm:text-lg font-black text-slate-900">
+            Détails & Caractéristiques du Produit
+          </h2>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200/60 hidden sm:inline-block">
+            Expérience Mobile HD
+          </span>
         </div>
+        <RichProductDescription 
+          description={product.description} 
+          productName={product.name} 
+        />
       </section>
 
-      {/* Informations Techniques & Spécifications */}
+      {/* Informations Techniques & Spécifications Adaptives */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-blue-600" />
-          <h2 className="text-base sm:text-lg font-black text-slate-900">Informations & Fiche Technique</h2>
+          {isDigital ? <Zap className="w-5 h-5 text-emerald-600" /> : isService ? <Sparkles className="w-5 h-5 text-purple-600" /> : <Layers className="w-5 h-5 text-blue-600" />}
+          <h2 className="text-base sm:text-lg font-black text-slate-900">
+            {isDigital ? 'Caractéristiques & Spécifications Digitales' : isService ? 'Détails & Modalités de la Prestation' : 'Informations & Fiche Technique'}
+          </h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Garantie & SAV</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.warranty || 'Garantie 1 an · Échange 7j'}</div>
+
+        {isDigital ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type de Produit</div>
+                <div className="text-xs font-black text-slate-900">
+                  {product.digitalSpecs?.digitalType === 'GAME_KEY' ? 'Clé CD Officielle' : product.digitalSpecs?.digitalType === 'ACCOUNT' ? 'Compte Privé / Partagé' : product.digitalSpecs?.digitalType === 'SOFTWARE' ? 'Logiciel avec Licence' : product.digitalSpecs?.digitalType === 'SUBSCRIPTION' ? 'Abonnement Renouvelable' : 'Produit Digital'}
+                </div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mode d'accès</div>
+                <div className="text-xs font-black text-slate-900">
+                  {product.digitalSpecs?.sharingMethod === 'FULL_ACCESS' ? 'Accès Dédié 100% Personnel' : product.digitalSpecs?.sharingMethod === 'SHARED_ACCOUNT' ? 'Profil Privé avec Code PIN' : product.digitalSpecs?.sharingMethod === 'LICENSE_KEY' ? 'Clé Alphanumérique Unique' : product.digitalSpecs?.sharingMethod === 'FAMILY_INVITE' ? 'Invitation sur Compte Existant' : 'Activation Directe'}
+                </div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Délai d'envoi</div>
+                <div className="text-xs font-black text-emerald-600 font-bold">{product.digitalSpecs?.deliveryTime || '⚡ Immédiat (Moins de 2 minutes)'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Garantie & Support</div>
+                <div className="text-xs font-black text-slate-900">{product.digitalSpecs?.warrantyPeriod || 'Garantie anti-coupure & support 24/7'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Région / VPN</div>
+                <div className="text-xs font-black text-slate-900">{product.digitalSpecs?.regionRestriction || 'Global / Sans VPN Requis'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Appareils supportés</div>
+                <div className="text-xs font-black text-slate-900">{(product.digitalSpecs?.supportedDevices || ['PC', 'Mac', 'Mobile', 'Console']).join(', ')}</div>
+              </div>
+            </div>
+
+            {/* Included features list if available */}
+            {product.digitalSpecs?.includedFeatures && product.digitalSpecs.includedFeatures.length > 0 && (
+              <div className="p-4 bg-emerald-50/50 border border-emerald-200/60 rounded-2xl space-y-2">
+                <div className="text-xs font-bold text-emerald-900">Avantages & Fonctionnalités inclus :</div>
+                <div className="flex flex-wrap gap-2">
+                  {product.digitalSpecs.includedFeatures.map((feat, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      {feat}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Origine / Fabrication</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.origin || 'Maroc / Confection Artisanale'}</div>
+        ) : isService ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prestation</div>
+                <div className="text-xs font-black text-slate-900">{product.serviceSpecs?.serviceType || 'Service Professionnel'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Délai d'exécution</div>
+                <div className="text-xs font-black text-purple-700 font-bold">{product.serviceSpecs?.turnaroundTime || '24h - 48h ouvrées'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Révisions</div>
+                <div className="text-xs font-black text-slate-900">{product.serviceSpecs?.revisions || 'Révisions incluses'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Garantie</div>
+                <div className="text-xs font-black text-slate-900">{product.serviceSpecs?.guaranteeText || 'Satisfait ou ajusté'}</div>
+              </div>
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1 col-span-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prérequis client</div>
+                <div className="text-xs font-semibold text-slate-800">{product.serviceSpecs?.clientRequirements || 'Échange préalable via WhatsApp'}</div>
+              </div>
+            </div>
+
+            {product.serviceSpecs?.deliverables && product.serviceSpecs.deliverables.length > 0 && (
+              <div className="p-4 bg-purple-50/50 border border-purple-200/60 rounded-2xl space-y-2">
+                <div className="text-xs font-bold text-purple-900">Livrables fournis :</div>
+                <div className="flex flex-wrap gap-2">
+                  {product.serviceSpecs.deliverables.map((deliv, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-white border border-purple-300 text-purple-800 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                      <Check className="w-3.5 h-3.5 text-purple-600" />
+                      {deliv}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Matière / Finition</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.material || 'Matériaux Supérieurs'}</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Garantie & SAV</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.warranty || 'Garantie 1 an · Échange 7j'}</div>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Origine / Fabrication</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.origin || 'Maroc / Confection Artisanale'}</div>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Matière / Finition</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.material || 'Matériaux Supérieurs'}</div>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Poids</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.weight || '350 g'}</div>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dimensions</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.dimensions || 'Format Standard'}</div>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Spécificité / Autonomie</div>
+              <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.batteryLife || 'Usage Quotidien Garanti'}</div>
+            </div>
           </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Poids</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.weight || '350 g'}</div>
-          </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dimensions</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.dimensions || 'Format Standard'}</div>
-          </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Spécificité / Autonomie</div>
-            <div className="text-xs font-black text-slate-900">{product.technicalSpecs?.batteryLife || 'Usage Quotidien Garanti'}</div>
-          </div>
-        </div>
+        )}
       </section>
 
       {/* Verified Moroccan Customer Reviews */}
