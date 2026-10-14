@@ -66,8 +66,12 @@ import {
 import { RichProductDescription } from '../common/RichProductDescription';
 
 export const ProductsAdminView: React.FC = () => {
-  const { currentUser, formatMoney, showToast, navigateToProduct, getProductShareUrl } = useApp();
-  const [products, setProducts] = useState<Product[]>(dbService.products);
+  const { currentUser, formatMoney, showToast, navigateToProduct, getProductShareUrl, products: appProducts, refreshProducts } = useApp();
+  const [products, setProducts] = useState<Product[]>(appProducts);
+
+  useEffect(() => {
+    setProducts(appProducts);
+  }, [appProducts]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -587,6 +591,7 @@ export const ProductsAdminView: React.FC = () => {
 
     dbService.saveProduct(saved, currentUser);
     setProducts([...dbService.products]);
+    refreshProducts();
     setIsModalOpen(false);
     showToast(editingProduct ? "Produit mis à jour avec succès dans PostgreSQL" : "Nouveau produit créé avec succès dans PostgreSQL");
   };
@@ -603,6 +608,7 @@ export const ProductsAdminView: React.FC = () => {
     // Immediately remove from dbService and state
     dbService.deleteProduct(targetId, currentUser);
     setProducts(prev => prev.filter(p => p.id !== targetId));
+    refreshProducts();
     setProductToDelete(null);
     showToast(`✓ Produit « ${targetName} » supprimé de PostgreSQL`);
   };

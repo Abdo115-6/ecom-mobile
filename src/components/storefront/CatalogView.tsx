@@ -23,6 +23,7 @@ export const CatalogView: React.FC = () => {
     setSelectedCategorySlug, 
     searchTerm, 
     setSearchTerm,
+    products: storeProducts,
     t 
   } = useApp();
 
@@ -32,7 +33,7 @@ export const CatalogView: React.FC = () => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const categories = dbService.categories;
-  const allProducts = dbService.products.filter(p => p.status === 'PUBLISHED');
+  const allProducts = storeProducts.filter(p => p.status === 'PUBLISHED');
 
   // Available brands list
   const brands = useMemo(() => {

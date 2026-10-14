@@ -4,9 +4,9 @@ import { dbService } from '../../services/dbService';
 import { Heart, ShoppingBag, Trash2, ArrowRight } from 'lucide-react';
 
 export const WishlistView: React.FC = () => {
-  const { wishlistIds, toggleWishlist, addToCart, navigateToProduct, formatMoney, setCurrentView, t } = useApp();
+  const { wishlistIds, toggleWishlist, addToCart, navigateToProduct, formatMoney, setCurrentView, products: storeProducts, t } = useApp();
 
-  const wishlistedProducts = dbService.products.filter(p => wishlistIds.includes(p.id));
+  const wishlistedProducts = storeProducts.filter(p => wishlistIds.includes(p.id));
 
   if (wishlistedProducts.length === 0) {
     return (

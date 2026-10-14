@@ -55,10 +55,11 @@ export const ProductDetailView: React.FC = () => {
     directBuyMode,
     showToast,
     locale,
+    products: storeProducts,
     t 
   } = useApp();
 
-  const product = dbService.getProductBySlug(selectedProductSlug || '');
+  const product = storeProducts.find(p => p.slug === selectedProductSlug) || dbService.getProductBySlug(selectedProductSlug || '');
 
   // Variant & Image state
   const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>(

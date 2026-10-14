@@ -390,9 +390,16 @@ async function startServer() {
       }
     }
 
-    const fileProducts = readJsonFile(PRODUCTS_FILE, null);
-    if (fileProducts) {
-      return res.json({ success: true, products: fileProducts, source: 'file' });
+    const fileProducts = readJsonFile<any[]>(PRODUCTS_FILE, []);
+    if (fileProducts && Array.isArray(fileProducts)) {
+      const isFake = (p: any) => {
+        if (!p) return true;
+        const n = (p.name || '').toLowerCase();
+        const b = (p.brand || '').toLowerCase();
+        return b.includes('aura') || n.includes('parfum oud royal') || n.includes('tondeuse sans fil') || n.includes('montre chronographe') || n.includes('t-shirt minimaliste');
+      };
+      const clean = fileProducts.filter(p => !isFake(p));
+      return res.json({ success: true, products: clean, source: 'file' });
     }
 
     return res.json({ success: true, products: [], source: 'empty' });

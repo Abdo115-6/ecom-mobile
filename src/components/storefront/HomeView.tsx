@@ -19,11 +19,12 @@ export const HomeView: React.FC = () => {
     toggleWishlist, 
     isWishlisted, 
     formatMoney, 
+    products: allStoreProducts,
     t 
   } = useApp();
 
   const categories = dbService.categories;
-  const allPublished = dbService.products.filter(p => p.status === 'PUBLISHED');
+  const allPublished = allStoreProducts.filter(p => p.status === 'PUBLISHED');
 
   const selectedCat = categories.find(c => c.slug === selectedCategorySlug);
   const products = selectedCategorySlug
@@ -78,6 +79,31 @@ export const HomeView: React.FC = () => {
         </div>
 
         {/* PRODUCTS GRID (Direct, Clean, Minimalist) */}
+        {products.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-14 text-center max-w-lg mx-auto shadow-xs space-y-4 my-6">
+            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-500">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900">
+                {selectedCat ? `Aucun produit dans la collection ${selectedCat.name}` : 'Votre catalogue est prêt'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {selectedCat 
+                  ? 'Ajoutez des articles à cette catégorie depuis le panneau d\'administration.' 
+                  : 'Seuls les produits réels que vous ajoutez depuis le panneau d\'administration s\'afficheront ici.'}
+              </p>
+            </div>
+            <div>
+              <button
+                onClick={() => setCurrentView('admin-products')}
+                className="px-5 py-2.5 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer inline-flex items-center gap-2"
+              >
+                <span>+ Ajouter un produit</span>
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
           {products.map(product => (
             <div
@@ -163,6 +189,7 @@ export const HomeView: React.FC = () => {
             </div>
           ))}
         </div>
+        )}
       </section>
 
       {/* 2. COLLECTIONS UNDER PRODUCTS (User Request: "then under it collection") */}

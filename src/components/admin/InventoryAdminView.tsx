@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { InventoryMovementType, InventoryMovement } from '../../types/ecommerce';
@@ -15,8 +15,12 @@ import {
 } from 'lucide-react';
 
 export const InventoryAdminView: React.FC = () => {
-  const { currentUser, showToast } = useApp();
-  const [products, setProducts] = useState(dbService.products);
+  const { currentUser, showToast, products: appProducts } = useApp();
+  const [products, setProducts] = useState(appProducts);
+
+  useEffect(() => {
+    setProducts(appProducts);
+  }, [appProducts]);
   const [movements, setMovements] = useState<InventoryMovement[]>(dbService.inventoryMovements);
   const [searchTerm, setSearchTerm] = useState('');
   

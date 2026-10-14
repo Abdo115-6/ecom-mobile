@@ -52,6 +52,10 @@ interface AppContextType {
   lastConfirmedOrder: Order | null;
   setLastConfirmedOrder: (order: Order | null) => void;
 
+  // Reactive Products State
+  products: Product[];
+  refreshProducts: () => void;
+
   // Localization & Currency
   locale: Locale;
   setLocale: (loc: Locale) => void;
@@ -107,9 +111,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currency, setCurrency] = useState<CurrencyCode>('MAD');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
-  const [wishlistIds, setWishlistIds] = useState<string[]>(['prod-oud-royal', 'prod-rose-musc']);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<User>(dbService.users[0]); // Default Super Admin
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Reactive Products State
+  const [products, setProducts] = useState<Product[]>(() => dbService.products);
+
+  useEffect(() => {
+    const unsub = dbService.subscribeProducts((latestProducts) => {
+      setProducts([...latestProducts]);
+    });
+    return unsub;
+  }, []);
+
+  const refreshProducts = () => {
+    setProducts([...dbService.products]);
+  };
 
   // Admin authentication state stored in sessionStorage
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -602,6 +620,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminLogout,
         toastMessage,
         showToast,
+        products,
+        refreshProducts,
       }}
     >
       {children}
