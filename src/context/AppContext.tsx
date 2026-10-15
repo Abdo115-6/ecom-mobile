@@ -100,7 +100,7 @@ interface AppContextType {
   switchUserRole: (role: RoleName) => void;
   isAdminMode: boolean;
   isAdminAuthenticated: boolean;
-  adminLogin: (email: string, pass: string) => Promise<boolean>;
+  adminLogin: (email: string, pass: string) => Promise<{ success: boolean; message?: string }>;
   adminLogout: () => void;
 
   // Toast System
@@ -160,9 +160,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     if (view.startsWith('admin-') && view !== 'admin-login' && !isAdminAuthenticated) {
-      setCurrentViewState('admin-login');
+      setCurrentViewState('home');
       if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/adminonly');
+        window.history.pushState(null, '', '/');
       }
       return;
     }
@@ -438,7 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Admin Login authentication check - Secured on real backend to shield from fetchers
-  const adminLogin = async (emailInput: string, passwordInput: string): Promise<boolean> => {
+  const adminLogin = async (emailInput: string, passwordInput: string): Promise<{ success: boolean; message?: string }> => {
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPass = passwordInput.trim();
 
@@ -455,7 +455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: data.user?.id || 'usr-abdo',
           email: data.user?.email || 'abdo@store.com',
           firstName: data.user?.firstName || 'Abdo',
-          lastName: data.user?.lastName || 'Store Admin',
+          lastName: data.user?.lastName || 'Propriétaire',
           role: (data.user?.role || 'SUPER_ADMIN') as RoleName,
           permissions: data.user?.permissions || ['all'],
           isActive: true,
@@ -467,8 +467,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           sessionStorage.setItem('aura_admin_auth', 'true');
           sessionStorage.setItem('aura_admin_token', data.token);
+          localStorage.setItem('aura_admin_auth', 'true');
+          localStorage.setItem('aura_admin_token', data.token);
         } catch (err) {
-          console.warn('sessionStorage error', err);
+          console.warn('Storage notice:', err);
         }
 
         dbService.addAuditLog(
@@ -476,19 +478,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'APPROVE',
           'Authentication',
           activeAdminUser.id,
-          `Connexion sécurisée réussie pour ${activeAdminUser.email}`
+          `Connexion propriétaire réussie pour ${activeAdminUser.email}`
         );
 
         showToast(`Bienvenue Abdo sur votre Back-Office ShopMe Maroc`);
         setCurrentViewState('admin-dashboard');
         window.history.pushState(null, '', '/adminonly');
-        return true;
+        return { success: true };
+      } else {
+        return { success: false, message: data.message || 'Identifiants incorrects.' };
       }
     } catch (err) {
       console.warn('Authentication error:', err);
+      return { success: false, message: "Erreur de connexion au serveur d'authentification." };
     }
-
-    return false;
   };
 
   // Admin Logout
@@ -496,8 +499,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAdminAuthenticated(false);
     try {
       sessionStorage.removeItem('aura_admin_auth');
+      sessionStorage.removeItem('aura_admin_token');
+      localStorage.removeItem('aura_admin_auth');
+      localStorage.removeItem('aura_admin_token');
     } catch (err) {
-      console.warn('sessionStorage error', err);
+      console.warn('Storage notice:', err);
     }
     dbService.addAuditLog(
       currentUser,
@@ -520,10 +526,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = window.location.hash;
       const search = window.location.search;
       const params = new URLSearchParams(search);
-      const isAdminUrl = path.includes('adminonly') || hash.includes('adminonly') || hash.includes('admin');
+      const isAdminUrl = path === '/adminonly' || path.startsWith('/adminonly') || hash === '#adminonly';
+
+      // Obscure common attack scans for /admin or /admin/ by redirecting to home
+      if (!isAdminUrl && (path === '/admin' || path === '/admin/' || hash === '#admin')) {
+        window.history.replaceState(null, '', '/');
+        setCurrentViewState('home');
+        return;
+      }
 
       if (isAdminUrl) {
-        if (sessionStorage.getItem('aura_admin_auth') === 'true') {
+        const isAuth = sessionStorage.getItem('aura_admin_auth') === 'true' || localStorage.getItem('aura_admin_auth') === 'true';
+        if (isAuth) {
           setIsAdminAuthenticated(true);
           setCurrentViewState('admin-dashboard');
         } else {

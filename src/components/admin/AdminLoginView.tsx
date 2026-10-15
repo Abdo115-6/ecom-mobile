@@ -7,9 +7,6 @@ import {
   Mail, 
   KeyRound, 
   ArrowLeft, 
-  CheckCircle2, 
-  Server, 
-  Database, 
   AlertCircle,
   Eye,
   EyeOff
@@ -30,10 +27,10 @@ export const AdminLoginView: React.FC = () => {
     setLoading(true);
 
     try {
-      const success = await adminLogin(email, password);
+      const res = await adminLogin(email, password);
       setLoading(false);
-      if (!success) {
-        setError("Identifiants incorrects. Accès strictement réservé à abdo@store.com.");
+      if (!res.success) {
+        setError(res.message || "Identifiants incorrects. Accès strictement réservé au propriétaire.");
       }
     } catch {
       setLoading(false);
@@ -60,11 +57,6 @@ export const AdminLoginView: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           <span>Retour à la Boutique ShopMe</span>
         </button>
-
-        <div className="flex items-center gap-2 text-[11px] text-amber-400/90 font-mono bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Accès Restreint : /adminonly</span>
-        </div>
       </div>
 
       {/* Center Card */}
@@ -95,7 +87,7 @@ export const AdminLoginView: React.FC = () => {
             {/* Email Field */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                <span>Adresse E-mail Administrateur</span>
+                <span>Adresse E-mail</span>
               </label>
               <div className="relative">
                 <input
@@ -103,7 +95,7 @@ export const AdminLoginView: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@store.com"
+                  placeholder=""
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -121,14 +113,14 @@ export const AdminLoginView: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
+                  placeholder=""
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-10 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -158,17 +150,6 @@ export const AdminLoginView: React.FC = () => {
               <span>Session chiffrée SSL · Accès réservé et tracé</span>
             </div>
           </div>
-
-        {/* Database & Architecture Specification Badge */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 text-[11px] text-slate-400 space-y-2">
-          <div className="flex items-center gap-2 text-slate-200 font-bold">
-            <Database className="w-4 h-4 text-emerald-400" />
-            <span>Moteur Relationnel & Mining Actif</span>
-          </div>
-          <p className="leading-relaxed">
-            <strong className="text-white">PostgreSQL 16</strong> combiné au moteur de détection des abandons de formulaires en direct et capture des leads non finalisés.
-          </p>
-        </div>
 
       </div>
 

@@ -1,12 +1,14 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
+import { whatsappService } from '../../services/whatsappService';
 import heroBg from '../../assets/images/shopme_morocco_hero_1791579209702.jpg';
 import { 
   ArrowRight, 
   ShoppingBag, 
   Heart, 
-  Star 
+  Star,
+  MessageCircle 
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
@@ -20,6 +22,7 @@ export const HomeView: React.FC = () => {
     isWishlisted, 
     formatMoney, 
     products: allStoreProducts,
+    isAdminAuthenticated,
     t 
   } = useApp();
 
@@ -86,21 +89,46 @@ export const HomeView: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <h3 className="text-lg font-black text-slate-900">
-                {selectedCat ? `Aucun produit dans la collection ${selectedCat.name}` : 'Votre catalogue est prêt'}
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
                 {selectedCat 
-                  ? 'Ajoutez des articles à cette catégorie depuis le panneau d\'administration.' 
-                  : 'Seuls les produits réels que vous ajoutez depuis le panneau d\'administration s\'afficheront ici.'}
+                  ? `Aucun article disponible dans la collection ${selectedCat.name}` 
+                  : 'Nouveautés bientôt disponibles'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+                {selectedCat 
+                  ? 'Nos nouveautés pour cette catégorie arrivent très prochainement. Découvrez toutes nos autres collections disponibles.' 
+                  : 'Notre boutique prépare de nouveaux articles exclusifs. N\'hésitez pas à nous contacter sur WhatsApp pour toute demande.'}
               </p>
             </div>
-            <div>
-              <button
-                onClick={() => setCurrentView('admin-products')}
-                className="px-5 py-2.5 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer inline-flex items-center gap-2"
-              >
-                <span>+ Ajouter un produit</span>
-              </button>
+            
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              {selectedCat ? (
+                <button
+                  onClick={() => setSelectedCategorySlug(null)}
+                  className="px-5 py-2.5 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
+                >
+                  Voir toutes nos collections
+                </button>
+              ) : (
+                <a
+                  href={whatsappService.generateSupportLink('Salam ShopMe Maroc, je cherche des informations sur vos produits.')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer inline-flex items-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4 fill-white" />
+                  <span>Nous contacter sur WhatsApp</span>
+                </a>
+              )}
+
+              {/* Only the authenticated owner who accessed via /adminonly sees the add button */}
+              {isAdminAuthenticated && (
+                <button
+                  onClick={() => setCurrentView('admin-products')}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer inline-flex items-center gap-2"
+                >
+                  <span>+ Ajouter un produit (Admin)</span>
+                </button>
+              )}
             </div>
           </div>
         ) : (

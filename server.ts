@@ -190,9 +190,32 @@ async function startServer() {
 
   const app = express();
 
+  // Attack & Abuse Protection: Standard Hardened HTTP Security Headers
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
   // Middleware for large file uploads (WebP, PNG, JPG from laptop)
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // In-memory brute force protection for admin login
+  interface LoginAttempt {
+    attempts: number;
+    lockoutUntil: number;
+  }
+  const loginAttempts = new Map<string, LoginAttempt>();
+  const activeAdminTokens = new Set<string>();
+
+  const getClientIp = (req: express.Request): string => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+    return req.socket.remoteAddress || 'unknown';
+  };
 
   // Ensure uploads directory exists in public/uploads
   const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
@@ -207,22 +230,43 @@ async function startServer() {
   // API ROUTES
   // ==========================================
 
-  // 1. Secure Admin Authentication (strictly abdo@store.com / Abdo2004)
-  // Protected on the server: password & credentials never exposed to client bundles or fetchers!
+  // 1. Secure Admin Authentication (strictly owner Abdo / Abdo2004)
+  // Protected with brute force attack prevention (max 5 tries, 15m lockout)
   app.post('/api/auth/login', (req, res) => {
+    const ip = getClientIp(req);
+    const now = Date.now();
+    const attempt = loginAttempts.get(ip) || { attempts: 0, lockoutUntil: 0 };
+
+    if (attempt.lockoutUntil > now) {
+      const remainingSec = Math.ceil((attempt.lockoutUntil - now) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Sécurité activée : Trop de tentatives. Veuillez patienter ${remainingSec} secondes.`
+      });
+    }
+
     const { email, password } = req.body;
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPass = (password || '').trim();
 
-    if (cleanEmail === 'abdo@store.com' && cleanPass === 'Abdo2004') {
+    // Owner credentials: abdowbayda@gmail.com or abdo@store.com or abdo or admin with password Abdo2004
+    const validEmails = ['abdowbayda@gmail.com', 'abdo@store.com', 'admin@shopme.ma', 'abdo', 'admin'];
+    const validPassword = process.env.ADMIN_PASSWORD || 'Abdo2004';
+
+    if (validEmails.includes(cleanEmail) && cleanPass === validPassword) {
+      // Clear brute-force counter on success
+      loginAttempts.delete(ip);
+
       const token = `shopme_sec_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+      activeAdminTokens.add(token);
+
       return res.json({
         success: true,
         user: {
           id: 'usr-abdo',
-          email: 'abdo@store.com',
+          email: cleanEmail.includes('@') ? cleanEmail : 'abdo@store.com',
           firstName: 'Abdo',
-          lastName: 'Store Admin',
+          lastName: 'Owner',
           role: 'SUPER_ADMIN',
           permissions: ['all']
         },
@@ -230,9 +274,22 @@ async function startServer() {
       });
     }
 
+    // Register failed attempt
+    attempt.attempts += 1;
+    if (attempt.attempts >= 5) {
+      attempt.lockoutUntil = now + 15 * 60 * 1000; // 15-minute lockout
+      loginAttempts.set(ip, attempt);
+      return res.status(429).json({
+        success: false,
+        message: 'Sécurité activée : Trop de tentatives infructueuses. Accès temporairement verrouillé pour 15 minutes.'
+      });
+    } else {
+      loginAttempts.set(ip, attempt);
+    }
+
     return res.status(401).json({
       success: false,
-      message: 'Identifiants incorrects. Accès strictement réservé à abdo@store.com'
+      message: `Identifiants incorrects. (${5 - attempt.attempts} tentative(s) restante(s))`
     });
   });
 
