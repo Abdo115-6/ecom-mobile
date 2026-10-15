@@ -66,7 +66,12 @@ interface AppContextType {
 
   // Cart Management
   cartItems: CartItem[];
-  addToCart: (product: Product, variantId?: string, quantity?: number) => void;
+  addToCart: (
+    product: Product, 
+    variantId?: string, 
+    quantity?: number, 
+    customOptions?: { price?: number; variantTitle?: string; imageUrl?: string; openDrawer?: boolean }
+  ) => void;
   removeFromCart: (itemId: string) => void;
   updateCartQuantity: (itemId: string, newQty: number) => void;
   clearCart: () => void;
@@ -78,6 +83,12 @@ interface AppContextType {
   applyCoupon: (code: string) => { success: boolean; message: string };
   removeCoupon: () => void;
   cartItemCount: number;
+
+  // Cart Sidebar Drawer State
+  isCartDrawerOpen: boolean;
+  setIsCartDrawerOpen: (open: boolean) => void;
+  openCartDrawer: () => void;
+  closeCartDrawer: () => void;
 
   // Wishlist
   wishlistIds: string[];
@@ -114,6 +125,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<User>(dbService.users[0]); // Default Super Admin
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState<boolean>(false);
+
+  const openCartDrawer = () => setIsCartDrawerOpen(true);
+  const closeCartDrawer = () => setIsCartDrawerOpen(false);
 
   // Reactive Products State
   const [products, setProducts] = useState<Product[]>(() => dbService.products);
@@ -231,19 +246,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Cart operations
-  const addToCart = (product: Product, variantId?: string, quantity = 1) => {
-    let itemPrice = product.price;
-    let variantTitle: string | undefined;
-    let itemImage = product.images[0]?.imageUrl || '';
+  const addToCart = (
+    product: Product, 
+    variantId?: string, 
+    quantity = 1,
+    customOptions?: { price?: number; variantTitle?: string; imageUrl?: string; openDrawer?: boolean }
+  ) => {
+    let itemPrice = customOptions?.price !== undefined ? customOptions.price : product.price;
+    let variantTitle: string | undefined = customOptions?.variantTitle;
+    let itemImage = customOptions?.imageUrl || product.images[0]?.imageUrl || '';
     let maxStock = product.stockQuantity;
 
     if (variantId) {
       const variant = product.variants.find(v => v.id === variantId);
       if (variant) {
-        itemPrice = variant.price;
-        variantTitle = variant.title;
+        if (customOptions?.price === undefined) itemPrice = variant.price;
+        if (!variantTitle) variantTitle = variant.title;
         maxStock = variant.stockQuantity;
-        if (variant.imageUrl) itemImage = variant.imageUrl;
+        if (!customOptions?.imageUrl && variant.imageUrl) itemImage = variant.imageUrl;
       }
     }
 
@@ -253,7 +273,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setCartItems(prev => {
-      const existing = prev.find(i => i.productId === product.id && i.variantId === variantId);
+      const existing = prev.find(i => 
+        i.productId === product.id && 
+        i.variantId === variantId && 
+        i.variantTitle === variantTitle && 
+        i.price === itemPrice
+      );
       if (existing) {
         const nextQty = Math.min(existing.quantity + quantity, maxStock);
         return prev.map(i => i === existing ? { ...i, quantity: nextQty } : i);
@@ -289,6 +314,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         variant: variantTitle
       }]
     });
+
+    // Automatically open the side bar cart drawer (unless explicitly disabled)
+    if (customOptions?.openDrawer !== false) {
+      setIsCartDrawerOpen(true);
+    }
   };
 
   const removeFromCart = (itemId: string) => {
@@ -609,6 +639,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         applyCoupon,
         removeCoupon,
         cartItemCount,
+        isCartDrawerOpen,
+        setIsCartDrawerOpen,
+        openCartDrawer,
+        closeCartDrawer,
         wishlistIds,
         toggleWishlist,
         isWishlisted,

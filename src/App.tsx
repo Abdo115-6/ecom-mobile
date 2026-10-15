@@ -4,6 +4,7 @@ import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { SpecificationsModal } from './components/common/SpecificationsModal';
+import { CartDrawer } from './components/common/CartDrawer';
 
 // Storefront Views
 import { HomeView } from './components/storefront/HomeView';
@@ -164,6 +165,7 @@ const MainRouter: React.FC = () => {
 
       <Footer />
       <MobileBottomNav />
+      <CartDrawer />
 
       {/* Global Toast Notification */}
       {toastMessage && (

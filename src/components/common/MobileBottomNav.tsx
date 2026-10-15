@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Home, Grid, Heart, ShoppingBag, User as UserIcon, ShieldCheck } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
-  const { currentView, setCurrentView, cartItemCount, wishlistIds, t, isAdminMode } = useApp();
+  const { currentView, setCurrentView, cartItemCount, wishlistIds, t, isAdminMode, openCartDrawer } = useApp();
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 safe-area-bottom">
@@ -48,7 +48,7 @@ export const MobileBottomNav: React.FC = () => {
 
         {/* Cart */}
         <button
-          onClick={() => setCurrentView('cart')}
+          onClick={openCartDrawer}
           className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] min-h-[44px] cursor-pointer transition-colors ${
             currentView === 'cart' ? 'text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}

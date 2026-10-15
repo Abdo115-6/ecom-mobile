@@ -29,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
     currentView, 
     setCurrentView, 
     cartItemCount, 
+    openCartDrawer,
     wishlistIds, 
     locale, 
     setLocale, 
@@ -107,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
 
             {/* Shopping Bag Trigger */}
             <button
-              onClick={() => setCurrentView('cart')}
+              onClick={openCartDrawer}
               className="relative p-2 text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               aria-label={t.cart}
             >

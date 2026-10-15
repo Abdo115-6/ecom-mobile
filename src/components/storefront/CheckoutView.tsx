@@ -6,7 +6,6 @@ import { clientMovementService } from '../../services/clientMovementService';
 import { 
   ShieldCheck, 
   Truck, 
-  CreditCard, 
   Banknote, 
   CheckCircle2, 
   ArrowLeft, 
@@ -290,54 +289,31 @@ export const CheckoutView: React.FC = () => {
           </div>
         </div>
 
-        {/* Step 3: Payment Method */}
+        {/* Step 3: Payment Method - Cash On Delivery Exclusively */}
         <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs">
           <div className="flex items-center gap-2 text-slate-900 font-extrabold text-sm sm:text-base border-b border-slate-100 pb-3">
-            <CreditCard className="w-5 h-5 text-blue-600" />
+            <Banknote className="w-5 h-5 text-emerald-600" />
             <span>3. {t.paymentMethod}</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Cash On Delivery (Selected by default) */}
-            <div
-              onClick={() => setPaymentMethod('CASH_ON_DELIVERY')}
-              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-3 ${
-                paymentMethod === 'CASH_ON_DELIVERY'
-                  ? 'border-slate-900 bg-slate-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                <Banknote className="w-5 h-5" />
+          <div>
+            {/* Cash On Delivery (Selected) */}
+            <div className="p-4 rounded-2xl border-2 border-emerald-600 bg-emerald-50/50 flex items-center gap-3.5 shadow-xs">
+              <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Banknote className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <div className="text-xs font-extrabold text-slate-900">{t.cashOnDelivery}</div>
-                <div className="text-[10px] text-slate-500">Réglez en espèces au livreur après vérification</div>
+                <div className="text-sm font-black text-slate-950 flex items-center gap-2">
+                  <span>{t.cashOnDelivery}</span>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    الدفع عند الاستلام
+                  </span>
+                </div>
+                <div className="text-xs text-slate-600 mt-0.5">
+                  Paiement sécurisé en espèces auprès du livreur après vérification complète de votre colis
+                </div>
               </div>
-              {paymentMethod === 'CASH_ON_DELIVERY' && (
-                <CheckCircle2 className="w-5 h-5 text-slate-900 shrink-0" />
-              )}
-            </div>
-
-            {/* Credit Card */}
-            <div
-              onClick={() => setPaymentMethod('CREDIT_CARD')}
-              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-3 ${
-                paymentMethod === 'CREDIT_CARD'
-                  ? 'border-slate-900 bg-slate-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <div className="text-xs font-extrabold text-slate-900">{t.creditCard}</div>
-                <div className="text-[10px] text-slate-500">Paiement 3D Secure sécurisé CMI / Visa / Mastercard</div>
-              </div>
-              {paymentMethod === 'CREDIT_CARD' && (
-                <CheckCircle2 className="w-5 h-5 text-slate-900 shrink-0" />
-              )}
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
             </div>
           </div>
         </div>

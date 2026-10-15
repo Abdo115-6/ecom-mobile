@@ -56,6 +56,7 @@ export const ProductDetailView: React.FC = () => {
     showToast,
     locale,
     products: storeProducts,
+    openCartDrawer,
     t 
   } = useApp();
 
@@ -266,6 +267,36 @@ export const ProductDetailView: React.FC = () => {
   // Companion & Reviews
   const companionProduct = dataMiningService.getFrequentlyBoughtTogether(product.id);
   const productReviews = dbService.reviews.filter(r => r.productId === product.id && r.status === 'APPROVED');
+
+  // Handle Add to Cart & Open Cart Drawer
+  const handleAddToCart = () => {
+    if (!product) return;
+
+    const finalPrice = (isDigital || isService) ? unitPrice : packTotalPrice;
+    const finalTitle = isDigital && selectedDuration
+      ? `${product.name} (${selectedDuration.label})`
+      : isDigital && selectedDenomination
+      ? `${product.name} (${selectedDenomination.amountLabel})`
+      : activePack && activePack.title !== 'Pack 1 Pièce' && activePack.title !== '1 Pièce'
+      ? `${product.name} - ${activePack.title}`
+      : activeVariant?.title && activeVariant.title !== 'Défaut'
+      ? activeVariant.title
+      : undefined;
+
+    const effectiveQty = (isDigital || isService) ? customQuantity : (activePack?.quantity || customQuantity || 1);
+
+    addToCart(product, activeVariant?.id, effectiveQty, {
+      price: finalPrice,
+      variantTitle: finalTitle,
+      imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl,
+      openDrawer: true
+    });
+
+    clientMovementService.trackClick('Ajout au Panier depuis Fiche Produit', 'BUTTON', {
+      productSlug: product.slug,
+      productName: product.name,
+    });
+  };
 
   // Handle Direct 1-Click Moroccan COD Order
   const handleDirectCodOrder = (e: React.FormEvent) => {
@@ -861,6 +892,68 @@ export const ProductDetailView: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* ADD TO CART ACTION BLOCK (Ajouter au Panier & Voir Sidebar) */}
+          <div className="bg-white border-2 border-slate-900 rounded-3xl p-4 sm:p-5 shadow-md space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                  <ShoppingBag className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-950 uppercase tracking-wider">Ajouter au Panier</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Cumulez plusieurs articles ou finalisez votre commande</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                ✓ 0 DH Frais de Port
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Quantity Stepper */}
+              <div className="flex items-center justify-between border-2 border-slate-200 rounded-2xl bg-slate-50 p-1 min-w-[130px]">
+                <button
+                  type="button"
+                  onClick={() => setCustomQuantity(q => Math.max(1, q - 1))}
+                  disabled={customQuantity <= 1}
+                  className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-white rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Diminuer la quantité"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <div className="flex flex-col items-center px-2">
+                  <span className="text-[9px] text-slate-400 uppercase font-black leading-none">Qté</span>
+                  <span className="font-black text-sm text-slate-950 leading-tight">
+                    {(isDigital || isService) ? customQuantity : (activePack?.quantity || customQuantity)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomQuantity(q => Math.min(activeStock || 99, q + 1))}
+                  disabled={customQuantity >= (activeStock || 99)}
+                  className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-white rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Augmenter la quantité"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Primary "Ajouter au Panier" Button */}
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={!isDigital && !isService && activeStock <= 0}
+                className="flex-1 py-3.5 px-6 bg-slate-950 hover:bg-slate-800 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+              >
+                <ShoppingBag className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span>AJOUTER AU PANIER</span>
+                <span className="text-xs font-semibold text-slate-300 ml-1">
+                  · {formatMoney((isDigital || isService ? unitPrice : packTotalPrice) * ((isDigital || isService) ? customQuantity : 1))}
+                </span>
+              </button>
+            </div>
+          </div>
 
           {/* DIRECT EXPRESS ORDER FORM (TAILORED FOR DIGITAL, SERVICE, AND PHYSICAL) */}
           <div id="direct-cod-form" className={`bg-gradient-to-b from-white to-slate-50 border-2 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 transition-all ${
