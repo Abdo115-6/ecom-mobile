@@ -415,7 +415,7 @@ export const ProductsAdminView: React.FC = () => {
     setFormComparePrice(p.compareAtPrice || 0);
     setFormCostPrice(p.costPrice || 0);
     setFormStock(p.stockQuantity);
-    setFormShortDesc(p.shortDescription);
+    setFormShortDesc(p.shortDescription || '');
     setFormDesc(p.description);
     setFormStatus(p.status);
     setFormSeoTitle(p.seoTitle || '');

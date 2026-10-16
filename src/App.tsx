@@ -5,6 +5,7 @@ import { Footer } from './components/common/Footer';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { SpecificationsModal } from './components/common/SpecificationsModal';
 import { CartDrawer } from './components/common/CartDrawer';
+import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
 
 // Storefront Views
 import { HomeView } from './components/storefront/HomeView';
@@ -171,6 +172,7 @@ const MainRouter: React.FC = () => {
       <Footer />
       <MobileBottomNav />
       <CartDrawer />
+      <FloatingWhatsAppButton />
 
       {/* Global Toast Notification */}
       {toastMessage && (

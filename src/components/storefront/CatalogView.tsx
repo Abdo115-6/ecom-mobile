@@ -68,7 +68,7 @@ export const CatalogView: React.FC = () => {
         const q = searchTerm.toLowerCase();
         const matchesName = p.name.toLowerCase().includes(q);
         const matchesSku = p.sku.toLowerCase().includes(q);
-        const matchesDesc = p.shortDescription.toLowerCase().includes(q);
+        const matchesDesc = (p.shortDescription || p.description || '').toLowerCase().includes(q);
         const matchesBrand = p.brand.toLowerCase().includes(q);
         if (!matchesName && !matchesSku && !matchesDesc && !matchesBrand) return false;
       }

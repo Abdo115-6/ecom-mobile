@@ -16,12 +16,96 @@ import {
 // Initial Seed Data tailored for ShopMe (Produits Digitaux & Services)
 const INITIAL_CATEGORIES: Category[] = [
   {
+    id: "cat-hommes",
+    name: "Collection Hommes",
+    slug: "hommes",
+    description: "Montres chronographes, accessoires de luxe, gadgets high-tech et maroquinerie",
+    imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=600&q=80",
+    displayOrder: 1,
+    isActive: true,
+    badge: "TENDANCE ⚡",
+    subcategories: [
+      {
+        id: "subcat-h-montres",
+        parentId: "cat-hommes",
+        name: "Montres & Chronographes",
+        slug: "montres-hommes",
+        description: "Boîte simple ou avec coffret cadeau luxe",
+        imageUrl: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 1,
+        isActive: true
+      },
+      {
+        id: "subcat-h-hightech",
+        parentId: "cat-hommes",
+        name: "High-Tech & Gadgets Auto",
+        slug: "hightech-hommes",
+        description: "Chargeurs 5-en-1, accessoires connectés",
+        imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 2,
+        isActive: true
+      },
+      {
+        id: "subcat-h-maro",
+        parentId: "cat-hommes",
+        name: "Maroquinerie & Ceintures",
+        slug: "maroquinerie-hommes",
+        description: "Ceintures cuir et portefeuilles anti-RFID",
+        imageUrl: "https://images.unsplash.com/photo-1624222247344-550fb60583dc?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 3,
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: "cat-femmes",
+    name: "Collection Femmes",
+    slug: "femmes",
+    description: "Montres élégantes, sacs à main luxueux, porte-monnaie et accessoires",
+    imageUrl: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80",
+    displayOrder: 2,
+    isActive: true,
+    badge: "ÉLÉGANCE ✨",
+    subcategories: [
+      {
+        id: "subcat-f-montres",
+        parentId: "cat-femmes",
+        name: "Montres & Coffrets Femmes",
+        slug: "montres-femmes",
+        description: "Boîte simple ou coffret cadeau luxe",
+        imageUrl: "https://images.unsplash.com/photo-1508615039623-a25605d2b022?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 1,
+        isActive: true
+      },
+      {
+        id: "subcat-f-sacs",
+        parentId: "cat-femmes",
+        name: "Sacs à Main & Sacoches",
+        slug: "sacs-femmes",
+        description: "Sacs de ville et pochettes élégantes",
+        imageUrl: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 2,
+        isActive: true
+      },
+      {
+        id: "subcat-f-portemonnaie",
+        parentId: "cat-femmes",
+        name: "Porte-Monnaie & Accessoires",
+        slug: "portemonnaie-femmes",
+        description: "Porte-monnaie zippés et accessoires",
+        imageUrl: "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=600&q=80",
+        displayOrder: 3,
+        isActive: true
+      }
+    ]
+  },
+  {
     id: "cat-digital",
     name: "Produits Digitaux & Abonnements",
     slug: "produits-digitaux",
     description: "Abonnements IA & SVOD, clés de jeux, recharges in-game et licences logicielles",
     imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
-    displayOrder: 1,
+    displayOrder: 3,
     isActive: true,
     productKind: "DIGITAL",
     badge: "INSTANT ⚡",
@@ -153,7 +237,326 @@ const INITIAL_CATEGORIES: Category[] = [
   }
 ];
 
-const INITIAL_PRODUCTS: Product[] = [];
+const INITIAL_PRODUCTS: any[] = [
+  {
+    id: "prod-h-montre",
+    name: "Montre Chronographe Quartz Homme - Édition Royale",
+    slug: "montre-chronographe-homme-royale",
+    brand: "ShopMe Luxury",
+    sku: "W-MEN-ROYAL-01",
+    categoryId: "cat-hommes",
+    price: 299.00,
+    compareAtPrice: 450.00,
+    costPrice: 120.00,
+    stock: 45,
+    lowStockThreshold: 5,
+    rating: 4.9,
+    reviewsCount: 78,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-m1",
+        productId: "prod-h-montre",
+        imageUrl: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      },
+      {
+        id: "img-m2",
+        productId: "prod-h-montre",
+        imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80",
+        isPrimary: false,
+        displayOrder: 2
+      }
+    ],
+    promotionalPacks: [
+      {
+        id: "pack-m1",
+        productId: "prod-h-montre",
+        quantity: 1,
+        title: "1 Pièce (Boîte Simple)",
+        packPrice: 299.00,
+        unitPrice: 299.00,
+        isPopular: false
+      },
+      {
+        id: "pack-m2",
+        productId: "prod-h-montre",
+        quantity: 2,
+        title: "Pack 2 Pièces (Économique - Livr. Gratuite)",
+        packPrice: 499.00,
+        unitPrice: 249.50,
+        badgeText: "LE PLUS VENDU 🔥",
+        isPopular: true
+      },
+      {
+        id: "pack-m3",
+        productId: "prod-h-montre",
+        quantity: 3,
+        title: "Pack 3 Pièces (Coffret Cadeau Luxe)",
+        packPrice: 699.00,
+        unitPrice: 233.00,
+        badgeText: "MEILLEURE OFFRE ⭐",
+        isPopular: false
+      }
+    ],
+    variants: [
+      {
+        id: "var-m-cadran-noir",
+        productId: "prod-h-montre",
+        title: "Cadran Noir & Bracelet Argent",
+        sku: "W-MEN-BK-SL",
+        price: 299.00,
+        stock: 25,
+        imageUrl: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80"
+      },
+      {
+        id: "var-m-cadran-bleu",
+        productId: "prod-h-montre",
+        title: "Cadran Bleu Océan & Bracelet Acier",
+        sku: "W-MEN-BL-SL",
+        price: 299.00,
+        stock: 20,
+        imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80"
+      }
+    ],
+    productKind: "PHYSICAL",
+    description: "Montre de haute précision avec mouvement chronographe à quartz, verre saphir inrayable et étanchéité 3 ATM. Livrée dans son écrin de protection avec garantie 1 an. Paiement cash à la livraison partout au Maroc après vérification du colis."
+  },
+  {
+    id: "prod-h-chargeur",
+    name: "Chargeur Voiture Rapide 5-en-1 Starlight LED",
+    slug: "chargeur-voiture-5in1-starlight",
+    brand: "ShopMe Tech",
+    sku: "TECH-CAR-01",
+    categoryId: "cat-hommes",
+    price: 199.00,
+    compareAtPrice: 299.00,
+    costPrice: 65.00,
+    stock: 60,
+    lowStockThreshold: 10,
+    rating: 4.8,
+    reviewsCount: 124,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-c1",
+        productId: "prod-h-chargeur",
+        imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    promotionalPacks: [
+      {
+        id: "pack-c1",
+        productId: "prod-h-chargeur",
+        quantity: 1,
+        title: "1 Pièce",
+        packPrice: 199.00,
+        unitPrice: 199.00,
+        isPopular: false
+      },
+      {
+        id: "pack-c2",
+        productId: "prod-h-chargeur",
+        quantity: 2,
+        title: "Pack 2 Pièces (Livraison Gratuite)",
+        packPrice: 349.00,
+        unitPrice: 174.50,
+        badgeText: "POPULAIRE 🔥",
+        isPopular: true
+      }
+    ],
+    productKind: "PHYSICAL",
+    description: "Chargeur allume-cigare ultra rapide 5-en-1 avec double câble rétractable (Type-C et Lightning) et affichage LED du voltage en direct. Compatible avec toutes les voitures."
+  },
+  {
+    id: "prod-f-montre",
+    name: "Montre Femme Élégance Argentée avec Bracelet Assorti",
+    slug: "montre-femme-elegance-argente",
+    brand: "ShopMe Luxury",
+    sku: "W-WOM-ELEG-01",
+    categoryId: "cat-femmes",
+    price: 279.00,
+    compareAtPrice: 390.00,
+    costPrice: 90.00,
+    stock: 35,
+    lowStockThreshold: 5,
+    rating: 4.9,
+    reviewsCount: 92,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-wf1",
+        productId: "prod-f-montre",
+        imageUrl: "https://images.unsplash.com/photo-1508615039623-a25605d2b022?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    promotionalPacks: [
+      {
+        id: "pack-wf1",
+        productId: "prod-f-montre",
+        quantity: 1,
+        title: "1 Pièce (Boîte Simple)",
+        packPrice: 279.00,
+        unitPrice: 279.00,
+        isPopular: false
+      },
+      {
+        id: "pack-wf2",
+        productId: "prod-f-montre",
+        quantity: 2,
+        title: "Pack 2 Pièces (Avec Coffret Cadeau)",
+        packPrice: 479.00,
+        unitPrice: 239.50,
+        badgeText: "COFFRET CADEAU ✨",
+        isPopular: true
+      }
+    ],
+    productKind: "PHYSICAL",
+    description: "Montre féminine raffinée avec cadran nacre et bracelet maille milanaise argentée. Livrée dans son coffret bijou. Idéale pour sublimer vos tenues au quotidien."
+  },
+  {
+    id: "prod-f-sac",
+    name: "Sac à Main Cuir Luxueux Sacoche Ville & Soirée",
+    slug: "sac-a-main-cuir-ville",
+    brand: "ShopMe Bag",
+    sku: "BAG-WOM-01",
+    categoryId: "cat-femmes",
+    price: 349.00,
+    compareAtPrice: 490.00,
+    costPrice: 130.00,
+    stock: 28,
+    lowStockThreshold: 4,
+    rating: 4.9,
+    reviewsCount: 64,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-bag1",
+        productId: "prod-f-sac",
+        imageUrl: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    promotionalPacks: [
+      {
+        id: "pack-bag1",
+        productId: "prod-f-sac",
+        quantity: 1,
+        title: "1 Pièce",
+        packPrice: 349.00,
+        unitPrice: 349.00,
+        isPopular: true
+      }
+    ],
+    productKind: "PHYSICAL",
+    description: "Sac à main structuré en cuir synthétique de première qualité avec finitions dorées, double poignée et bandoulière amovible. Spacieux et chic."
+  },
+  {
+    id: "prod-f-portemonnaie",
+    name: "Porte-Monnaie Zippé Compact Tendance",
+    slug: "porte-monnaie-zippe-compact",
+    brand: "ShopMe Bag",
+    sku: "WAL-WOM-01",
+    categoryId: "cat-femmes",
+    price: 149.00,
+    compareAtPrice: 220.00,
+    costPrice: 50.00,
+    stock: 50,
+    lowStockThreshold: 10,
+    rating: 4.7,
+    reviewsCount: 43,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-wal1",
+        productId: "prod-f-portemonnaie",
+        imageUrl: "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    productKind: "PHYSICAL",
+    description: "Porte-monnaie compact avec multiples compartiments pour cartes, billets et monnaie. Fermeture zippée fluide et sécurisée."
+  },
+  {
+    id: "prod-dig-netflix",
+    name: "Abonnement Netflix Premium 4K UHD (Compte Privé)",
+    slug: "abonnement-netflix-premium-4k",
+    brand: "Netflix Official",
+    sku: "SUB-NETFLIX-01",
+    categoryId: "cat-digital",
+    price: 49.00,
+    compareAtPrice: 75.00,
+    costPrice: 20.00,
+    stock: 999,
+    lowStockThreshold: 50,
+    rating: 5.0,
+    reviewsCount: 310,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-net1",
+        productId: "prod-dig-netflix",
+        imageUrl: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    productKind: "DIGITAL",
+    digitalSpecs: {
+      digitalType: "ACCOUNT",
+      deliveryMethod: "AUTO_WHATSAPP",
+      warrantyDays: 30,
+      durationOptions: [
+        { id: "dur-1m", label: "1 Mois", days: 30, price: 49.00, isDefault: true },
+        { id: "dur-3m", label: "3 Mois", days: 90, price: 129.00 },
+        { id: "dur-6m", label: "6 Mois", days: 180, price: 239.00 }
+      ]
+    },
+    description: "Compte Netflix Premium 4K Ultra HD avec profil privé verrouillé par code PIN. Accès immédiat via WhatsApp avec garantie complète pendant toute la durée."
+  },
+  {
+    id: "prod-dig-chatgpt",
+    name: "Abonnement ChatGPT Plus GPT-4o & Canvas (Compte Privé)",
+    slug: "abonnement-chatgpt-plus",
+    brand: "OpenAI",
+    sku: "SUB-CHATGPT-01",
+    categoryId: "cat-digital",
+    price: 99.00,
+    compareAtPrice: 150.00,
+    costPrice: 40.00,
+    stock: 999,
+    lowStockThreshold: 50,
+    rating: 4.9,
+    reviewsCount: 185,
+    status: "PUBLISHED",
+    images: [
+      {
+        id: "img-gpt1",
+        productId: "prod-dig-chatgpt",
+        imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+        isPrimary: true,
+        displayOrder: 1
+      }
+    ],
+    productKind: "DIGITAL",
+    digitalSpecs: {
+      digitalType: "ACCOUNT",
+      deliveryMethod: "AUTO_WHATSAPP",
+      warrantyDays: 30,
+      durationOptions: [
+        { id: "dur-gpt-1m", label: "1 Mois", days: 30, price: 99.00, isDefault: true }
+      ]
+    },
+    description: "Compte ChatGPT Plus officiel avec accès illimité à GPT-4o, génération d'images DALL-E 3 et Canvas. Réception instantanée sur WhatsApp."
+  }
+];
 
 const INITIAL_INVENTORY_MOVEMENTS: InventoryMovement[] = [];
 

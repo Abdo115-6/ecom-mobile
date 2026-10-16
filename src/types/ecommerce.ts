@@ -87,6 +87,7 @@ export interface ProductVariant {
   price: number;
   compareAtPrice?: number;
   stockQuantity: number;
+  stock?: number;
   imageUrl?: string;
 }
 
@@ -95,7 +96,7 @@ export interface ProductImage {
   productId: string;
   imageUrl: string;
   thumbnailUrl?: string;
-  altText: string;
+  altText?: string;
   displayOrder: number;
   isPrimary: boolean;
 }
@@ -120,7 +121,8 @@ export type SharingMethod =
 export interface DurationOption {
   id: string;
   label: string;
-  durationValue: string;
+  durationValue?: string;
+  days?: number;
   price: number;
   compareAtPrice?: number;
   badge?: string;
@@ -140,11 +142,13 @@ export interface TopUpDenomination {
 
 export interface DigitalSpecs {
   digitalType: DigitalType;
-  sharingMethod: SharingMethod;
-  deliveryTime: string;
-  warrantyPeriod: string;
-  regionRestriction: string;
-  supportedDevices: string[];
+  sharingMethod?: SharingMethod;
+  deliveryMethod?: string;
+  warrantyDays?: number;
+  deliveryTime?: string;
+  warrantyPeriod?: string;
+  regionRestriction?: string;
+  supportedDevices?: string[];
   durationOptions?: DurationOption[];
   topUpDenominations?: TopUpDenomination[];
   includedFeatures?: string[];
@@ -184,24 +188,27 @@ export interface Product {
   name: string;
   slug: string;
   sku: string;
-  shortDescription: string;
+  shortDescription?: string;
   description: string;
   brand: string;
   price: number;
   compareAtPrice?: number;
   costPrice?: number;
   status: ProductStatus;
-  isFeatured: boolean;
-  isVisible: boolean;
+  isFeatured?: boolean;
+  isVisible?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   images: ProductImage[];
   variants: ProductVariant[];
   promoPacks?: PromoPack[];
+  promotionalPacks?: any[];
   technicalSpecs?: TechnicalSpecs;
   digitalSpecs?: DigitalSpecs;
   serviceSpecs?: ServiceSpecs;
   stockQuantity: number; // Aggregate across variants
+  stock?: number;
+  lowStockThreshold?: number;
   rating: number;
   reviewsCount: number;
   viewCount: number;

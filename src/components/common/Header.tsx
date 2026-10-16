@@ -66,6 +66,36 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
 
   return (
     <>
+      {/* TOP ANNOUNCEMENT BAR (User Request: "up livraison par tout au maroc") */}
+      <div className="bg-slate-950 text-white text-[10px] sm:text-xs py-2 px-3 sm:px-4 border-b border-slate-900 tracking-wider font-bold">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2 mx-auto sm:mx-0 overflow-hidden text-center sm:text-left">
+            <span className="text-amber-400">✦</span>
+            <span className="uppercase tracking-widest text-slate-100 font-extrabold">
+              LIVRAISON GRATUITE PARTOUT AU MAROC
+            </span>
+            <span className="text-amber-400">✦</span>
+            <span className="hidden sm:inline text-slate-300 font-medium">PAIEMENT CASH À LA LIVRAISON</span>
+            <span className="hidden md:inline text-amber-400">✦</span>
+            <span className="hidden md:inline text-emerald-400 font-semibold">EXPÉDITION EXPRESS 24H-48H</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-3 text-slate-400 text-[11px]">
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              WhatsApp Actif
+            </span>
+            <a 
+              href={whatsappService.generateSupportLink('Salam ShopMe Maroc')} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-white transition-colors"
+            >
+              +212 668-381916
+            </a>
+          </div>
+        </div>
+      </div>
+
       <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-xs">
         {/* Main Navbar: Left (3 Lines) - Middle (Logo) - Right (Search & Cart) */}
         <div className="max-w-7xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between relative">
@@ -95,8 +125,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
             </button>
           </div>
 
-          {/* RIGHT: Search icon & Shopping bag icon */}
+          {/* RIGHT: WhatsApp, Search icon & Shopping bag icon */}
           <div className="flex items-center gap-1 sm:gap-2">
+            {/* WhatsApp Quick Order Button */}
+            <a
+              href={whatsappService.generateSupportLink('Salam ShopMe Maroc, je souhaite commander ou avoir des renseignements.')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer"
+              title="Commander directement sur WhatsApp"
+              aria-label="Commander sur WhatsApp"
+            >
+              <MessageCircle className="w-4 h-4 fill-white" />
+              <span className="font-extrabold hidden xs:inline sm:inline">WhatsApp</span>
+            </a>
+
             {/* Search Trigger */}
             <button
               onClick={() => setSearchOpen(!searchOpen)}
