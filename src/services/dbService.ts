@@ -297,7 +297,7 @@ const INITIAL_SETTINGS: StoreSettings = {
   whatsappPhoneNumber: "+212600000000",
   whatsappOrderConfirmationTemplate: "Bonjour {{customer_name}} 👋\nMerci pour votre commande *{{order_number}}* sur ShopMe.\n📦 {{items}}\n💰 Total : {{total}} (paiement à la livraison)\n📍 {{address}}\n\nRépondez *OUI* pour confirmer votre commande ou *NON* pour l'annuler.",
   whatsappShippingTemplate: "Bonjour {{customer_name}}, votre colis pour la commande #{{order_number}} est en cours d'acheminement par notre livreur. Numéro de suivi : {{tracking_number}}.",
-  metaPixelId: "982348273619284",
+  metaPixelId: "1937322180765245",
   googleAnalyticsId: "G-9K8L7M6N5P",
   tiktokPixelId: "C1234567890ABCDEFGH",
   snapchatPixelId: "snap-pix-9821381"
