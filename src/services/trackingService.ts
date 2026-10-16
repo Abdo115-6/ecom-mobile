@@ -173,6 +173,35 @@ class MarketingTrackingService {
           items: payload.items
         }
       });
+
+      // Client-side dispatch to Meta Pixel (fbq)
+      const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
+      if (typeof fbq === 'function') {
+        if (eventName === 'view_item') {
+          fbq('track', 'ViewContent', {
+            content_name: options?.items?.[0]?.name,
+            content_type: 'product',
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'add_to_cart') {
+          fbq('track', 'AddToCart', {
+            content_name: options?.items?.[0]?.name,
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'begin_checkout') {
+          fbq('track', 'InitiateCheckout', {
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'purchase') {
+          fbq('track', 'Purchase', {
+            value: payload.value,
+            currency: payload.currency
+          });
+        }
+      }
     }
 
     // Add to history and notify observers

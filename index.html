@@ -43,6 +43,33 @@
       }
     }
     </script>
+
+    <!-- Meta Pixel Base Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    var pixelId = '982348273619284';
+    try {
+      var s = localStorage.getItem('shopme_store_settings_v1');
+      if (s) {
+        var parsed = JSON.parse(s);
+        if (parsed && parsed.metaPixelId) pixelId = parsed.metaPixelId;
+      }
+    } catch(e) {}
+    fbq('init', pixelId);
+    fbq('track', 'PageView');
+    </script>
+    <noscript>
+      <img height="1" width="1" style="display:none" 
+           src="https://www.facebook.com/tr?id=982348273619284&ev=PageView&noscript=1"/>
+    </noscript>
+    <!-- End Meta Pixel Base Code -->
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-slate-900 selection:text-white">
     <div id="root"></div>

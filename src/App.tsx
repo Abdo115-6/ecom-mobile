@@ -58,11 +58,16 @@ const MainRouter: React.FC = () => {
   const { currentView, isAdminMode, toastMessage, setCurrentView } = useApp();
   const [specsModalOpen, setSpecsModalOpen] = useState(false);
 
-  // Scroll to top on every view navigation (near navbar, not footer)
+  // Scroll to top on every view navigation and fire Meta Pixel PageView on SPA route change
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+
+    // Fire Meta Pixel PageView on each route change for Single Page App
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'PageView');
+    }
   }, [currentView]);
 
   // Dynamic meta robots shield to hide admin views from search engines and fetchers

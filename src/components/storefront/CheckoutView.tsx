@@ -41,6 +41,19 @@ export const CheckoutView: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Meta Pixel InitiateCheckout Event
+  React.useEffect(() => {
+    if (cartItems.length > 0 && typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'InitiateCheckout', {
+        content_type: 'product',
+        content_ids: cartItems.map(i => i.productId),
+        num_items: cartItems.reduce((acc, i) => acc + i.quantity, 0),
+        value: cartTotal,
+        currency: currency || 'MAD'
+      });
+    }
+  }, []);
+
   const handleFieldChange = (field: 'fullName' | 'phone' | 'city' | 'street', value: string) => {
     if (field === 'fullName') setFullName(value);
     if (field === 'phone') setPhone(value);

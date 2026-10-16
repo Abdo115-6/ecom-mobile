@@ -138,10 +138,23 @@ export const ProductDetailView: React.FC = () => {
     product?.digitalSpecs?.topUpDenominations?.find(d => d.isPopular)?.id || product?.digitalSpecs?.topUpDenominations?.[0]?.id
   );
 
-  // Track product view in client movement service
+  const hasFiredCheckoutPixelRef = React.useRef(false);
+
+  // Track product view in client movement service & Meta Pixel ViewContent
   useEffect(() => {
     if (product) {
       clientMovementService.trackProductView(product, packsList[selectedPackIndex]?.quantity || 1, activeVariant?.title);
+
+      // Meta Pixel ViewContent
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'ViewContent', {
+          content_name: product.name,
+          content_type: 'product',
+          content_ids: [product.id],
+          value: unitPrice,
+          currency: 'MAD'
+        });
+      }
     }
   }, [product?.id, selectedPackIndex, activeVariant?.id]);
 
@@ -151,6 +164,20 @@ export const ProductDetailView: React.FC = () => {
     if (field === 'phone') setCustomerPhone(value);
     if (field === 'city') setSelectedCity(value);
     if (field === 'address') setShippingAddress(value);
+
+    // Fire InitiateCheckout once when customer starts typing in the order form
+    if (!hasFiredCheckoutPixelRef.current && product) {
+      hasFiredCheckoutPixelRef.current = true;
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'InitiateCheckout', {
+          content_name: product.name,
+          content_type: 'product',
+          content_ids: [product.id],
+          value: packTotalPrice,
+          currency: 'MAD'
+        });
+      }
+    }
 
     clientMovementService.captureFormInput({
       fullName: field === 'fullName' ? value : customerName,
@@ -291,6 +318,17 @@ export const ProductDetailView: React.FC = () => {
       imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl,
       openDrawer: true
     });
+
+    // Meta Pixel AddToCart Event
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'AddToCart', {
+        content_name: product.name,
+        content_type: 'product',
+        content_ids: [product.id],
+        value: finalPrice * effectiveQty,
+        currency: 'MAD'
+      });
+    }
 
     clientMovementService.trackClick('Ajout au Panier depuis Fiche Produit', 'BUTTON', {
       productSlug: product.slug,
