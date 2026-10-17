@@ -202,6 +202,38 @@ class MarketingTrackingService {
           });
         }
       }
+
+      // Client-side dispatch to TikTok Pixel (ttq)
+      const ttq = (window as unknown as { ttq?: { track?: (...args: unknown[]) => void } }).ttq;
+      if (ttq && typeof ttq.track === 'function') {
+        if (eventName === 'view_item') {
+          ttq.track('ViewContent', {
+            content_id: options?.items?.[0]?.id,
+            content_name: options?.items?.[0]?.name,
+            content_type: 'product',
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'add_to_cart') {
+          ttq.track('AddToCart', {
+            content_id: options?.items?.[0]?.id,
+            content_name: options?.items?.[0]?.name,
+            content_type: 'product',
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'begin_checkout') {
+          ttq.track('InitiateCheckout', {
+            value: payload.value,
+            currency: payload.currency
+          });
+        } else if (eventName === 'purchase') {
+          ttq.track('CompletePayment', {
+            value: payload.value,
+            currency: payload.currency
+          });
+        }
+      }
     }
 
     // Add to history and notify observers

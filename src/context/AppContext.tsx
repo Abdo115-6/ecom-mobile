@@ -118,8 +118,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [lastConfirmedOrder, setLastConfirmedOrder] = useState<Order | null>(null);
 
-  const [locale, setLocaleState] = useState<Locale>('fr');
-  const [currency, setCurrency] = useState<CurrencyCode>('MAD');
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = (localStorage.getItem('shopme_locale') || localStorage.getItem('aura_locale')) as Locale;
+        if (saved && (saved === 'fr' || saved === 'ar' || saved === 'en')) {
+          return saved;
+        }
+      }
+    } catch {}
+    return 'fr';
+  });
+
+  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = (localStorage.getItem('shopme_currency') || localStorage.getItem('aura_currency')) as CurrencyCode;
+        if (saved && (saved === 'MAD' || saved === 'EUR' || saved === 'USD')) {
+          return saved;
+        }
+      }
+    } catch {}
+    return 'MAD';
+  });
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
@@ -188,12 +209,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Set HTML direction and lang when locale changes
+  // Set HTML direction and lang when locale changes & persist in localStorage
   const setLocale = (newLoc: Locale) => {
     setLocaleState(newLoc);
-    document.documentElement.lang = newLoc;
-    document.documentElement.dir = newLoc === 'ar' ? 'rtl' : 'ltr';
+    try {
+      localStorage.setItem('shopme_locale', newLoc);
+    } catch {}
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = newLoc;
+      document.documentElement.dir = newLoc === 'ar' ? 'rtl' : 'ltr';
+    }
   };
+
+  const setCurrency = (newCur: CurrencyCode) => {
+    setCurrencyState(newCur);
+    try {
+      localStorage.setItem('shopme_currency', newCur);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+    }
+  }, [locale]);
 
   // Toast helper
   const showToast = (msg: string) => {

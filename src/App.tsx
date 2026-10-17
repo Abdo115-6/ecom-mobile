@@ -69,6 +69,11 @@ const MainRouter: React.FC = () => {
     if (typeof window !== 'undefined' && (window as any).fbq) {
       (window as any).fbq('track', 'PageView');
     }
+
+    // Fire TikTok Pixel page event on each route change for Single Page App
+    if (typeof window !== 'undefined' && (window as any).ttq) {
+      (window as any).ttq.page();
+    }
   }, [currentView]);
 
   // Dynamic meta robots shield to hide admin views from search engines and fetchers

@@ -68,30 +68,65 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
     <>
       {/* TOP ANNOUNCEMENT BAR (User Request: "up livraison par tout au maroc") */}
       <div className="bg-slate-950 text-white text-[10px] sm:text-xs py-2 px-3 sm:px-4 border-b border-slate-900 tracking-wider font-bold">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 mx-auto sm:mx-0 overflow-hidden text-center sm:text-left">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden text-left">
             <span className="text-amber-400">✦</span>
-            <span className="uppercase tracking-widest text-slate-100 font-extrabold">
-              LIVRAISON GRATUITE PARTOUT AU MAROC
+            <span className="uppercase tracking-widest text-slate-100 font-extrabold truncate">
+              {t.deliveryEverywhere}
             </span>
-            <span className="text-amber-400">✦</span>
-            <span className="hidden sm:inline text-slate-300 font-medium">PAIEMENT CASH À LA LIVRAISON</span>
+            <span className="hidden sm:inline text-amber-400">✦</span>
+            <span className="hidden sm:inline text-slate-300 font-medium">{t.cashOnDeliveryShort}</span>
             <span className="hidden md:inline text-amber-400">✦</span>
-            <span className="hidden md:inline text-emerald-400 font-semibold">EXPÉDITION EXPRESS 24H-48H</span>
+            <span className="hidden md:inline text-emerald-400 font-semibold">{t.expressShipping}</span>
           </div>
-          <div className="hidden lg:flex items-center gap-3 text-slate-400 text-[11px]">
-            <span className="flex items-center gap-1.5 text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              WhatsApp Actif
-            </span>
-            <a 
-              href={whatsappService.generateSupportLink('Salam ShopMe Maroc')} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="hover:text-white transition-colors"
-            >
-              +212 668-381916
-            </a>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Quick Language Switcher Bar */}
+            <div className="inline-flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800 text-[10px] sm:text-[11px]">
+              <Globe className="w-3 h-3 text-slate-400 shrink-0" />
+              <button
+                type="button"
+                onClick={() => setLocale('fr')}
+                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer font-extrabold ${
+                  locale === 'fr' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+                title="Français"
+                aria-label="Changer en Français"
+              >
+                FR
+              </button>
+              <span className="text-slate-700">|</span>
+              <button
+                type="button"
+                onClick={() => setLocale('ar')}
+                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer font-extrabold ${
+                  locale === 'ar' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+                title="العربية (المغرب)"
+                aria-label="التبديل إلى العربية"
+              >
+                عربي
+              </button>
+              <span className="text-slate-700">|</span>
+              <button
+                type="button"
+                onClick={() => setLocale('en')}
+                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer font-extrabold ${
+                  locale === 'en' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+                title="English"
+                aria-label="Switch to English"
+              >
+                EN
+              </button>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-2 text-slate-400 text-[11px]">
+              <span className="flex items-center gap-1 text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                {locale === 'ar' ? 'واتساب متاح' : locale === 'en' ? 'WhatsApp Online' : 'WhatsApp Actif'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -225,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
               {/* Collections section */}
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                  Collections
+                  {t.categories}
                 </div>
                 <div className="space-y-1">
                   <button
@@ -236,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                         : 'text-slate-800 hover:bg-slate-100'
                     }`}
                   >
-                    <span>Tous les Produits</span>
+                    <span>{t.navAllProducts}</span>
                     <ChevronRight className="w-4 h-4 opacity-50" />
                   </button>
 
@@ -260,7 +295,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
               {/* Navigation links */}
               <div className="pt-2 border-t border-slate-100">
                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                  Navigation
+                  {locale === 'ar' ? 'التنقل' : locale === 'en' ? 'Navigation' : 'Navigation'}
                 </div>
                 <div className="space-y-1 text-sm font-bold text-slate-800">
                   <button
@@ -270,7 +305,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                     }}
                     className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between cursor-pointer"
                   >
-                    <span>Accueil</span>
+                    <span>{t.home}</span>
                   </button>
 
                   <button
@@ -280,7 +315,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                     }}
                     className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between cursor-pointer"
                   >
-                    <span>Catalogue</span>
+                    <span>{t.catalog}</span>
                   </button>
 
                   <button
@@ -292,26 +327,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                   >
                     <span className="flex items-center gap-2">
                       <Heart className="w-4 h-4 text-rose-500" />
-                      <span>Mes Favoris</span>
+                      <span>{t.wishlist}</span>
                     </span>
                     {wishlistIds.length > 0 && (
                       <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-bold rounded-full">
                         {wishlistIds.length}
                       </span>
                     )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setCurrentView('track-order');
-                      setSidebarOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-blue-600" />
-                      <span>Suivi de Commande</span>
-                    </span>
                   </button>
                 </div>
               </div>
@@ -325,36 +347,67 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                   className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-xs transition-colors shadow-sm"
                 >
                   <MessageCircle className="w-4 h-4 fill-white" />
-                  <span>WhatsApp direct</span>
+                  <span>{t.directWhatsApp}</span>
                 </a>
               </div>
             </div>
 
-            {/* Drawer Footer: Currency & Language */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Devise :</span>
+            {/* Drawer Footer: Currency & Language Selection */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-4 text-xs">
+              {/* Language Selection Buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                  <Globe className="w-4 h-4 text-slate-500" />
+                  <span>{t.languageLabel}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLocale('fr')}
+                    className={`py-2 px-1 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
+                      locale === 'fr'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Français 🇫🇷
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocale('ar')}
+                    className={`py-2 px-1 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
+                      locale === 'ar'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    العربية 🇲🇦
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocale('en')}
+                    className={`py-2 px-1 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
+                      locale === 'en'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    English 🇬🇧
+                  </button>
+                </div>
+              </div>
+
+              {/* Currency Selection */}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                <span className="text-slate-500 font-semibold">{t.currencyLabel}</span>
                 <select
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-bold text-slate-800"
+                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-bold text-slate-800 cursor-pointer"
                 >
                   <option value="MAD">MAD (DH)</option>
                   <option value="EUR">EUR (€)</option>
                   <option value="USD">USD ($)</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Langue :</span>
-                <select
-                  value={locale}
-                  onChange={(e) => setLocale(e.target.value as Locale)}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-bold text-slate-800"
-                >
-                  <option value="fr">Français</option>
-                  <option value="ar">العربية (المغرب)</option>
-                  <option value="en">English</option>
                 </select>
               </div>
             </div>

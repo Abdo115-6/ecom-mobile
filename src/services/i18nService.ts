@@ -72,6 +72,24 @@ export interface Translations {
   continueShopping: string;
   specificationsDoc: string;
   liveTrackingInspector: string;
+  deliveryEverywhere: string;
+  cashOnDeliveryShort: string;
+  expressShipping: string;
+  orderOnWhatsApp: string;
+  viewOffersAndPacks: string;
+  weeklyPromo: string;
+  advantageousPacks: string;
+  orderThisPack: string;
+  menCollection: string;
+  womenCollection: string;
+  digitalAccounts: string;
+  allCollections: string;
+  viewAllCatalog: string;
+  qualityGuarantee: string;
+  languageLabel: string;
+  currencyLabel: string;
+  directWhatsApp: string;
+  navAllProducts: string;
 }
 
 const fr: Translations = {
@@ -145,7 +163,25 @@ const fr: Translations = {
   emptyCart: "Votre panier est vide pour le moment",
   continueShopping: "Continuer mes achats",
   specificationsDoc: "Cahier des Charges & Specs",
-  liveTrackingInspector: "Live Event Tracking"
+  liveTrackingInspector: "Live Event Tracking",
+  deliveryEverywhere: "Livraison Gratuite Partout au Maroc",
+  cashOnDeliveryShort: "Paiement Cash à la Livraison (COD)",
+  expressShipping: "Expédition Express 24h-48h",
+  orderOnWhatsApp: "Commander sur WhatsApp (طلب عبر الواتساب)",
+  viewOffersAndPacks: "Voir les Offres & Packs",
+  weeklyPromo: "PROMO DE LA SEMAINE",
+  advantageousPacks: "NOS PACKS AVANTAGEUX",
+  orderThisPack: "COMMANDER CE PACK",
+  menCollection: "COLLECTION HOMMES",
+  womenCollection: "COLLECTION FEMMES",
+  digitalAccounts: "ABONNEMENTS & COMPTES DIGITAUX",
+  allCollections: "TOUTES NOS COLLECTIONS",
+  viewAllCatalog: "Voir tout le catalogue",
+  qualityGuarantee: "100% Authentique & Qualité Garantie",
+  languageLabel: "Langue :",
+  currencyLabel: "Devise :",
+  directWhatsApp: "WhatsApp direct",
+  navAllProducts: "Tous les Produits"
 };
 
 const ar: Translations = {
@@ -219,11 +255,29 @@ const ar: Translations = {
   emptyCart: "سلة التسوق فارغة حالياً",
   continueShopping: "متابعة التسوق",
   specificationsDoc: "دفتر الشروط والمواصفات",
-  liveTrackingInspector: "تتبع الأحداث المباشر"
+  liveTrackingInspector: "تتبع الأحداث المباشر",
+  deliveryEverywhere: "توصيل مجاني لجميع مدن المغرب",
+  cashOnDeliveryShort: "الدفع عند الاستلام (كاش)",
+  expressShipping: "شحن سريع خلال 24-48 ساعة",
+  orderOnWhatsApp: "طلب عبر الواتساب",
+  viewOffersAndPacks: "عرض العروض والباقات",
+  weeklyPromo: "عروض وتخفيضات الأسبوع",
+  advantageousPacks: "باقاتنا المميزة والموفرة",
+  orderThisPack: "طلب هذه الباقة",
+  menCollection: "تشكيلة الرجال",
+  womenCollection: "تشكيلة النساء",
+  digitalAccounts: "اشتراكات وحسابات رقمية",
+  allCollections: "جميع التشكيلات",
+  viewAllCatalog: "عرض كامل المتجر",
+  qualityGuarantee: "جودة أصلية ومضمونة 100%",
+  languageLabel: "اللغة :",
+  currencyLabel: "العملة :",
+  directWhatsApp: "واتساب مباشر",
+  navAllProducts: "جميع المنتجات"
 };
 
 const en: Translations = {
-  appName: "Aura Commerce",
+  appName: "ShopMe Morocco",
   home: "Home",
   catalog: "Shop",
   categories: "Categories",
@@ -293,7 +347,25 @@ const en: Translations = {
   emptyCart: "Your cart is currently empty",
   continueShopping: "Continue Shopping",
   specificationsDoc: "Architecture & Specs",
-  liveTrackingInspector: "Live Event Tracking"
+  liveTrackingInspector: "Live Event Tracking",
+  deliveryEverywhere: "Free Delivery All Over Morocco",
+  cashOnDeliveryShort: "Cash on Delivery (COD)",
+  expressShipping: "Express Shipping 24h-48h",
+  orderOnWhatsApp: "Order via WhatsApp",
+  viewOffersAndPacks: "View Offers & Packs",
+  weeklyPromo: "WEEKLY DEALS",
+  advantageousPacks: "OUR VALUE PACKS",
+  orderThisPack: "ORDER THIS PACK",
+  menCollection: "MEN'S COLLECTION",
+  womenCollection: "WOMEN'S COLLECTION",
+  digitalAccounts: "DIGITAL SUBSCRIPTIONS & ACCOUNTS",
+  allCollections: "ALL OUR COLLECTIONS",
+  viewAllCatalog: "View full catalog",
+  qualityGuarantee: "100% Authentic & Guaranteed Quality",
+  languageLabel: "Language:",
+  currencyLabel: "Currency:",
+  directWhatsApp: "Direct WhatsApp",
+  navAllProducts: "All Products"
 };
 
 export const TRANSLATIONS: Record<Locale, Translations> = { fr, ar, en };

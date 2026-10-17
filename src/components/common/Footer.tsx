@@ -16,9 +16,6 @@ export const Footer: React.FC = () => {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-900">
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
             <Logo size="md" variant="dark" />
-            <span className="text-[10px] tracking-widest uppercase text-slate-500 font-bold mt-2">
-              BOUTIQUE OFFICIELLE MAROC
-            </span>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold">
