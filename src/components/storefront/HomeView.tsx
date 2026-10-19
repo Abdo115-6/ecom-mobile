@@ -344,33 +344,67 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 4. NOS PACKS (User Request: "for packs wait until i add product and do packs with the product i add") */}
+      {/* 4. NOS PACKS (Always Visible & Advantageous Bundles) */}
       {(() => {
-        // Find product with promo packs configured (e.g. added by owner)
-        const productWithPacks = allPublished.find(p => p.promoPacks && p.promoPacks.length > 0);
-        const packs = productWithPacks?.promoPacks || [];
+        // Find product with promo packs configured, or top physical featured product (e.g. Lunette, etc.)
+        const productWithPacks = allPublished.find(p => p.promoPacks && p.promoPacks.length > 0)
+          || allPublished.find(p => p.categoryId !== 'cat-digital' && p.productKind !== 'DIGITAL')
+          || allPublished[0];
 
-        // If no product with packs added yet, wait (hide from clients, show notice only to owner)
-        if (!productWithPacks || packs.length === 0) {
-          if (!isAdminAuthenticated) return null;
-          return (
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-2">
-              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 sm:p-5 flex items-start gap-3 shadow-xs">
-                <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-amber-900">
-                    Section Packs en attente (Visible uniquement par vous, propriétaire)
-                  </h4>
-                  <p className="text-xs text-amber-800">
-                    Cette section est masquée pour les clients. Dès que vous ajouterez un produit avec des packs dans <span className="font-bold">/adminonly</span>, les packs de votre produit s'afficheront automatiquement ici.
-                  </p>
-                </div>
-              </div>
-            </section>
-          );
-        }
+        if (!productWithPacks) return null;
 
-        // Dynamically render packs based on the product added by the owner
+        const defaultPacks = [
+          {
+            id: 'pack-1',
+            quantity: 1,
+            title: 'Pack 1 Pièce',
+            price: productWithPacks.variants[0]?.price || productWithPacks.price,
+            compareAtPrice: productWithPacks.compareAtPrice,
+            badge: ''
+          },
+          {
+            id: 'pack-2',
+            quantity: 2,
+            title: 'Pack 2 Pièces',
+            price: Math.round((productWithPacks.variants[0]?.price || productWithPacks.price) * 2 * 0.8),
+            compareAtPrice: Math.round((productWithPacks.variants[0]?.price || productWithPacks.price) * 2),
+            badge: 'LE PLUS POPULAIRE 🔥 -20%'
+          },
+          {
+            id: 'pack-3',
+            quantity: 3,
+            title: 'Pack 3 Pièces',
+            price: Math.round((productWithPacks.variants[0]?.price || productWithPacks.price) * 2),
+            compareAtPrice: Math.round((productWithPacks.variants[0]?.price || productWithPacks.price) * 3),
+            badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT'
+          }
+        ];
+
+        const rawHomePacks: any[] = (productWithPacks.promoPacks && productWithPacks.promoPacks.length > 0)
+          ? productWithPacks.promoPacks
+          : ((productWithPacks as any).promotionalPacks && (productWithPacks as any).promotionalPacks.length > 0)
+          ? (productWithPacks as any).promotionalPacks
+          : [];
+
+        const basePiecePrice = productWithPacks.variants[0]?.price || productWithPacks.price;
+
+        const packs = rawHomePacks.length > 0
+          ? rawHomePacks.map((p: any, idx: number) => {
+              const qty = Number(p.quantity) || (idx + 1);
+              const rawPPrice = p.price ?? p.packPrice;
+              const price = typeof rawPPrice === 'number' && !isNaN(rawPPrice) && rawPPrice > 0 ? rawPPrice : (qty * basePiecePrice);
+              const compareAtPrice = p.compareAtPrice || (qty * (productWithPacks.compareAtPrice || Math.round(basePiecePrice * 1.25)));
+              return {
+                id: p.id || `pack-${qty}-${idx}`,
+                quantity: qty,
+                title: p.title || `Pack ${qty} Pièce${qty > 1 ? 's' : ''}`,
+                price,
+                compareAtPrice: compareAtPrice > price ? compareAtPrice : undefined,
+                badge: p.badge || p.badgeText || (qty === 2 ? 'LE PLUS POPULAIRE 🔥 -20%' : qty === 3 ? 'MEILLEURE OFFRE 🎁 1 GRATUIT' : '')
+              };
+            })
+          : defaultPacks;
+
         return (
           <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
@@ -492,14 +526,33 @@ export const HomeView: React.FC = () => {
 
                     <div className="flex flex-col gap-2 pt-2">
                       <button
-                        onClick={() => navigateToProduct(productWithPacks.slug)}
+                        onClick={() => {
+                          addToCart(productWithPacks, productWithPacks.variants[0]?.id, 1, {
+                            price: pack.price,
+                            variantTitle: `${pack.title} (${pack.quantity} pcs)`,
+                            imageUrl: productWithPacks.images[0]?.imageUrl,
+                            openDrawer: true,
+                            packPieces: pack.quantity,
+                            packTitle: pack.title,
+                            pieceUnitPrice: unitPrice,
+                            savingsAmount: savings
+                          });
+                        }}
                         className={`w-full py-2.5 font-extrabold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs ${
                           isPopular 
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
                             : 'bg-slate-950 hover:bg-slate-800 text-white'
                         }`}
                       >
-                        <span>COMMANDER CE PACK</span>
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>AJOUTER CE PACK AU PANIER</span>
+                      </button>
+
+                      <button
+                        onClick={() => navigateToProduct(productWithPacks.slug)}
+                        className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-[11px] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>Commander en 1 Clic (Fiche Produit)</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
 

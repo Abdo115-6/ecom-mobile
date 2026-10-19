@@ -12,7 +12,9 @@ import {
   Truck, 
   ShieldCheck, 
   ChevronRight,
-  PackageCheck
+  PackageCheck,
+  Gift,
+  Check
 } from 'lucide-react';
 
 export const CartDrawer: React.FC = () => {
@@ -21,6 +23,7 @@ export const CartDrawer: React.FC = () => {
     closeCartDrawer, 
     cartItems, 
     updateCartQuantity, 
+    updateCartItem,
     removeFromCart, 
     cartSubtotal, 
     cartDiscount, 
@@ -201,22 +204,41 @@ export const CartDrawer: React.FC = () => {
                         </button>
                       </div>
 
-                      {/* Variant/Option Badge */}
-                      {item.variantTitle && (
-                        <div className="inline-block text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                          {item.variantTitle}
-                        </div>
-                      )}
+                      {/* Variant/Option Badge & Pack Details */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {item.packPieces && item.packPieces > 1 ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                            📦 {item.packTitle || `Pack ${item.packPieces} Pièces`}
+                            <span className="text-emerald-600 font-bold">({item.quantity * item.packPieces} pcs)</span>
+                          </span>
+                        ) : null}
+                        {item.variantTitle && (!item.packPieces || item.packPieces <= 1 || !item.variantTitle.startsWith('Pack')) && (
+                          <span className="inline-block text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {item.variantTitle}
+                          </span>
+                        )}
+                      </div>
 
                       {/* Price & Quantity Controls */}
                       <div className="flex items-center justify-between pt-1">
-                        <div className="text-xs font-black text-slate-950">
-                          {formatMoney(item.price * item.quantity)}
-                          {item.quantity > 1 && (
-                            <span className="text-[10px] font-semibold text-slate-400 ml-1.5">
-                              ({formatMoney(item.price)}/u)
-                            </span>
-                          )}
+                        <div>
+                          <div className="text-xs sm:text-sm font-black text-slate-950">
+                            {formatMoney(item.price * item.quantity)}
+                          </div>
+                          {item.packPieces && item.packPieces > 1 ? (
+                            <div className="text-[10px] font-semibold text-emerald-700">
+                              Soit {formatMoney(item.pieceUnitPrice || (item.price / item.packPieces))} / pièce
+                              {item.quantity > 1 && (
+                                <span className="text-slate-400 font-normal ml-1">
+                                  ({formatMoney(item.price)}/pack)
+                                </span>
+                              )}
+                            </div>
+                          ) : item.quantity > 1 ? (
+                            <div className="text-[10px] font-semibold text-slate-400">
+                              ({formatMoney(item.price)} / pièce)
+                            </div>
+                          ) : null}
                         </div>
 
                         {/* Quantity Stepper */}
@@ -224,24 +246,114 @@ export const CartDrawer: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                            className="p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-l-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-l-lg transition-colors cursor-pointer"
                             aria-label="Diminuer"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="w-7 text-center font-bold text-xs text-slate-900">
-                            {item.quantity}
-                          </span>
+                          <div className="px-1.5 min-w-[32px] text-center">
+                            <span className="font-black text-xs text-slate-900 block leading-tight">
+                              {item.quantity}
+                            </span>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase leading-none block">
+                              {item.packPieces && item.packPieces > 1 ? 'pack' : 'qté'}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                            className="p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-r-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-r-lg transition-colors cursor-pointer"
                             aria-label="Augmenter"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
+
+                      {/* In-Cart Pack Chooser (Customer can choose packs directly inside Panier!) */}
+                      {(() => {
+                        const prod = dbService.getProductById(item.productId);
+                        if (!prod || prod.productKind === 'DIGITAL' || prod.productKind === 'SERVICE' || prod.categoryId === 'cat-digital' || prod.categoryId === 'cat-services') {
+                          return null;
+                        }
+
+                        const rawPacks: any[] = (prod.promoPacks && prod.promoPacks.length > 0)
+                          ? prod.promoPacks
+                          : ((prod as any).promotionalPacks && (prod as any).promotionalPacks.length > 0)
+                          ? (prod as any).promotionalPacks
+                          : [];
+
+                        const basePrice = prod.variants.find(v => v.id === item.variantId)?.price || prod.price;
+                        const availablePacks = rawPacks.length > 0
+                          ? rawPacks.map((p, idx) => {
+                              const qty = Number(p.quantity) || (idx + 1);
+                              const rawPPrice = p.price ?? p.packPrice;
+                              const packPrice = typeof rawPPrice === 'number' && !isNaN(rawPPrice) ? rawPPrice : (qty * basePrice);
+                              const savings = (qty * basePrice) > packPrice ? ((qty * basePrice) - packPrice) : 0;
+                              return {
+                                id: p.id || `pack-${qty}-${idx}`,
+                                quantity: qty,
+                                title: p.title || `Pack ${qty} Pièce${qty > 1 ? 's' : ''}`,
+                                price: packPrice,
+                                unitPrice: Math.round(packPrice / qty),
+                                savings,
+                                badge: p.badge || p.badgeText || (qty === 2 ? '-20% 🔥' : qty === 3 ? '1 Offert 🎁' : '')
+                              };
+                            })
+                          : [
+                              { id: 'p1', quantity: 1, title: '1 Pièce', price: basePrice, unitPrice: basePrice, savings: 0, badge: '' },
+                              { id: 'p2', quantity: 2, title: 'Pack 2 Pièces', price: Math.round(basePrice * 2 * 0.8), unitPrice: Math.round(basePrice * 0.8), savings: Math.round(basePrice * 2 * 0.2), badge: '-20% 🔥' },
+                              { id: 'p3', quantity: 3, title: 'Pack 3 Pièces', price: Math.round(basePrice * 2), unitPrice: Math.round(basePrice * 2 / 3), savings: basePrice, badge: '1 Gratuit 🎁' }
+                            ];
+
+                        const currentPackQty = item.packPieces || 1;
+
+                        return (
+                          <div className="pt-2 mt-2 border-t border-slate-100/90">
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold mb-1.5">
+                              <span className="flex items-center gap-1 text-slate-800">
+                                <Gift className="w-3 h-3 text-emerald-600" />
+                                <span>Choisir un Pack :</span>
+                              </span>
+                              <span className="text-emerald-700 font-extrabold text-[9px]">
+                                {currentPackQty > 1 ? `✓ Pack ${currentPackQty} actif` : 'Économies disponibles'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {availablePacks.map(p => {
+                                const isCurrent = currentPackQty === p.quantity;
+                                return (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => {
+                                      updateCartItem(item.id, {
+                                        price: p.price,
+                                        packPieces: p.quantity,
+                                        packTitle: p.title,
+                                        pieceUnitPrice: p.unitPrice,
+                                        savingsAmount: p.savings,
+                                        variantTitle: p.quantity > 1 ? `${p.title} (${p.quantity} pcs)` : undefined
+                                      });
+                                    }}
+                                    className={`py-1.5 px-1 rounded-xl text-center border transition-all cursor-pointer ${
+                                      isCurrent
+                                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black ring-1 ring-emerald-500/30'
+                                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700 font-medium'
+                                    }`}
+                                  >
+                                    <div className="text-[10px] leading-tight truncate">{p.title}</div>
+                                    <div className="text-[11px] font-black mt-0.5">{formatMoney(p.price)}</div>
+                                    {p.badge && (
+                                      <div className="text-[8px] text-emerald-700 font-extrabold uppercase truncate">{p.badge}</div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

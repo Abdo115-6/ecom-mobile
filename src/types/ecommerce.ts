@@ -249,6 +249,10 @@ export interface CartItem {
   quantity: number;
   imageUrl: string;
   maxStock: number;
+  packPieces?: number;
+  packTitle?: string;
+  pieceUnitPrice?: number;
+  savingsAmount?: number;
 }
 
 export interface Cart {

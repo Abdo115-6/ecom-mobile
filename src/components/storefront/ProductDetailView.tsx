@@ -70,42 +70,105 @@ export const ProductDetailView: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [customQuantity, setCustomQuantity] = useState<number>(1);
 
-  // Dynamic Offer Packs (Custom from merchant or default 1, 2, 3)
-  const packsList = (product?.promoPacks && product.promoPacks.length > 0)
-    ? product.promoPacks
-    : [
-        {
-          id: 'pack-1',
-          quantity: 1,
-          title: 'Pack 1 Pièce',
-          price: product ? (product.variants[0]?.price || product.price) : 299,
-          compareAtPrice: product?.compareAtPrice,
-          badge: ''
-        },
-        {
-          id: 'pack-2',
-          quantity: 2,
-          title: 'Pack 2 Pièces',
-          price: product ? Math.round((product.variants[0]?.price || product.price) * 2 * 0.8) : 499,
-          compareAtPrice: product ? (product.variants[0]?.price || product.price) * 2 : 598,
-          badge: 'LE PLUS POPULAIRE 🔥 -20%'
-        },
-        {
-          id: 'pack-3',
-          quantity: 3,
-          title: 'Pack 3 Pièces',
-          price: product ? (product.variants[0]?.price || product.price) * 2 : 598,
-          compareAtPrice: product ? (product.variants[0]?.price || product.price) * 3 : 897,
-          badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT'
+  // Selected variant calculation
+  const activeVariant = product?.variants.find(v => v.id === selectedVariantId) || product?.variants[0];
+
+  // Dynamic Offer Packs (Normalized from promotionalPacks / promoPacks or calculated from base price)
+  const packsList = React.useMemo(() => {
+    if (!product) return [];
+
+    const rawPacks: any[] = (product.promoPacks && product.promoPacks.length > 0)
+      ? product.promoPacks
+      : ((product as any).promotionalPacks && (product as any).promotionalPacks.length > 0)
+      ? (product as any).promotionalPacks
+      : [];
+
+    const basePiecePrice = activeVariant ? activeVariant.price : (product.variants[0]?.price || product.price || 299);
+    const baseComparePrice = activeVariant?.compareAtPrice || product.compareAtPrice || Math.round(basePiecePrice * 1.3);
+
+    if (rawPacks.length > 0) {
+      return rawPacks.map((p, idx) => {
+        const qty = Number(p.quantity) || (idx + 1);
+        const rawPPrice = p.price ?? p.packPrice;
+        let price = typeof rawPPrice === 'number' && !isNaN(rawPPrice) && rawPPrice > 0 
+          ? rawPPrice 
+          : (qty * basePiecePrice);
+
+        // Adjust if active variant has differing price
+        if (activeVariant && product.price > 0 && activeVariant.price !== product.price) {
+          const ratio = activeVariant.price / product.price;
+          price = Math.round(price * ratio);
         }
-      ];
+
+        const rawCompare = p.compareAtPrice;
+        let compareAtPrice: number | undefined = typeof rawCompare === 'number' && !isNaN(rawCompare) && rawCompare > price
+          ? rawCompare
+          : Math.round(qty * baseComparePrice);
+
+        if (compareAtPrice <= price) {
+          compareAtPrice = qty > 1 ? Math.round(qty * basePiecePrice * 1.2) : undefined;
+        }
+
+        const unitPiecePrice = Math.round((price / qty) * 100) / 100;
+        const totalSavings = compareAtPrice && compareAtPrice > price 
+          ? (compareAtPrice - price) 
+          : ((qty * basePiecePrice) > price ? ((qty * basePiecePrice) - price) : 0);
+
+        return {
+          id: p.id || `pack-${qty}-${idx}`,
+          quantity: qty,
+          title: p.title || `Pack ${qty} Pièce${qty > 1 ? 's' : ''}`,
+          price,
+          unitPrice: unitPiecePrice,
+          compareAtPrice: compareAtPrice && compareAtPrice > price ? compareAtPrice : undefined,
+          savings: totalSavings,
+          badge: p.badge || p.badgeText || (qty === 2 ? 'LE PLUS POPULAIRE 🔥 -20%' : qty === 3 ? 'MEILLEURE OFFRE 🎁 1 GRATUIT' : '')
+        };
+      });
+    }
+
+    // Default 1, 2, 3 packs
+    const pack1Price = basePiecePrice;
+    const pack2Price = Math.round(basePiecePrice * 2 * 0.8); // 20% discount on 2 pieces
+    const pack3Price = Math.round(basePiecePrice * 2); // 3 for price of 2 (1 free)
+
+    return [
+      {
+        id: 'pack-1',
+        quantity: 1,
+        title: 'Pack 1 Pièce',
+        price: pack1Price,
+        unitPrice: pack1Price,
+        compareAtPrice: baseComparePrice > pack1Price ? baseComparePrice : undefined,
+        savings: baseComparePrice > pack1Price ? baseComparePrice - pack1Price : 0,
+        badge: ''
+      },
+      {
+        id: 'pack-2',
+        quantity: 2,
+        title: 'Pack 2 Pièces',
+        price: pack2Price,
+        unitPrice: Math.round(pack2Price / 2),
+        compareAtPrice: basePiecePrice * 2,
+        savings: (basePiecePrice * 2) - pack2Price,
+        badge: 'LE PLUS POPULAIRE 🔥 -20%'
+      },
+      {
+        id: 'pack-3',
+        quantity: 3,
+        title: 'Pack 3 Pièces',
+        price: pack3Price,
+        unitPrice: Math.round(pack3Price / 3),
+        compareAtPrice: basePiecePrice * 3,
+        savings: (basePiecePrice * 3) - pack3Price,
+        badge: 'MEILLEURE OFFRE 🎁 1 GRATUIT'
+      }
+    ];
+  }, [product, activeVariant]);
 
   const [selectedPackIndex, setSelectedPackIndex] = useState<number>(() => {
     return packsList.length > 1 ? 1 : 0;
   });
-
-  // Selected variant calculation
-  const activeVariant = product?.variants.find(v => v.id === selectedVariantId) || product?.variants[0];
 
   // Auto-scroll to COD form if directBuyMode is active
   useEffect(() => {
@@ -287,9 +350,18 @@ export const ProductDetailView: React.FC = () => {
   // Delivery info for selected city
   const cityInfo = MOROCCAN_CITIES.find(c => c.name === selectedCity) || MOROCCAN_CITIES[0];
 
+  // Merchandise total taking pack and quantity into account
+  const isPhysical = !isDigital && !isService;
+  const effectivePack = isPhysical ? (packsList[selectedPackIndex] || packsList[0]) : null;
+  const packPieceCount = effectivePack ? effectivePack.quantity : 1;
+  const effectiveUnitPrice = (isDigital || isService) ? unitPrice : (effectivePack ? effectivePack.price : unitPrice);
+  const effectivePackSavings = (isDigital || isService) ? 0 : (effectivePack?.savings || packDiscount || 0);
+  const totalItemsPrice = effectiveUnitPrice * customQuantity;
+  const effectiveDiscount = effectivePackSavings * customQuantity;
+
   // Delivery fee calculation from admin settings (Free 0 DH for digital & services)
-  const deliveryFee = (isDigital || isService) ? 0 : dbService.calculateDeliveryFee(selectedCity, packTotalPrice);
-  const finalOrderTotal = packTotalPrice + deliveryFee;
+  const deliveryFee = (isDigital || isService) ? 0 : dbService.calculateDeliveryFee(selectedCity, totalItemsPrice);
+  const finalOrderTotal = totalItemsPrice + deliveryFee;
 
   // Companion & Reviews
   const companionProduct = dataMiningService.getFrequentlyBoughtTogether(product.id);
@@ -298,25 +370,36 @@ export const ProductDetailView: React.FC = () => {
   // Handle Add to Cart & Open Cart Drawer
   const handleAddToCart = () => {
     if (!product) return;
+    const finalPrice = effectiveUnitPrice;
+    const packPieces = isPhysical ? packPieceCount : 1;
+    const packTitle = isPhysical ? effectivePack?.title : undefined;
+    const pieceUnitPrice = isPhysical ? (effectivePack?.unitPrice || Math.round(finalPrice / packPieces)) : unitPrice;
+    const savingsAmount = effectivePackSavings;
 
-    const finalPrice = (isDigital || isService) ? unitPrice : packTotalPrice;
+    const variantLabel = activeVariant?.title && activeVariant.title !== 'Défaut' && activeVariant.title !== 'Default'
+      ? activeVariant.title
+      : undefined;
+
     const finalTitle = isDigital && selectedDuration
       ? `${product.name} (${selectedDuration.label})`
       : isDigital && selectedDenomination
       ? `${product.name} (${selectedDenomination.amountLabel})`
-      : activePack && activePack.title !== 'Pack 1 Pièce' && activePack.title !== '1 Pièce'
-      ? `${product.name} - ${activePack.title}`
-      : activeVariant?.title && activeVariant.title !== 'Défaut'
-      ? activeVariant.title
-      : undefined;
+      : packPieces > 1
+      ? `${packTitle || `Pack ${packPieces} Pièces`} (${packPieces} pcs)${variantLabel ? ` · ${variantLabel}` : ''}`
+      : variantLabel;
 
-    const effectiveQty = (isDigital || isService) ? customQuantity : (activePack?.quantity || customQuantity || 1);
+    // The customer is purchasing customQuantity pack(s) at finalPrice per pack
+    const effectiveQty = customQuantity || 1;
 
     addToCart(product, activeVariant?.id, effectiveQty, {
       price: finalPrice,
       variantTitle: finalTitle,
       imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl,
-      openDrawer: true
+      openDrawer: true,
+      packPieces,
+      packTitle,
+      pieceUnitPrice,
+      savingsAmount
     });
 
     // Meta Pixel AddToCart Event
@@ -365,11 +448,13 @@ export const ProductDetailView: React.FC = () => {
       ? `${product.name} (Durée : ${selectedDuration.label})` 
       : isDigital && selectedDenomination 
       ? `${product.name} (Option : ${selectedDenomination.amountLabel})` 
-      : activeVariant 
+      : effectivePack && effectivePack.quantity > 1
+      ? `${effectivePack.title} (${effectivePack.quantity} pcs)${activeVariant?.title && activeVariant.title !== 'Défaut' && activeVariant.title !== 'Default' ? ` · ${activeVariant.title}` : ''}`
+      : activeVariant?.title && activeVariant.title !== 'Défaut' && activeVariant.title !== 'Default'
       ? `${product.name} - ${activeVariant.title}` 
-      : `${product.name} (Pack ${packQuantity} pcs)`;
+      : product.name;
 
-    // Build Moroccan order
+    // Build Moroccan order with exact quantity and subtotal
     const orderItems = [
       {
         id: "item-" + Date.now(),
@@ -377,10 +462,10 @@ export const ProductDetailView: React.FC = () => {
         productName: product.name,
         sku: activeSku,
         variantTitle: effectiveTitle,
-        unitPrice: (isDigital || isService) ? unitPrice : (packTotalPrice / packQuantity),
-        quantity: (isDigital || isService) ? 1 : packQuantity,
-        subtotal: packTotalPrice,
-        imageUrl: product.images[0]?.imageUrl || ''
+        unitPrice: effectiveUnitPrice,
+        quantity: customQuantity,
+        subtotal: totalItemsPrice,
+        imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl || ''
       }
     ];
 
@@ -393,8 +478,8 @@ export const ProductDetailView: React.FC = () => {
           customerPhone: customerPhone.trim(),
           status: 'PROCESSING',
           currency: 'MAD',
-          subtotal: packTotalPrice,
-          discountAmount: (isDigital || isService) ? 0 : packDiscount,
+          subtotal: totalItemsPrice,
+          discountAmount: effectiveDiscount,
           shippingFee: (isDigital || isService) ? 0 : deliveryFee,
           taxAmount: 0,
           totalAmount: finalOrderTotal,
@@ -879,24 +964,28 @@ export const ProductDetailView: React.FC = () => {
 
           {/* DYNAMIC OFFER PACKS SELECTOR (FOR PHYSICAL PRODUCTS ONLY) */}
           {!isDigital && !isService && (
-            <div className="space-y-2.5 pt-1">
-              <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
-                <span>Sélectionnez votre offre promotionnelle :</span>
-                <span className="text-[11px] text-emerald-600 font-bold">Livraison 0 DH</span>
-              </label>
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-950 flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] shadow-xs">🎁</span>
+                  <span>Choisissez votre formule / Pack Promo :</span>
+                </label>
+                <span className="text-[10px] font-black text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                  ✓ Livraison 0 DH Gratuite
+                </span>
+              </div>
 
               <div className={`grid grid-cols-1 ${packsList.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2.5`}>
                 {packsList.map((pack, idx) => {
                   const isSelected = selectedPackIndex === idx;
-                  const savings = pack.compareAtPrice && pack.compareAtPrice > pack.price
-                    ? pack.compareAtPrice - pack.price
-                    : 0;
+                  const savings = pack.savings || 0;
 
                   return (
                     <div
                       key={pack.id || `pack-${idx}`}
                       onClick={() => {
                         setSelectedPackIndex(idx);
+                        setCustomQuantity(1);
                         handleInputChange('fullName', customerName);
                         clientMovementService.trackClick(`Choix ${pack.title}`, 'PACK', {
                           productSlug: product.slug,
@@ -905,25 +994,56 @@ export const ProductDetailView: React.FC = () => {
                       }}
                       className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative ${
                         isSelected 
-                          ? 'border-emerald-600 bg-emerald-50/80 shadow-md ring-2 ring-emerald-500/20' 
+                          ? 'border-emerald-600 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/25 scale-[1.01]' 
                           : 'border-slate-200 bg-white hover:border-slate-300'
                       }`}
                     >
                       {pack.badge && (
-                        <span className="absolute -top-2.5 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs">
+                        <span className={`absolute -top-2.5 right-3 px-2 py-0.5 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs ${
+                          isSelected ? 'bg-emerald-600' : 'bg-slate-900'
+                        }`}>
                           {pack.badge}
                         </span>
                       )}
-                      <div className="text-xs font-extrabold text-slate-900">{pack.title}</div>
-                      <div className="text-base font-black text-emerald-800 mt-1">{formatMoney(pack.price)}</div>
-                      {pack.compareAtPrice && pack.compareAtPrice > pack.price ? (
-                        <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
-                          <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
-                          <span className="text-emerald-700 font-bold">Économie {formatMoney(savings)}</span>
+                      
+                      {/* Pack Title with Radio Indicator */}
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs' : 'border-slate-300 bg-white'
+                          }`}>
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs font-black text-slate-950 leading-tight">{pack.title}</span>
                         </div>
-                      ) : (
-                        <div className="text-[10px] text-slate-500 mt-0.5">Offre standard</div>
-                      )}
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0 ${
+                          isSelected ? 'bg-emerald-200 text-emerald-950' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {pack.quantity} {pack.quantity > 1 ? 'pièces' : 'pièce'}
+                        </span>
+                      </div>
+
+                      {/* Price & Unit Breakdown */}
+                      <div className="mt-2 pl-6">
+                        <div className="text-base sm:text-lg font-black text-emerald-800">
+                          {formatMoney(pack.price)}
+                        </div>
+                        {pack.quantity > 1 && (
+                          <div className="text-[11px] font-bold text-emerald-700 mt-0.5">
+                            Soit {formatMoney(pack.unitPrice)} / pièce
+                          </div>
+                        )}
+                        {savings > 0 ? (
+                          <div className="flex items-center gap-1.5 text-[10px] mt-0.5 font-bold">
+                            {pack.compareAtPrice && (
+                              <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
+                            )}
+                            <span className="text-emerald-700">Économie {formatMoney(savings)}</span>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-500 mt-0.5">Offre standard individuelle</div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -961,9 +1081,11 @@ export const ProductDetailView: React.FC = () => {
                   <Minus className="w-4 h-4" />
                 </button>
                 <div className="flex flex-col items-center px-2">
-                  <span className="text-[9px] text-slate-400 uppercase font-black leading-none">Qté</span>
+                  <span className="text-[9px] text-slate-400 uppercase font-black leading-none">
+                    {effectivePack && effectivePack.quantity > 1 ? 'Packs' : 'Qté'}
+                  </span>
                   <span className="font-black text-sm text-slate-950 leading-tight">
-                    {(isDigital || isService) ? customQuantity : (activePack?.quantity || customQuantity)}
+                    {customQuantity}
                   </span>
                 </div>
                 <button
@@ -987,10 +1109,23 @@ export const ProductDetailView: React.FC = () => {
                 <ShoppingBag className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
                 <span>AJOUTER AU PANIER</span>
                 <span className="text-xs font-semibold text-slate-300 ml-1">
-                  · {formatMoney((isDigital || isService ? unitPrice : packTotalPrice) * ((isDigital || isService) ? customQuantity : 1))}
+                  · {formatMoney(totalItemsPrice)}
                 </span>
               </button>
             </div>
+
+            {/* Clear Pack & Quantity Confirmation Helper */}
+            {effectivePack && effectivePack.quantity > 1 && (
+              <div className="flex items-center justify-between text-[11px] text-emerald-900 bg-emerald-50/90 border border-emerald-200 px-3.5 py-2 rounded-xl">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    Sélection : <strong>{customQuantity} × {effectivePack.title}</strong> ({customQuantity * effectivePack.quantity} pièces au total)
+                  </span>
+                </div>
+                <span className="font-black text-emerald-700">{formatMoney(totalItemsPrice)}</span>
+              </div>
+            )}
           </div>
 
           {/* DIRECT EXPRESS ORDER FORM (TAILORED FOR DIGITAL, SERVICE, AND PHYSICAL) */}
@@ -1032,6 +1167,64 @@ export const ProductDetailView: React.FC = () => {
 
             <form onSubmit={handleDirectCodOrder} className="space-y-3.5">
               
+              {/* Form Embedded Pack Choice (For Physical Products with multiple packs) */}
+              {!isDigital && !isService && packsList.length > 1 && (
+                <div className="space-y-2 p-3 sm:p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Formule / Pack sélectionné :</span>
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full">
+                      Cliquez pour changer d'offre
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {packsList.map((pack, idx) => {
+                      const isSelected = selectedPackIndex === idx;
+                      return (
+                        <button
+                          key={`cod-pack-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPackIndex(idx);
+                            setCustomQuantity(1);
+                          }}
+                          className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer relative ${
+                            isSelected 
+                              ? 'border-emerald-600 bg-white shadow-sm ring-2 ring-emerald-500/20' 
+                              : 'border-slate-200 bg-white/70 hover:bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-900 leading-tight">{pack.title}</span>
+                            <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                              isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
+                            }`}>
+                              {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                            </div>
+                          </div>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span className="text-xs sm:text-sm font-black text-emerald-800">{formatMoney(pack.price)}</span>
+                            {pack.quantity > 1 && (
+                              <span className="text-[9px] text-slate-500 font-semibold">
+                                ({formatMoney(pack.unitPrice)}/pc)
+                              </span>
+                            )}
+                          </div>
+                          {pack.badge && (
+                            <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tight mt-0.5 truncate">
+                              {pack.badge}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Customer Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
@@ -1184,13 +1377,27 @@ export const ProductDetailView: React.FC = () => {
                 <div className="flex justify-between text-slate-600">
                   <span>Article :</span>
                   <span className="font-bold text-slate-900">
-                    {product.name} {selectedDuration ? `(${selectedDuration.label})` : selectedDenomination ? `(${selectedDenomination.amountLabel})` : isDigital || isService ? '' : `(${packQuantity} pcs)`}
+                    {product.name}
                   </span>
                 </div>
-                {packDiscount > 0 && !isDigital && !isService && (
+                {effectivePack && effectivePack.quantity > 1 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Offre promotionnelle :</span>
+                    <span className="font-bold text-emerald-700">
+                      {effectivePack.title} ({effectivePack.quantity} pièces)
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-600">
+                  <span>Quantité commandée :</span>
+                  <span className="font-bold text-slate-900">
+                    {customQuantity} {effectivePack && effectivePack.quantity > 1 ? `pack${customQuantity > 1 ? 's' : ''} (${effectivePack.quantity * customQuantity} pièces au total)` : `pièce${customQuantity > 1 ? 's' : ''}`}
+                  </span>
+                </div>
+                {effectiveDiscount > 0 && !isDigital && !isService && (
                   <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>Remise Pack :</span>
-                    <span>-{formatMoney(packDiscount)}</span>
+                    <span>Remise Pack appliquée :</span>
+                    <span>-{formatMoney(effectiveDiscount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-slate-700">

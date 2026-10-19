@@ -70,10 +70,20 @@ interface AppContextType {
     product: Product, 
     variantId?: string, 
     quantity?: number, 
-    customOptions?: { price?: number; variantTitle?: string; imageUrl?: string; openDrawer?: boolean }
+    customOptions?: { 
+      price?: number; 
+      variantTitle?: string; 
+      imageUrl?: string; 
+      openDrawer?: boolean;
+      packPieces?: number;
+      packTitle?: string;
+      pieceUnitPrice?: number;
+      savingsAmount?: number;
+    }
   ) => void;
   removeFromCart: (itemId: string) => void;
   updateCartQuantity: (itemId: string, newQty: number) => void;
+  updateCartItem: (itemId: string, updates: Partial<CartItem>) => void;
   clearCart: () => void;
   cartSubtotal: number;
   cartDiscount: number;
@@ -290,7 +300,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     product: Product, 
     variantId?: string, 
     quantity = 1,
-    customOptions?: { price?: number; variantTitle?: string; imageUrl?: string; openDrawer?: boolean }
+    customOptions?: { 
+      price?: number; 
+      variantTitle?: string; 
+      imageUrl?: string; 
+      openDrawer?: boolean;
+      packPieces?: number;
+      packTitle?: string;
+      pieceUnitPrice?: number;
+      savingsAmount?: number;
+    }
   ) => {
     let itemPrice = customOptions?.price !== undefined ? customOptions.price : product.price;
     let variantTitle: string | undefined = customOptions?.variantTitle;
@@ -317,7 +336,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         i.productId === product.id && 
         i.variantId === variantId && 
         i.variantTitle === variantTitle && 
-        i.price === itemPrice
+        i.price === itemPrice &&
+        i.packPieces === customOptions?.packPieces
       );
       if (existing) {
         const nextQty = Math.min(existing.quantity + quantity, maxStock);
@@ -333,7 +353,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           price: itemPrice,
           quantity: Math.min(quantity, maxStock),
           imageUrl: itemImage,
-          maxStock
+          maxStock,
+          packPieces: customOptions?.packPieces,
+          packTitle: customOptions?.packTitle,
+          pieceUnitPrice: customOptions?.pieceUnitPrice,
+          savingsAmount: customOptions?.savingsAmount
         };
         return [...prev, newItem];
       }
@@ -389,6 +413,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return i;
     }));
+  };
+
+  const updateCartItem = (itemId: string, updates: Partial<CartItem>) => {
+    setCartItems(prev => prev.map(item => item.id === itemId ? { ...item, ...updates } : item));
   };
 
   const clearCart = () => {
@@ -684,6 +712,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToCart,
         removeFromCart,
         updateCartQuantity,
+        updateCartItem,
         clearCart,
         cartSubtotal,
         cartDiscount,
