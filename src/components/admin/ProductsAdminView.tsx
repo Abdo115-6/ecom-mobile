@@ -97,6 +97,11 @@ export const ProductsAdminView: React.FC = () => {
   const [formPrice, setFormPrice] = useState<number>(299.00);
   const [formComparePrice, setFormComparePrice] = useState<number>(399.00);
   const [formCostPrice, setFormCostPrice] = useState<number>(120.00);
+  // Delivery: CITY = city rates from Settings, FIXED = price set here, FREE = always free
+  const [formShippingMode, setFormShippingMode] = useState<'CITY' | 'FIXED' | 'FREE'>('FIXED');
+  const [formShippingFee, setFormShippingFee] = useState<number>(35);
+  const [formDeliveryCost, setFormDeliveryCost] = useState<number>(35);
+  const [formAdCostPerOrder, setFormAdCostPerOrder] = useState<number>(0);
   const [formStock, setFormStock] = useState<number>(20);
   const [formShortDesc, setFormShortDesc] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -306,6 +311,10 @@ export const ProductsAdminView: React.FC = () => {
     setFormPrice(299.00);
     setFormComparePrice(399.00);
     setFormCostPrice(120.00);
+    setFormShippingMode('FIXED');
+    setFormShippingFee(dbService.settings.standardShippingFee ?? 35);
+    setFormDeliveryCost(dbService.settings.defaultDeliveryCost ?? 35);
+    setFormAdCostPerOrder(0);
     setFormStock(25);
     setFormShortDesc('Qualité supérieure, finitions raffinées et livraison express partout au Maroc.');
     setFormDesc('Fiche produit confectionnée avec des matériaux nobles. Idéal pour un usage quotidien ou un cadeau d\'exception. Paiement à la livraison après inspection.');
@@ -414,6 +423,18 @@ export const ProductsAdminView: React.FC = () => {
     setFormPrice(p.price);
     setFormComparePrice(p.compareAtPrice || 0);
     setFormCostPrice(p.costPrice || 0);
+    if (p.shippingFee === undefined || p.shippingFee === null) {
+      setFormShippingMode('CITY');
+      setFormShippingFee(dbService.settings.standardShippingFee ?? 35);
+    } else if (Number(p.shippingFee) === 0) {
+      setFormShippingMode('FREE');
+      setFormShippingFee(0);
+    } else {
+      setFormShippingMode('FIXED');
+      setFormShippingFee(Number(p.shippingFee));
+    }
+    setFormDeliveryCost(p.deliveryCost ?? dbService.settings.defaultDeliveryCost ?? 35);
+    setFormAdCostPerOrder(p.adCostPerOrder ?? 0);
     setFormStock(p.stockQuantity);
     setFormShortDesc(p.shortDescription || '');
     setFormDesc(p.description);
@@ -538,6 +559,11 @@ export const ProductsAdminView: React.FC = () => {
       price: Number(formPrice),
       compareAtPrice: formComparePrice > 0 ? Number(formComparePrice) : undefined,
       costPrice: formCostPrice > 0 ? Number(formCostPrice) : undefined,
+      shippingFee: formProductKind !== 'PHYSICAL'
+        ? 0
+        : formShippingMode === 'CITY' ? undefined : formShippingMode === 'FREE' ? 0 : Math.max(0, Number(formShippingFee) || 0),
+      deliveryCost: formProductKind === 'PHYSICAL' ? Math.max(0, Number(formDeliveryCost) || 0) : 0,
+      adCostPerOrder: Math.max(0, Number(formAdCostPerOrder) || 0),
       stockQuantity: formProductKind === 'PHYSICAL' ? totalVariantStock : Number(formStock),
       shortDescription: formShortDesc,
       description: formDesc,
@@ -1650,6 +1676,84 @@ Découvrez notre création exclusive confectionnée avec un savoir-faire d'excep
                     />
                   </div>
                 </div>
+
+                {/* Livraison & coûts par produit */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                  {formProductKind === 'PHYSICAL' && (
+                    <>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 block mb-1">🚚 Livraison client</label>
+                        <select
+                          value={formShippingMode}
+                          onChange={(e) => setFormShippingMode(e.target.value as 'CITY' | 'FIXED' | 'FREE')}
+                          className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                        >
+                          <option value="FIXED">Prix fixe pour ce produit</option>
+                          <option value="CITY">Tarif par ville (Paramètres)</option>
+                          <option value="FREE">Livraison gratuite</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 block mb-1">Frais livraison client (DH)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          disabled={formShippingMode !== 'FIXED'}
+                          value={formShippingMode === 'FREE' ? 0 : formShippingFee}
+                          onChange={(e) => setFormShippingFee(Number(e.target.value))}
+                          className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-bold disabled:opacity-50"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {formShippingMode === 'CITY'
+                            ? 'Selon la ville (onglet Paramètres)'
+                            : formShippingMode === 'FREE'
+                            ? 'Le client ne paie pas la livraison'
+                            : 'Payé par le client, quelle que soit la ville'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 block mb-1">Coût réel livreur (DH)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={formDeliveryCost}
+                          onChange={(e) => setFormDeliveryCost(Number(e.target.value))}
+                          className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">Ce que vous payez à la société de livraison</p>
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">Coût pub / commande (DH)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={formAdCostPerOrder}
+                      onChange={(e) => setFormAdCostPerOrder(Number(e.target.value))}
+                      className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Budget pub ÷ nombre de commandes</p>
+                  </div>
+                </div>
+
+                {formCostPrice > 0 && (() => {
+                  const clientFee = formProductKind !== 'PHYSICAL' || formShippingMode === 'FREE'
+                    ? 0
+                    : formShippingMode === 'FIXED' ? Number(formShippingFee) || 0 : (dbService.settings.standardShippingFee ?? 0);
+                  const deliveryCost = formProductKind === 'PHYSICAL' ? Number(formDeliveryCost) || 0 : 0;
+                  const adCost = Number(formAdCostPerOrder) || 0;
+                  const net = Number(formPrice) + clientFee - Number(formCostPrice) - deliveryCost - adCost;
+                  return (
+                    <div className={`text-[11px] font-bold px-3 py-2 rounded-xl ${net >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                      Bénéfice net estimé / commande (1 pièce) : {net.toFixed(2)} DH
+                      <span className="text-slate-400 font-medium"> = vente {Number(formPrice)} + livraison client {clientFee} − achat {Number(formCostPrice)} − livreur {deliveryCost} − pub {adCost}</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* SECTION SPÉCIFIQUE : PRODUIT DIGITAL */}

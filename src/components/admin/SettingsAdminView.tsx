@@ -25,6 +25,7 @@ export const SettingsAdminView: React.FC = () => {
   const [publicDomain, setPublicDomain] = useState(currentSettings.publicDomain || '');
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(currentSettings.freeShippingThreshold);
   const [standardShippingFee, setStandardShippingFee] = useState(currentSettings.standardShippingFee);
+  const [defaultDeliveryCost, setDefaultDeliveryCost] = useState(currentSettings.defaultDeliveryCost ?? 35);
   const [isFreeShippingPromoActive, setIsFreeShippingPromoActive] = useState(
     currentSettings.isFreeShippingPromoActive || false
   );
@@ -66,6 +67,7 @@ export const SettingsAdminView: React.FC = () => {
       publicDomain: publicDomain.trim() || undefined,
       freeShippingThreshold: Number(freeShippingThreshold),
       standardShippingFee: Number(standardShippingFee),
+      defaultDeliveryCost: Number(defaultDeliveryCost),
       isFreeShippingPromoActive,
       cityShippingRates,
       metaPixelId,
@@ -215,7 +217,26 @@ export const SettingsAdminView: React.FC = () => {
                 <span className="text-xs text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 font-bold">DH</span>
               </div>
               <span className="text-[10px] text-slate-400 mt-1 block">
-                La livraison devient automatiquement offerte au-delà de ce montant de panier.
+                La livraison devient automatiquement offerte au-delà de ce montant de panier (0 = désactivé). Ne s'applique pas aux produits ayant leur propre prix de livraison.
+              </span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Coût réel livreur par défaut (DH)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  value={defaultDeliveryCost}
+                  onChange={(e) => setDefaultDeliveryCost(Number(e.target.value))}
+                  className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono font-bold"
+                />
+                <span className="text-xs text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 font-bold">DH</span>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Ce que vous payez à la société de livraison par colis (utilisé dans le calcul de marge si le produit n'a pas son propre coût).
               </span>
             </div>
           </div>

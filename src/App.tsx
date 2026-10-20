@@ -38,6 +38,7 @@ import { SettingsAdminView } from './components/admin/SettingsAdminView';
 
 // Toast and Floating trigger icons
 import { FileText } from 'lucide-react';
+import { trackingService } from './services/trackingService';
 
 // Anti-crawler and anti-fetcher shield for secret admin panel
 const isBotOrFetcher = (): boolean => {
@@ -59,20 +60,15 @@ const MainRouter: React.FC = () => {
   const { currentView, isAdminMode, toastMessage, setCurrentView } = useApp();
   const [specsModalOpen, setSpecsModalOpen] = useState(false);
 
-  // Scroll to top on every view navigation and fire Meta Pixel PageView on SPA route change
+  // Scroll to top on every view navigation and record a page view on SPA route change
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
 
-    // Fire Meta Pixel PageView on each route change for Single Page App
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'PageView');
-    }
-
-    // Fire TikTok Pixel page event on each route change for Single Page App
-    if (typeof window !== 'undefined' && (window as any).ttq) {
-      (window as any).ttq.page();
+    // Real page view on each SPA route change (browser pixels + server, shared event_id)
+    if (!currentView.startsWith('admin')) {
+      trackingService.track('page_view', { metadata: { view: currentView } });
     }
   }, [currentView]);
 

@@ -47,9 +47,14 @@ export const WhatsAppAdminView: React.FC = () => {
 
   const handleGenerateLivePairingCode = async () => {
     setIsGeneratingPairingCode(true);
-    const code = await baileysBotService.requestLivePairingCode(BAILEYS_BOT_NUMBER);
-    setIsGeneratingPairingCode(false);
-    showToast(`✓ Nouveau Code Officiel WhatsApp généré : ${code}`);
+    try {
+      const code = await baileysBotService.requestLivePairingCode(BAILEYS_BOT_NUMBER);
+      showToast(`✓ Code WhatsApp généré : ${code}`);
+    } catch (err: any) {
+      showToast(`⚠️ ${err.message}`);
+    } finally {
+      setIsGeneratingPairingCode(false);
+    }
   };
 
   const handleCopyPairingCode = (code: string) => {
@@ -114,15 +119,19 @@ export const WhatsAppAdminView: React.FC = () => {
 
   // Action: Connect / Scan
   const handleConnectSimulate = async () => {
-    await baileysBotService.simulateConnect();
-    setIsQrModalOpen(false);
-    showToast('🎉 Baileys WhatsApp Bot connecté avec succès sur +212 668-381916');
+    const s = await baileysBotService.connect();
+    if (s.status === 'CONNECTED') {
+      setIsQrModalOpen(false);
+      showToast('🎉 Bot WhatsApp connecté sur +212 668-381916');
+    } else {
+      showToast('⏳ Pas encore connecté : scannez le QR code ou utilisez le code d\'association');
+    }
   };
 
-  // Action: Disconnect
-  const handleDisconnect = () => {
-    baileysBotService.disconnect();
-    showToast('Bot WhatsApp déconnecté.');
+  // Action: Disconnect (stops the bot, keeps the session for the next start)
+  const handleDisconnect = async () => {
+    await baileysBotService.disconnect();
+    showToast('Bot WhatsApp arrêté. Cliquez sur Connecter pour le relancer.');
   };
 
   // Action: Simulate Client "OUI" Reply (User Request: "after client answer oui or something that mean yes bailys answer him u order confirmed and u will receive it soon")
@@ -162,7 +171,7 @@ export const WhatsAppAdminView: React.FC = () => {
                     : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                 }`}>
                   <span className={`w-2 h-2 rounded-full ${status.status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-                  {status.status === 'CONNECTED' ? 'CONNECTÉ & ACTIF' : 'SCANNER QR CODE'}
+                  {status.status === 'CONNECTED' ? 'CONNECTÉ & ACTIF' : status.status === 'CONNECTING' ? 'RECONNEXION…' : status.status === 'DISCONNECTED' ? 'ARRÊTÉ' : 'SCANNER QR CODE'}
                 </span>
                 <span className="px-2.5 py-0.5 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-full text-[11px] font-mono font-bold">
                   {BAILEYS_BOT_NUMBER}
@@ -170,6 +179,12 @@ export const WhatsAppAdminView: React.FC = () => {
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 Connexion WhatsApp Web par QR Code · Envoi automatique après commande · Réponse intelligente et confirmation immédiate
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Session : {status.sessionStorage === 'postgres' ? '✓ sauvegardée en base de données (reste connectée après redémarrage)' : status.sessionStorage === 'file' ? '⚠️ fichier local (perdue au prochain déploiement, configurez DATABASE_URL)' : '…'}
+                {(status.pendingOutbox || 0) > 0 && <> · <span className="text-amber-400">{status.pendingOutbox} message(s) en attente d'envoi</span></>}
+                {status.status !== 'CONNECTED' && status.error && <> · <span className="text-rose-400">{status.error}</span></>}
+                {status.status !== 'CONNECTED' && !status.error && status.lastDisconnectReason && <> · Dernière coupure : {status.lastDisconnectReason}</>}
               </p>
             </div>
           </div>
@@ -629,11 +644,7 @@ export const WhatsAppAdminView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
-                  baileysBotService.simulateConnect();
-                  setIsQrModalOpen(false);
-                  showToast('✓ Session WhatsApp liée avec succès sur ' + BAILEYS_BOT_NUMBER);
-                }}
+                onClick={handleConnectSimulate}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Check className="w-4 h-4" />

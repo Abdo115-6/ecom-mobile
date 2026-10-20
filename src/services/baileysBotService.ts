@@ -41,13 +41,19 @@ class BaileysBotService {
           const prevStatus = this.status.status;
           const prevPairing = this.status.pairingCode;
           const prevQr = this.status.qrCodeDataUrl;
+          // The server is the only source of truth for the connection state
           this.status = {
             ...this.status,
             status: data.status || this.status.status,
-            qrCodeDataUrl: data.qrCodeDataUrl || this.status.qrCodeDataUrl,
-            pairingCode: data.pairingCode || this.status.pairingCode,
-            connectedAt: data.connectedAt || this.status.connectedAt,
-            uptimeSeconds: data.uptimeSeconds || this.status.uptimeSeconds
+            qrCodeDataUrl: data.qrCodeDataUrl,
+            pairingCode: data.pairingCode,
+            connectedAt: data.connectedAt,
+            uptimeSeconds: data.uptimeSeconds || 0,
+            error: data.error,
+            lastDisconnectAt: data.lastDisconnectAt,
+            lastDisconnectReason: data.lastDisconnectReason,
+            pendingOutbox: data.pendingOutbox,
+            sessionStorage: data.sessionStorage
           };
           if (prevStatus !== this.status.status || data.pairingCode !== prevPairing || data.qrCodeDataUrl !== prevQr) {
             this.saveStatus();
@@ -60,26 +66,21 @@ class BaileysBotService {
     return { ...this.status };
   }
 
+  /** Real pairing code from WhatsApp, or throws with the server's reason */
   public async requestLivePairingCode(phoneNumber?: string): Promise<string> {
-    try {
-      const res = await fetch('/api/whatsapp/baileys/request-pairing-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: phoneNumber || '212668381916' })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.pairingCode) {
-          this.status.pairingCode = data.pairingCode;
-          this.status.status = 'SCAN_QR';
-          this.saveStatus();
-          return data.pairingCode;
-        }
-      }
-    } catch (e) {
-      console.warn('Live pairing code error:', e);
+    const res = await fetch('/api/whatsapp/baileys/request-pairing-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber: phoneNumber || '212668381916' })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.pairingCode) {
+      throw new Error(data.error || 'Impossible de générer le code');
     }
-    return this.status.pairingCode || '6683-8191';
+    this.status.pairingCode = data.pairingCode;
+    this.status.status = 'SCAN_QR';
+    this.saveStatus();
+    return data.pairingCode;
   }
 
   // --- Status & QR Code ---
@@ -95,13 +96,12 @@ class BaileysBotService {
         console.warn('Failed to load Baileys status:', e);
       }
     }
+    // Unknown until the server answers (never show "connected" by default)
     return {
-      status: 'CONNECTED',
+      status: 'CONNECTING',
       phoneNumber: BAILEYS_BOT_NUMBER,
-      uptimeSeconds: 84600,
-      autoConfirmationEnabled: true,
-      connectedAt: new Date(Date.now() - 3600 * 24 * 1000).toISOString(),
-      pairingCode: 'BAIL-212-668-381916'
+      uptimeSeconds: 0,
+      autoConfirmationEnabled: true
     };
   }
 
@@ -170,20 +170,21 @@ class BaileysBotService {
     this.saveStatus();
   }
 
-  public async simulateConnect(): Promise<void> {
-    this.status.status = 'CONNECTING';
+  /** Asks the server to (re)connect and returns the real state a few seconds later */
+  public async connect(): Promise<BaileysBotStatus> {
+    await fetch('/api/whatsapp/baileys/connect', { method: 'POST' }).catch(() => null);
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 800));
+      const s = await this.fetchLiveStatus();
+      if (s.status === 'CONNECTED') break;
+    }
     this.saveStatus();
-
-    await new Promise(r => setTimeout(r, 1200));
-
-    this.status.status = 'CONNECTED';
-    this.status.phoneNumber = BAILEYS_BOT_NUMBER;
-    this.status.connectedAt = new Date().toISOString();
-    this.saveStatus();
+    return { ...this.status };
   }
 
-  public disconnect(): void {
-    this.status.status = 'DISCONNECTED';
+  public async disconnect(): Promise<void> {
+    await fetch('/api/whatsapp/baileys/disconnect', { method: 'POST' }).catch(() => null);
+    await this.fetchLiveStatus();
     this.saveStatus();
   }
 

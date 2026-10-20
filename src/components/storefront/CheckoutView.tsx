@@ -29,6 +29,7 @@ export const CheckoutView: React.FC = () => {
     setLastConfirmedOrder, 
     setCurrentView,
     appliedCouponCode,
+    hasFreeShippingCoupon,
     t 
   } = useApp();
 
@@ -41,15 +42,13 @@ export const CheckoutView: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Meta Pixel InitiateCheckout Event
+  // InitiateCheckout (browser pixels + Conversions API, shared event_id)
   React.useEffect(() => {
-    if (cartItems.length > 0 && typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'InitiateCheckout', {
-        content_type: 'product',
-        content_ids: cartItems.map(i => i.productId),
-        num_items: cartItems.reduce((acc, i) => acc + i.quantity, 0),
+    if (cartItems.length > 0) {
+      trackingService.track('begin_checkout', {
         value: cartTotal,
-        currency: currency || 'MAD'
+        currency: currency || 'MAD',
+        items: cartItems.map(i => ({ id: i.productId, name: i.productName, price: i.price, quantity: i.quantity }))
       });
     }
   }, []);
@@ -68,8 +67,10 @@ export const CheckoutView: React.FC = () => {
     });
   };
 
-  // City-specific delivery fee from admin settings
-  const effectiveShippingFee = dbService.calculateDeliveryFee(city, cartSubtotal - cartDiscount);
+  // City-specific (or product-specific) delivery fee from admin settings
+  const effectiveShippingFee = hasFreeShippingCoupon
+    ? 0
+    : dbService.calculateDeliveryFee(city, cartSubtotal - cartDiscount, cartItems.map(i => i.productId));
   const effectiveTotal = Math.max(0, cartSubtotal - cartDiscount + effectiveShippingFee);
 
   if (cartItems.length === 0) {
@@ -133,7 +134,8 @@ export const CheckoutView: React.FC = () => {
         unitPrice: item.price,
         quantity: item.quantity,
         subtotal: item.price * item.quantity,
-        imageUrl: item.imageUrl
+        imageUrl: item.imageUrl,
+        packPieces: item.packPieces || 1
       })),
       utmSource: utm.source,
       utmCampaign: utm.campaign,
@@ -157,6 +159,13 @@ export const CheckoutView: React.FC = () => {
         shippingCity: city,
         utmSource: utm.source,
         utmCampaign: utm.campaign
+      },
+      // Hashed server-side for Meta/TikTok match quality, never stored
+      customer: {
+        phone,
+        firstName: fullName.split(' ')[0],
+        lastName: fullName.split(' ').slice(1).join(' ') || undefined,
+        city
       }
     });
 

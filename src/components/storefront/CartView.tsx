@@ -24,6 +24,7 @@ export const CartView: React.FC = () => {
     cartSubtotal, 
     cartDiscount, 
     cartShippingFee, 
+    cartFreeShippingThreshold,
     cartTotal, 
     appliedCouponCode, 
     applyCoupon, 
@@ -36,9 +37,9 @@ export const CartView: React.FC = () => {
   const [couponInput, setCouponInput] = useState('');
   const [couponError, setCouponError] = useState<string | null>(null);
 
-  const freeShippingThreshold = dbService.settings.freeShippingThreshold;
+  const freeShippingThreshold = cartFreeShippingThreshold;
   const remainingForFreeShipping = Math.max(0, freeShippingThreshold - cartSubtotal);
-  const progressPercent = Math.min(100, Math.round((cartSubtotal / freeShippingThreshold) * 100));
+  const progressPercent = freeShippingThreshold > 0 ? Math.min(100, Math.round((cartSubtotal / freeShippingThreshold) * 100)) : 0;
 
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +84,8 @@ export const CartView: React.FC = () => {
         </p>
       </div>
 
-      {/* Free Shipping Progress Indicator */}
+      {/* Free Shipping Progress Indicator (only when a free-shipping threshold applies to this cart) */}
+      {freeShippingThreshold > 0 && (
       <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
           <div className="flex items-center gap-1.5">
@@ -105,6 +107,7 @@ export const CartView: React.FC = () => {
           />
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         

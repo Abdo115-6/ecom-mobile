@@ -2,7 +2,6 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { whatsappService } from '../../services/whatsappService';
-import heroBg from '../../assets/images/shopme_morocco_hero_1791579209702.jpg';
 import { 
   ArrowRight, 
   ShoppingBag, 
@@ -46,7 +45,6 @@ export const HomeView: React.FC = () => {
     : allPublished;
 
   // Filtered lists for dedicated sections
-  const promoProducts = allPublished.filter(p => (p.compareAtPrice && p.compareAtPrice > p.price) || (p.promoPacks && p.promoPacks.length > 1));
   const hommesProducts = allPublished.filter(p => p.categoryId === 'cat-hommes');
   const femmesProducts = allPublished.filter(p => p.categoryId === 'cat-femmes');
   const digitalProducts = allPublished.filter(p => p.categoryId === 'cat-digital' || p.productKind === 'DIGITAL');
@@ -54,227 +52,49 @@ export const HomeView: React.FC = () => {
   return (
     <div className="space-y-8 sm:space-y-12 pb-24 overflow-x-hidden">
       
-      {/* 1. HERO BANNER (ShopMe Casablanca & Livraison Partout au Maroc with WhatsApp Button) */}
-      <section className="relative overflow-hidden w-full aspect-16/9 sm:aspect-21/9 max-h-[540px] bg-slate-900 flex items-center justify-center shadow-xs">
-        <img
-          src={heroBg}
-          alt="ShopMe Maroc"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center transition-transform duration-700 hover:scale-[1.01]"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-transparent pointer-events-none" />
-
-        {/* Hero Interactive Content & WhatsApp CTA */}
-        <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-8 md:p-12 text-white max-w-4xl">
-          <div className="space-y-2 sm:space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/90 backdrop-blur-xs text-slate-950 font-black rounded-full text-[10px] sm:text-xs uppercase tracking-wider shadow-md w-fit">
-              <Truck className="w-3.5 h-3.5" />
-              <span>{t.deliveryEverywhere} · {t.cashOnDeliveryShort}</span>
-            </div>
-
-            <div className="pt-2 flex flex-wrap items-center gap-2.5 sm:gap-3">
-              {/* WhatsApp Hero Order Button */}
-              <a
-                href={whatsappService.generateSupportLink('Salam ShopMe Maroc ! Je souhaite passer une commande ou découvrir les promos disponibles.')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 sm:px-5 py-2.5 sm:py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4 fill-slate-950" />
-                <span>{t.orderOnWhatsApp}</span>
-              </a>
-
-              {/* Browse Promos & Packs */}
-              <button
-                onClick={() => setCurrentView('catalog')}
-                className="px-4 sm:px-5 py-2.5 sm:py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-bold rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer border border-white/30"
-              >
-                <span>{t.viewOffersAndPacks}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. INFINITE MOVING WORDS (User Request: "the words moving abonnment accounts technlogy china usa morocco") */}
-      <section className="w-full bg-slate-950 text-white py-3 border-y border-slate-800 overflow-hidden relative shadow-inner">
-        <div className="animate-marquee whitespace-nowrap flex items-center gap-8 text-[11px] sm:text-xs font-black tracking-widest uppercase">
-          {/* Exact keywords from User: abonnment accounts technlogy china usa morocco */}
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-white bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700">ABONNEMENT</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/50">ACCOUNTS</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-sky-400 bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-800/50">TECHNOLOGY</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-800/50">CHINA 🇨🇳</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-800/50">USA 🇺🇸</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/50">MOROCCO 🇲🇦</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-amber-300 font-extrabold">LIVRAISON PARTOUT AU MAROC</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-white">PAIEMENT CASH À LA LIVRAISON (COD)</span>
-          </span>
-
-          {/* Seamless duplicate loop for continuous scrolling */}
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-white bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700">ABONNEMENT</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/50">ACCOUNTS</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-sky-400 bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-800/50">TECHNOLOGY</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-800/50">CHINA 🇨🇳</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-800/50">USA 🇺🇸</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/50">MOROCCO 🇲🇦</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-amber-300 font-extrabold">LIVRAISON PARTOUT AU MAROC</span>
-          </span>
-          <span className="flex items-center gap-2.5 text-amber-400">
-            <span>✦</span>
-            <span className="text-white">PAIEMENT CASH À LA LIVRAISON (COD)</span>
-          </span>
-        </div>
-      </section>
-
-      {/* 3. PROMO DE LA SEMAINE (User Request: "and product in promo") */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider animate-pulse">
-                <Flame className="w-3 h-3 fill-white" />
-                {locale === 'ar' ? 'عروض خاصة محدودة' : locale === 'en' ? 'Limited Special Deals' : 'Offres Spéciales Limitées'}
-              </span>
-              <span className="text-xs text-slate-500 font-semibold hidden sm:inline">
-                {locale === 'ar' ? 'المخزون متوفر بالدار البيضاء' : locale === 'en' ? 'Stock in Casablanca' : 'Stocks limités à Casablanca'}
-              </span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight mt-1">
-              {t.weeklyPromo}
-            </h2>
-          </div>
+      {/* 1. PRODUCTS FIRST: category chips + product grid (the menu's category links filter it too) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 space-y-4">
+        <div className="flex items-end justify-between gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+            {selectedCat ? selectedCat.name : t.navAllProducts}
+          </h1>
           <button
             onClick={() => setCurrentView('catalog')}
-            className="text-xs font-bold text-slate-900 hover:text-slate-600 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+            className="text-xs font-bold text-slate-900 hover:text-slate-600 flex items-center gap-1 cursor-pointer shrink-0"
           >
-            <span>{locale === 'ar' ? 'عرض جميع العروض' : locale === 'en' ? 'View all deals' : 'Voir toutes les offres'}</span>
+            <span>{t.viewAllCatalog}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Visual Promotional Banners (Inspiration from Image 1) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Promo Card 1: 1+1=3 */}
-          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100/70 border border-amber-200/80 p-6 sm:p-8 flex flex-col justify-between shadow-xs">
-            <div className="space-y-2">
-              <div className="inline-block px-3 py-1 bg-amber-500 text-slate-950 font-black rounded-lg text-xs uppercase tracking-wider shadow-xs">
-                {locale === 'ar' ? 'عرض ترويجي شوب مي' : locale === 'en' ? 'ShopMe Promo Pack' : 'Pack Promo ShopMe'}
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
-                1 + 1 = 3 <br />
-                <span className="text-rose-600">
-                  {locale === 'ar' ? 'اشري 2 منتوجات، الثالث فابور !' : locale === 'en' ? 'BUY 2 ITEMS, GET 3RD FREE!' : 'CHRI 2 PRODUITS, TALT FABOUR !'}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-700 font-medium max-w-sm">
-                {locale === 'ar'
-                  ? 'اطلب قطعتين من نفس التشكيلة واحصل على القطعة الثالثة مجاناً مع توصيل سريع لجميع مدن المغرب.'
-                  : locale === 'en'
-                  ? 'Order 2 items from the same collection and get the 3rd one free with express delivery all over Morocco.'
-                  : 'Commandez 2 articles de la même collection et recevez le 3ème article offert avec livraison express partout au Maroc.'}
-              </p>
-            </div>
-            <div className="pt-4 flex items-center justify-between">
-              <button
-                onClick={() => setCurrentView('catalog')}
-                className="px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
-              >
-                <span>{locale === 'ar' ? 'الاستفادة من العرض' : locale === 'en' ? 'Claim Offer' : "Profiter de l'offre"}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <span className="text-[11px] font-black text-amber-900 uppercase tracking-widest bg-amber-200/60 px-2.5 py-1 rounded-md">
-                {locale === 'ar' ? 'توصيل مجاني' : locale === 'en' ? 'Free Shipping' : 'Livraison Gratuite'}
-              </span>
-            </div>
-          </div>
-
-          {/* Promo Card 2: Vente Flash */}
-          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white p-6 sm:p-8 flex flex-col justify-between shadow-xs border border-slate-800">
-            <div className="space-y-2">
-              <div className="inline-block px-3 py-1 bg-rose-600 text-white font-black rounded-lg text-xs uppercase tracking-wider shadow-xs">
-                {locale === 'ar' ? 'تخفيضات سريعة 24-48 ساعة' : locale === 'en' ? 'Flash Sale 24H-48H' : 'Vente Flash 24H-48H'}
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
-                {locale === 'ar' ? 'خصومات تصل إلى -45%' : locale === 'en' ? 'UP TO 45% OFF' : "JUSQU'À -45% DE REMISE"} <br />
-                <span className="text-emerald-400">
-                  {locale === 'ar' ? 'على تشكيلة فاخرة وإلكترونيات' : locale === 'en' ? 'ON SELECT LUXURY & TECH' : 'SUR UNE SÉLECTION LUXE & TECH'}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-300 font-medium max-w-sm">
-                {locale === 'ar'
-                  ? 'ساعات أنيقة، إكسسوارات وحسابات رقمية مع دفع نقدي بعد فحص الطرد.'
-                  : locale === 'en'
-                  ? 'Elegant watches, quick chargers, accessories, and digital accounts with cash payment upon package inspection.'
-                  : 'Montres élégantes, chargeurs rapides, accessoires et comptes digitaux avec paiement en cash après contrôle du colis.'}
-              </p>
-            </div>
-            <div className="pt-4 flex items-center justify-between">
-              <button
-                onClick={() => setCurrentView('catalog')}
-                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
-              >
-                <span>{locale === 'ar' ? 'اكتشف التشكيلة' : locale === 'en' ? 'Discover Selection' : 'Découvrir la sélection'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <span className="text-[11px] font-bold text-slate-400">
-                {locale === 'ar' ? 'المخزون متوفر بالدار البيضاء' : locale === 'en' ? 'Stock in Casablanca' : 'Stock limité à Casablanca'}
-              </span>
-            </div>
-          </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+          <button
+            onClick={() => setSelectedCategorySlug(null)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border cursor-pointer transition-colors ${
+              !selectedCategorySlug ? 'bg-slate-950 text-white border-slate-950' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+            }`}
+          >
+            {t.navAllProducts}
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategorySlug(cat.slug)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border cursor-pointer transition-colors ${
+                selectedCategorySlug === cat.slug ? 'bg-slate-950 text-white border-slate-950' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
         </div>
 
-        {/* Promo Products Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 pt-2">
-          {promoProducts.slice(0, 4).map(product => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+          {products.slice(0, 12).map(product => (
             <div
               key={product.id}
               className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all relative"
             >
-              {/* Photo & Discounts */}
               <div className="relative aspect-square overflow-hidden bg-slate-50">
                 <img
                   src={product.images[0]?.imageUrl}
@@ -299,24 +119,13 @@ export const HomeView: React.FC = () => {
                 </button>
               </div>
 
-              {/* Info */}
               <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
-                <div>
-                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-widest">
-                    {product.brand}
-                  </div>
-                  <h3
-                    onClick={() => navigateToProduct(product.slug)}
-                    className="font-bold text-xs sm:text-sm text-slate-950 group-hover:text-slate-700 transition-colors line-clamp-2 mt-0.5 cursor-pointer leading-snug"
-                  >
-                    {product.name}
-                  </h3>
-
-                  <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
-                  </div>
-                </div>
+                <h3
+                  onClick={() => navigateToProduct(product.slug)}
+                  className="font-bold text-xs sm:text-sm text-slate-950 group-hover:text-slate-700 transition-colors line-clamp-2 cursor-pointer leading-snug"
+                >
+                  {product.name}
+                </h3>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div>
@@ -342,6 +151,21 @@ export const HomeView: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {products.length === 0 && (
+          <div className="text-center text-sm text-slate-500 py-10">
+            {locale === 'ar' ? 'لا توجد منتجات في هذا القسم حالياً' : locale === 'en' ? 'No products in this category yet' : 'Aucun produit dans cette catégorie pour le moment'}
+          </div>
+        )}
+
+        {products.length > 12 && (
+          <button
+            onClick={() => setCurrentView('catalog')}
+            className="w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-2xl text-sm cursor-pointer"
+          >
+            {t.viewAllCatalog} ({products.length})
+          </button>
+        )}
       </section>
 
       {/* 4. NOS PACKS (Always Visible & Advantageous Bundles) */}
@@ -509,7 +333,10 @@ export const HomeView: React.FC = () => {
                       <div className="text-xs font-bold text-slate-800 space-y-1.5 pt-2 border-t border-slate-100">
                         <div className="flex items-center gap-2 text-emerald-700">
                           <span>✓</span>
-                          <span>{pack.quantity >= 2 ? 'Livraison 0 DH Gratuite Partout au Maroc' : 'Livraison express 24h-48h'}</span>
+                          <span>{(() => {
+                            const fee = dbService.calculateDeliveryFee('Casablanca', pack.price, [productWithPacks.id]);
+                            return fee === 0 ? 'Livraison 0 DH Gratuite Partout au Maroc' : `Livraison express 24h-48h · ${formatMoney(fee)}`;
+                          })()}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-emerald-500">✓</span>

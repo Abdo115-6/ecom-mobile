@@ -194,6 +194,13 @@ export interface Product {
   price: number;
   compareAtPrice?: number;
   costPrice?: number;
+  // Delivery fee charged to the customer for this product.
+  // undefined = city rates from Settings, 0 = free delivery, > 0 = fixed fee
+  shippingFee?: number;
+  // Real cost paid to the delivery company per order (used for profit calculation)
+  deliveryCost?: number;
+  // Average advertising cost per order (CPA) for this product
+  adCostPerOrder?: number;
   status: ProductStatus;
   isFeatured?: boolean;
   isVisible?: boolean;
@@ -287,6 +294,8 @@ export interface OrderItem {
   quantity: number;
   subtotal: number;
   imageUrl: string;
+  // Pieces contained in one unit (promo pack of 2 = 2), used to compute the real purchase cost
+  packPieces?: number;
 }
 
 export interface WhatsAppMessage {
@@ -449,6 +458,8 @@ export interface StoreSettings {
   standardShippingFee: number;
   isFreeShippingPromoActive?: boolean;
   cityShippingRates?: Record<string, number>;
+  // Default real cost paid to the delivery company per order (profit calculation)
+  defaultDeliveryCost?: number;
   whatsappPhoneNumber: string;
   whatsappOrderConfirmationTemplate: string;
   whatsappShippingTemplate: string;
@@ -491,4 +502,9 @@ export interface BaileysBotStatus {
   connectedAt?: string;
   uptimeSeconds: number;
   autoConfirmationEnabled: boolean;
+  error?: string;
+  lastDisconnectAt?: string;
+  lastDisconnectReason?: string;
+  pendingOutbox?: number;
+  sessionStorage?: 'postgres' | 'file';
 }

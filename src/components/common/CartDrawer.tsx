@@ -28,6 +28,7 @@ export const CartDrawer: React.FC = () => {
     cartSubtotal, 
     cartDiscount, 
     cartShippingFee, 
+    cartFreeShippingThreshold,
     cartTotal, 
     formatMoney, 
     setCurrentView,
@@ -61,9 +62,9 @@ export const CartDrawer: React.FC = () => {
 
   if (!isCartDrawerOpen) return null;
 
-  const freeShippingThreshold = dbService.settings.freeShippingThreshold || 300;
+  const freeShippingThreshold = cartFreeShippingThreshold;
   const remainingForFreeShipping = Math.max(0, freeShippingThreshold - cartSubtotal);
-  const progressPercent = Math.min(100, Math.round((cartSubtotal / freeShippingThreshold) * 100));
+  const progressPercent = freeShippingThreshold > 0 ? Math.min(100, Math.round((cartSubtotal / freeShippingThreshold) * 100)) : 0;
 
   const handleProceedToCheckout = () => {
     clientMovementService.trackClick('Acheter Maintenant depuis Panier Drawer', 'CTA', {
@@ -122,7 +123,7 @@ export const CartDrawer: React.FC = () => {
           </div>
 
           {/* Free Shipping Progress Indicator */}
-          {cartItems.length > 0 && (
+          {cartItems.length > 0 && freeShippingThreshold > 0 && (
             <div className="px-5 py-3 bg-emerald-50/60 border-b border-emerald-100">
               <div className="flex items-center justify-between text-xs font-bold text-emerald-900 mb-1.5">
                 <div className="flex items-center gap-1.5">

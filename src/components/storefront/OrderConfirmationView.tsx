@@ -5,26 +5,7 @@ import { CheckCircle2, MessageCircle, Package, Truck, Home } from 'lucide-react'
 export const OrderConfirmationView: React.FC = () => {
   const { lastConfirmedOrder, setCurrentView, formatMoney, t } = useApp();
 
-  // Fire Meta Pixel Purchase event ONLY once per order (guarded against reload/refresh)
-  React.useEffect(() => {
-    if (!lastConfirmedOrder) return;
-    const orderId = lastConfirmedOrder.id || lastConfirmedOrder.orderNumber;
-    const guardKey = `fbq_purchase_fired_${orderId}`;
-
-    if (!sessionStorage.getItem(guardKey)) {
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'Purchase', {
-          content_type: 'product',
-          content_name: lastConfirmedOrder.items.map(i => i.productName).join(', '),
-          content_ids: lastConfirmedOrder.items.map(i => i.productId),
-          num_items: lastConfirmedOrder.items.reduce((acc, i) => acc + i.quantity, 0),
-          value: lastConfirmedOrder.totalAmount,
-          currency: lastConfirmedOrder.currency || 'MAD'
-        });
-      }
-      sessionStorage.setItem(guardKey, 'true');
-    }
-  }, [lastConfirmedOrder]);
+  // Purchase is tracked once at order creation by trackingService (pixels + Conversions API)
 
   if (!lastConfirmedOrder) {
     return (

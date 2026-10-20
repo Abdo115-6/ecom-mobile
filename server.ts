@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
+import { createTracker } from './server/tracking.js';
 
 dotenv.config();
 
@@ -119,6 +120,8 @@ async function initPostgresTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Full product document, so fields without a dedicated column (packs, delivery fee, kind…) are not lost
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS extra JSONB DEFAULT '{}'::jsonb;`);
 
     // 2. Orders Table
     await client.query(`
@@ -147,6 +150,8 @@ async function initPostgresTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Fields without a dedicated column (WhatsApp confirmation…)
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS extra JSONB DEFAULT '{}'::jsonb;`);
 
     // 3. Store Settings & Delivery Fees Table
     await client.query(`
@@ -187,6 +192,92 @@ async function initPostgresTables() {
 
 async function startServer() {
   await initPostgresTables();
+
+  // Visitor tracking store lives outside /public so it is never served to browsers
+  const tracker = createTracker({
+    dataDir: path.resolve(process.cwd(), 'data', 'tracking'),
+    pgPool,
+    isPgConnected: () => isPgConnected,
+    getSettings: () => readJsonFile<Record<string, any> | null>(SETTINGS_FILE, null)
+  });
+  await tracker.initPostgres();
+
+  const mapOrderRow = (row: any) => ({
+    ...(row.extra || {}),
+    id: row.id,
+    orderNumber: row.order_number,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+    status: row.status,
+    currency: row.currency,
+    subtotal: Number(row.subtotal),
+    discountAmount: Number(row.discount_amount || 0),
+    shippingFee: Number(row.shipping_fee || 0),
+    totalAmount: Number(row.total_amount),
+    shippingAddress: row.shipping_address,
+    paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+    shipment: row.shipment || {},
+    items: row.items || [],
+    utmSource: row.utm_source,
+    utmCampaign: row.utm_campaign,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+
+  async function loadAllOrders(): Promise<{ orders: any[]; source: string }> {
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT * FROM orders ORDER BY created_at DESC');
+        if (result.rows.length > 0) {
+          return { orders: result.rows.map(mapOrderRow), source: 'postgres' };
+        }
+      } catch (err) {
+        console.warn('Postgres orders query error:', err);
+      }
+    }
+    return { orders: readJsonFile<any[]>(ORDERS_FILE, []), source: 'file' };
+  }
+
+  async function updateOrderRecord(id: string, patch: { status?: string; whatsappConfirmation?: any }) {
+    const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+    const order = currentOrders.find(o => o.id === id);
+    if (order) {
+      if (patch.status) order.status = patch.status;
+      if (patch.whatsappConfirmation) order.whatsappConfirmation = patch.whatsappConfirmation;
+      order.updatedAt = new Date().toISOString();
+      writeJsonFile(ORDERS_FILE, currentOrders);
+    }
+
+    if (isPgConnected) {
+      try {
+        await pgPool.query(
+          `UPDATE orders SET
+             status = COALESCE($1, status),
+             extra = CASE WHEN $2::jsonb IS NULL THEN COALESCE(extra, '{}'::jsonb)
+                          ELSE COALESCE(extra, '{}'::jsonb) || jsonb_build_object('whatsappConfirmation', $2::jsonb) END,
+             updated_at = NOW()
+           WHERE id = $3`,
+          [patch.status || null, patch.whatsappConfirmation ? JSON.stringify(patch.whatsappConfirmation) : null, id]
+        );
+      } catch (err) {
+        console.warn('Postgres update order error:', err);
+      }
+    }
+  }
+
+  // WhatsApp bot: session + outbox in PostgreSQL so it survives restarts and redeploys
+  baileysManager.configure({
+    pool: pgPool,
+    usePostgres: isPgConnected,
+    orderStore: {
+      listOrders: async () => (await loadAllOrders()).orders,
+      updateOrder: updateOrderRecord
+    }
+  });
 
   const app = express();
 
@@ -415,6 +506,7 @@ async function startServer() {
         client.release();
         if (result.rows.length > 0) {
           const mapped = result.rows.map(row => ({
+            ...(row.extra || {}),
             id: row.id,
             categoryId: row.category_id,
             categoryName: row.category_name,
@@ -492,9 +584,9 @@ async function startServer() {
               id, category_id, category_name, name, slug, sku,
               short_description, description, brand, price, compare_at_price,
               cost_price, status, is_featured, is_visible, rating,
-              reviews_count, view_count, stock_quantity, images, variants, technical_specs, updated_at
+              reviews_count, view_count, stock_quantity, images, variants, technical_specs, extra, updated_at
             ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
               category_id = EXCLUDED.category_id,
@@ -515,6 +607,7 @@ async function startServer() {
               images = EXCLUDED.images,
               variants = EXCLUDED.variants,
               technical_specs = EXCLUDED.technical_specs,
+              extra = EXCLUDED.extra,
               updated_at = NOW();
           `, [
             product.id,
@@ -528,7 +621,7 @@ async function startServer() {
             product.brand || 'ShopMe',
             product.price,
             product.compareAtPrice || null,
-            product.costPrice || null,
+            product.costPrice ?? null,
             product.status || 'PUBLISHED',
             product.isFeatured ?? true,
             product.isVisible ?? true,
@@ -538,7 +631,8 @@ async function startServer() {
             product.stockQuantity || 10,
             JSON.stringify(product.images || []),
             JSON.stringify(product.variants || []),
-            JSON.stringify(product.technicalSpecs || {})
+            JSON.stringify(product.technicalSpecs || {}),
+            JSON.stringify(product)
           ]);
           client.release();
         } catch (dbErr) {
@@ -573,45 +667,8 @@ async function startServer() {
 
   // 5. Orders API (Get, Create, Status Update)
   app.get('/api/orders', async (req, res) => {
-    if (isPgConnected) {
-      try {
-        const client = await pgPool.connect();
-        const result = await client.query('SELECT * FROM orders ORDER BY created_at DESC');
-        client.release();
-        if (result.rows.length > 0) {
-          const mapped = result.rows.map(row => ({
-            id: row.id,
-            orderNumber: row.order_number,
-            customerId: row.customer_id,
-            customerName: row.customer_name,
-            customerEmail: row.customer_email,
-            customerPhone: row.customer_phone,
-            status: row.status,
-            currency: row.currency,
-            subtotal: Number(row.subtotal),
-            discountAmount: Number(row.discount_amount || 0),
-            shippingFee: Number(row.shipping_fee || 0),
-            totalAmount: Number(row.total_amount),
-            shippingAddress: row.shipping_address,
-            paymentMethod: row.payment_method,
-            paymentStatus: row.payment_status,
-            shipment: row.shipment || {},
-            items: row.items || [],
-            utmSource: row.utm_source,
-            utmCampaign: row.utm_campaign,
-            notes: row.notes,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-          }));
-          return res.json({ success: true, orders: mapped, source: 'postgres' });
-        }
-      } catch (err) {
-        console.warn('Postgres orders query error:', err);
-      }
-    }
-
-    const fileOrders = readJsonFile(ORDERS_FILE, []);
-    return res.json({ success: true, orders: fileOrders, source: 'file' });
+    const { orders, source } = await loadAllOrders();
+    return res.json({ success: true, orders, source });
   });
 
   app.post('/api/orders', async (req, res) => {
@@ -635,9 +692,9 @@ async function startServer() {
               id, order_number, customer_id, customer_name, customer_email,
               customer_phone, status, currency, subtotal, discount_amount,
               shipping_fee, total_amount, shipping_address, payment_method,
-              payment_status, shipment, items, utm_source, utm_campaign, notes, created_at, updated_at
+              payment_status, shipment, items, utm_source, utm_campaign, notes, extra, created_at, updated_at
             ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW()
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
               status = EXCLUDED.status,
@@ -662,7 +719,8 @@ async function startServer() {
             JSON.stringify(order.items || []),
             order.utmSource || 'direct',
             order.utmCampaign || '',
-            order.notes || ''
+            order.notes || '',
+            JSON.stringify({ whatsappConfirmation: order.whatsappConfirmation, whatsappNotification: order.whatsappNotification })
           ]);
           client.release();
         } catch (dbErr) {
@@ -688,26 +746,7 @@ async function startServer() {
   app.patch('/api/orders/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, whatsappConfirmation } = req.body;
-
-    const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
-    const order = currentOrders.find(o => o.id === id);
-    if (order) {
-      if (status) order.status = status;
-      if (whatsappConfirmation) order.whatsappConfirmation = whatsappConfirmation;
-      order.updatedAt = new Date().toISOString();
-      writeJsonFile(ORDERS_FILE, currentOrders);
-    }
-
-    if (isPgConnected) {
-      try {
-        const client = await pgPool.connect();
-        await client.query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status || order?.status, id]);
-        client.release();
-      } catch (err) {
-        console.warn('Postgres update order error:', err);
-      }
-    }
-
+    await updateOrderRecord(id, { status, whatsappConfirmation });
     return res.json({ success: true, id, status, whatsappConfirmation });
   });
 
@@ -728,6 +767,12 @@ async function startServer() {
     }
 
     return res.json({ success: true, message: `Commande ${id} supprimée avec succès` });
+  });
+
+  // Health check for uptime monitors (keeps free hosting plans awake, shows bot state)
+  app.get('/api/health', (req, res) => {
+    const wa = baileysManager.getStatus();
+    return res.json({ ok: true, postgres: isPgConnected, whatsapp: wa.status, whatsappOutbox: wa.pendingOutbox });
   });
 
   // ==========================================
@@ -935,7 +980,39 @@ async function startServer() {
     return res.json({ success: true, settings });
   });
 
-  // 7. Data Mining Leads (Real-time capture of abandoned inputs)
+  // 7. Real visitor tracking (page views, clicks, sources) + server-side Conversions APIs
+  // sendBeacon may post as text/plain, so the body is parsed manually when needed
+  app.post('/api/track', express.text({ type: ['text/plain', 'application/octet-stream'], limit: '256kb' }), async (req, res) => {
+    try {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+      const list = Array.isArray(body?.events) ? body.events : body?.eventId ? [body] : [];
+      const accepted = await tracker.ingest(list, {
+        ip: getClientIp(req),
+        userAgent: String(req.headers['user-agent'] || '')
+      });
+      return res.json({ success: true, accepted });
+    } catch (err: any) {
+      return res.status(400).json({ success: false, message: 'Payload de tracking invalide' });
+    }
+  });
+
+  app.get('/api/track/events', (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 200, 1000);
+    return res.json({ success: true, events: tracker.recent(limit, req.query.technical === '1') });
+  });
+
+  app.get('/api/track/stats', (req, res) => {
+    const allowed = ['today', '24h', '7d', '30d'] as const;
+    const range = (allowed as readonly string[]).includes(String(req.query.range)) ? req.query.range as typeof allowed[number] : '24h';
+    return res.json({ success: true, stats: tracker.stats(range) });
+  });
+
+  app.delete('/api/track/events', async (req, res) => {
+    await tracker.clear();
+    return res.json({ success: true });
+  });
+
+  // 8. Data Mining Leads (Real-time capture of abandoned inputs)
   app.get('/api/leads', async (req, res) => {
     if (isPgConnected) {
       try {
@@ -1183,6 +1260,15 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Close the WhatsApp socket cleanly on redeploy so the new instance takes over without conflict
+  const shutdown = async (signal: string) => {
+    console.log(`[Server] ${signal} received, closing WhatsApp session cleanly`);
+    await baileysManager.shutdown().catch(() => {});
+    process.exit(0);
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 ShopMe Full-Stack Server running at http://0.0.0.0:${PORT}`);

@@ -1431,17 +1431,47 @@ class DatabaseStore {
   }
 
   // --- Delivery Fee Calculation ---
-  calculateDeliveryFee(city: string = 'Casablanca', subtotal: number = 0): number {
+  cityDeliveryFee(city: string = 'Casablanca'): number {
+    const rate = this.settings.cityShippingRates?.[city];
+    if (rate !== undefined && rate !== null && !Number.isNaN(Number(rate))) {
+      return Number(rate);
+    }
+    return this.settings.standardShippingFee ?? 25;
+  }
+
+  /** Fixed delivery fee set on the product in the admin, or null when it follows the city rates */
+  productDeliveryFee(productId: string): number | null {
+    const product = this.products.find(p => p.id === productId);
+    if (!product || product.shippingFee === undefined || product.shippingFee === null) return null;
+    return Math.max(0, Number(product.shippingFee) || 0);
+  }
+
+  /** The free-shipping threshold only applies when no product in the order has its own delivery price */
+  isFreeShippingThresholdApplicable(productIds: string[] = []): boolean {
+    return this.settings.freeShippingThreshold > 0 && productIds.every(id => this.productDeliveryFee(id) === null);
+  }
+
+  /**
+   * Delivery fee for an order:
+   * 1. global "free delivery" promo switch → 0
+   * 2. products with their own delivery price → highest of those prices (one parcel per order)
+   * 3. otherwise free above the threshold, else the city rate
+   */
+  calculateDeliveryFee(city: string = 'Casablanca', subtotal: number = 0, productIds: string[] = []): number {
     if (this.settings.isFreeShippingPromoActive) {
       return 0;
     }
-    if (this.settings.freeShippingThreshold > 0 && subtotal >= this.settings.freeShippingThreshold) {
+    const productFees = productIds.map(id => this.productDeliveryFee(id));
+    const fixedFees = productFees.filter((f): f is number => f !== null);
+    const hasCityRatedItems = productFees.length === 0 || productFees.some(f => f === null);
+
+    if (fixedFees.length > 0 && !hasCityRatedItems) {
+      return Math.max(...fixedFees);
+    }
+    if (this.isFreeShippingThresholdApplicable(productIds) && subtotal >= this.settings.freeShippingThreshold) {
       return 0;
     }
-    if (this.settings.cityShippingRates && this.settings.cityShippingRates[city] !== undefined) {
-      return this.settings.cityShippingRates[city];
-    }
-    return this.settings.standardShippingFee ?? 25;
+    return Math.max(this.cityDeliveryFee(city), ...fixedFees);
   }
 
   // --- Settings ---

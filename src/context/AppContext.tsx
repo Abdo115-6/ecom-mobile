@@ -88,6 +88,8 @@ interface AppContextType {
   cartSubtotal: number;
   cartDiscount: number;
   cartShippingFee: number;
+  cartFreeShippingThreshold: number; // 0 when free shipping above a threshold does not apply to this cart
+  hasFreeShippingCoupon: boolean;
   cartTotal: number;
   appliedCouponCode: string | null;
   applyCoupon: (code: string) => { success: boolean; message: string };
@@ -279,20 +281,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.history.pushState(null, '', url);
     }
 
-    const prod = dbService.getProductBySlug(cleanSlug);
-    if (prod) {
-      trackingService.track('view_item', {
-        value: prod.price,
-        currency,
-        items: [{
-          id: prod.sku,
-          name: prod.name,
-          category: prod.categoryName,
-          price: prod.price,
-          quantity: 1
-        }]
-      });
-    }
+    // view_item is tracked by ProductDetailView (covers direct URL landings too)
   };
 
   // Cart operations
@@ -426,7 +415,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Calculations
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const freeShippingThreshold = dbService.settings.freeShippingThreshold;
+  const cartProductIds = cartItems.map(i => i.productId);
+  const cartFreeShippingThreshold = dbService.isFreeShippingThresholdApplicable(cartProductIds)
+    ? dbService.settings.freeShippingThreshold
+    : 0;
 
   let cartDiscount = 0;
   let isFreeShippingCoupon = false;
@@ -448,8 +440,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }
 
-  const isFreeShipping = cartSubtotal >= freeShippingThreshold || isFreeShippingCoupon || cartSubtotal === 0;
-  const cartShippingFee = isFreeShipping ? 0 : dbService.settings.standardShippingFee;
+  // Estimate with the default city; the checkout recalculates with the customer's city
+  const cartShippingFee = (isFreeShippingCoupon || cartItems.length === 0)
+    ? 0
+    : dbService.calculateDeliveryFee('Casablanca', cartSubtotal - cartDiscount, cartProductIds);
   const cartTotal = Math.max(0, cartSubtotal - cartDiscount + cartShippingFee);
   const cartItemCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -678,14 +672,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
 
-  // Track initial page view
-  useEffect(() => {
-    trackingService.track('page_view', {
-      currency,
-      metadata: { initialView: currentView }
-    });
-  }, []);
-
   return (
     <AppContext.Provider
       value={{
@@ -717,6 +703,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cartSubtotal,
         cartDiscount,
         cartShippingFee,
+        cartFreeShippingThreshold,
+        hasFreeShippingCoupon: isFreeShippingCoupon,
         cartTotal,
         appliedCouponCode,
         applyCoupon,

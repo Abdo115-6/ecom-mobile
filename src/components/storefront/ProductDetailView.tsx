@@ -203,23 +203,23 @@ export const ProductDetailView: React.FC = () => {
 
   const hasFiredCheckoutPixelRef = React.useRef(false);
 
-  // Track product view in client movement service & Meta Pixel ViewContent
+  // Track product view in client movement service
   useEffect(() => {
     if (product) {
       clientMovementService.trackProductView(product, packsList[selectedPackIndex]?.quantity || 1, activeVariant?.title);
-
-      // Meta Pixel ViewContent
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'ViewContent', {
-          content_name: product.name,
-          content_type: 'product',
-          content_ids: [product.id],
-          value: unitPrice,
-          currency: 'MAD'
-        });
-      }
     }
   }, [product?.id, selectedPackIndex, activeVariant?.id]);
+
+  // ViewContent once per product (also covers visitors landing directly on the product URL)
+  useEffect(() => {
+    if (product) {
+      trackingService.track('view_item', {
+        value: unitPrice,
+        currency: 'MAD',
+        items: [{ id: product.sku, name: product.name, category: product.categoryName, price: unitPrice, quantity: 1 }]
+      });
+    }
+  }, [product?.id]);
 
   // Handle Debounced Live Input Mining (Saisie en direct)
   const handleInputChange = (field: 'fullName' | 'phone' | 'city' | 'address', value: string) => {
@@ -231,15 +231,11 @@ export const ProductDetailView: React.FC = () => {
     // Fire InitiateCheckout once when customer starts typing in the order form
     if (!hasFiredCheckoutPixelRef.current && product) {
       hasFiredCheckoutPixelRef.current = true;
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'InitiateCheckout', {
-          content_name: product.name,
-          content_type: 'product',
-          content_ids: [product.id],
-          value: packTotalPrice,
-          currency: 'MAD'
-        });
-      }
+      trackingService.track('begin_checkout', {
+        value: packTotalPrice,
+        currency: 'MAD',
+        items: [{ id: product.sku, name: product.name, category: product.categoryName, price: packTotalPrice, quantity: 1 }]
+      });
     }
 
     clientMovementService.captureFormInput({
@@ -359,8 +355,9 @@ export const ProductDetailView: React.FC = () => {
   const totalItemsPrice = effectiveUnitPrice * customQuantity;
   const effectiveDiscount = effectivePackSavings * customQuantity;
 
-  // Delivery fee calculation from admin settings (Free 0 DH for digital & services)
-  const deliveryFee = (isDigital || isService) ? 0 : dbService.calculateDeliveryFee(selectedCity, totalItemsPrice);
+  // Delivery fee from the product's admin setting or the city rates (Free 0 DH for digital & services)
+  const deliveryFee = (isDigital || isService) ? 0 : dbService.calculateDeliveryFee(selectedCity, totalItemsPrice, [product.id]);
+  const deliveryLabel = deliveryFee === 0 ? 'Livraison Gratuite' : `Livraison ${formatMoney(deliveryFee)}`;
   const finalOrderTotal = totalItemsPrice + deliveryFee;
 
   // Companion & Reviews
@@ -402,16 +399,7 @@ export const ProductDetailView: React.FC = () => {
       savingsAmount
     });
 
-    // Meta Pixel AddToCart Event
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'AddToCart', {
-        content_name: product.name,
-        content_type: 'product',
-        content_ids: [product.id],
-        value: finalPrice * effectiveQty,
-        currency: 'MAD'
-      });
-    }
+    // AddToCart is tracked by addToCart() in AppContext (pixels + Conversions API)
 
     clientMovementService.trackClick('Ajout au Panier depuis Fiche Produit', 'BUTTON', {
       productSlug: product.slug,
@@ -465,9 +453,11 @@ export const ProductDetailView: React.FC = () => {
         unitPrice: effectiveUnitPrice,
         quantity: customQuantity,
         subtotal: totalItemsPrice,
-        imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl || ''
+        imageUrl: activeVariant?.imageUrl || product.images[0]?.imageUrl || '',
+        packPieces: packPieceCount
       }
     ];
+    const visitUtm = trackingService.getUtm();
 
     setTimeout(() => {
       try {
@@ -504,8 +494,8 @@ export const ProductDetailView: React.FC = () => {
             status: 'Commande confirmée · En préparation'
           },
           items: orderItems,
-          utmSource: new URLSearchParams(window.location.search).get('utm_source') || 'direct_ads',
-          utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'morocco_conversion',
+          utmSource: visitUtm.source,
+          utmCampaign: visitUtm.campaign,
           notes: isDigital 
             ? `⚡ PRODUIT DIGITAL: ${product.digitalSpecs?.digitalType || 'Digital'}. Email: ${customerEmail}. WhatsApp: ${customerPhone}.${playerIdOrAccount ? ` ID/Compte: ${playerIdOrAccount}` : ''}${selectedDuration ? ` Durée: ${selectedDuration.label}` : ''}`
             : isService
@@ -530,6 +520,14 @@ export const ProductDetailView: React.FC = () => {
             pack: packQuantity,
             shippingFee: deliveryFee,
             paymentMethod: 'CASH_ON_DELIVERY'
+          },
+          // Hashed server-side for Meta/TikTok match quality, never stored
+          customer: {
+            phone: customerPhone.trim(),
+            email: customerEmail.trim() || undefined,
+            firstName: customerName.trim().split(' ')[0],
+            lastName: customerName.trim().split(' ').slice(1).join(' ') || undefined,
+            city: isPhysical ? selectedCity : undefined
           }
         });
 
@@ -749,9 +747,11 @@ export const ProductDetailView: React.FC = () => {
                     -{Math.round(((product.compareAtPrice - unitPrice) / product.compareAtPrice) * 100)}%
                   </span>
                 )}
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                  ✓ Livraison Gratuite au Maroc
-                </span>
+                {isPhysical && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${deliveryFee === 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-700 bg-slate-50 border-slate-200'}`}>
+                    {deliveryFee === 0 ? '✓ Livraison Gratuite au Maroc' : `🚚 Livraison : ${formatMoney(deliveryFee)} (${selectedCity})`}
+                  </span>
+                )}
               </div>
               {product.compareAtPrice && product.compareAtPrice > unitPrice && (
                 <div className="text-xs text-emerald-600 font-bold mt-1">
@@ -970,8 +970,8 @@ export const ProductDetailView: React.FC = () => {
                   <span className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] shadow-xs">🎁</span>
                   <span>Choisissez votre formule / Pack Promo :</span>
                 </label>
-                <span className="text-[10px] font-black text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-0.5 rounded-full">
-                  ✓ Livraison 0 DH Gratuite
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${deliveryFee === 0 ? 'text-emerald-800 bg-emerald-100/90 border-emerald-300' : 'text-slate-700 bg-slate-100 border-slate-300'}`}>
+                  {deliveryFee === 0 ? '✓ Livraison 0 DH Gratuite' : `🚚 ${deliveryLabel}`}
                 </span>
               </div>
 
@@ -1402,8 +1402,8 @@ export const ProductDetailView: React.FC = () => {
                 )}
                 <div className="flex justify-between text-slate-700">
                   <span>{isDigital ? 'Livraison Instantanée WhatsApp & Email :' : isService ? 'Frais de prise en charge :' : `Frais de livraison (${selectedCity}) :`}</span>
-                  <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-                    GRATUITE (0 DH)
+                  <span className={`font-bold px-2 py-0.5 rounded-md ${deliveryFee === 0 ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-white border border-slate-200'}`}>
+                    {deliveryFee === 0 ? 'GRATUITE (0 DH)' : formatMoney(deliveryFee)}
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200/80 text-sm font-black text-slate-900">

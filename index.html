@@ -55,7 +55,7 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '1937322180765245');
-      fbq('track', 'PageView');
+      // PageView is fired by trackingService with an event_id (deduplicated with the Conversions API)
     </script>
     <!-- End Meta Pixel Code -->
 
@@ -67,7 +67,7 @@
     ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
 
       ttq.load('DB98263C77UDN3PL17DG');
-      ttq.page();
+      // ttq.page() is fired by trackingService on every route change
     }(window, document, 'ttq');
     </script>
     <!-- TikTok Pixel Code End -->
