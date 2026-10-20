@@ -164,7 +164,18 @@ async function initPostgresTables() {
       );
     `);
 
-    // 4. Data Mining Captured Leads Table (Inputs without Buy)
+    // 4. Uploaded product media. Render's disk is wiped on every deploy, so the database
+    // keeps the original bytes and /uploads/* is restored from it when the file is missing.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_files (
+        name VARCHAR(255) PRIMARY KEY,
+        mime_type VARCHAR(100) NOT NULL,
+        data BYTEA NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 5. Data Mining Captured Leads Table (Inputs without Buy)
     await client.query(`
       CREATE TABLE IF NOT EXISTS client_leads (
         id VARCHAR(100) PRIMARY KEY,
@@ -336,8 +347,75 @@ async function startServer() {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // Serve uploaded images statically
-  app.use('/uploads', express.static(uploadsDir));
+  const MEDIA_MIME: Record<string, string> = {
+    webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    svg: 'image/svg+xml', avif: 'image/avif', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime'
+  };
+  const isSafeMediaName = (name: string) => /^[a-zA-Z0-9_.-]+$/.test(name) && !name.includes('..');
+
+  const saveMediaToDb = async (name: string, mimeType: string, buffer: Buffer) => {
+    if (!isPgConnected) return false;
+    try {
+      await pgPool.query(
+        'INSERT INTO media_files (name, mime_type, data) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
+        [name, mimeType, buffer]
+      );
+      return true;
+    } catch (err) {
+      console.warn('Postgres media save error:', err);
+      return false;
+    }
+  };
+
+  // Files uploaded before media was stored in the database are copied in once, while they still exist on disk
+  if (isPgConnected) {
+    (async () => {
+      try {
+        const files = fs.readdirSync(uploadsDir).filter(isSafeMediaName);
+        if (files.length === 0) return;
+        const known = await pgPool.query('SELECT name FROM media_files WHERE name = ANY($1)', [files]);
+        const stored = new Set(known.rows.map((r: any) => r.name));
+        for (const name of files.filter(f => !stored.has(f))) {
+          const ext = name.split('.').pop()?.toLowerCase() || '';
+          await saveMediaToDb(name, MEDIA_MIME[ext] || 'application/octet-stream', fs.readFileSync(path.join(uploadsDir, name)));
+        }
+      } catch (err) {
+        console.warn('Media backfill notice:', err);
+      }
+    })();
+  }
+
+  // Uploaded media: served from disk, or restored from PostgreSQL after a redeploy wiped the disk.
+  // File names are unique (timestamped), so browsers and phones may cache them for a year.
+  app.get('/uploads/:name', async (req, res) => {
+    const name = req.params.name;
+    if (!isSafeMediaName(name)) return res.status(400).end();
+    const filePath = path.join(uploadsDir, name);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+
+    if (fs.existsSync(filePath)) return res.sendFile(filePath);
+
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT mime_type, data FROM media_files WHERE name = $1', [name]);
+        if (result.rows.length > 0) {
+          const { mime_type, data } = result.rows[0];
+          // Re-create the file so the next requests are served straight from disk (supports video seeking)
+          try {
+            fs.writeFileSync(filePath, data);
+            return res.sendFile(filePath);
+          } catch {
+            return res.type(mime_type).send(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Postgres media read error:', err);
+      }
+    }
+
+    res.set('Cache-Control', 'no-store');
+    return res.status(404).end();
+  });
 
   // ==========================================
   // API ROUTES
@@ -464,6 +542,8 @@ async function startServer() {
       const filePath = path.join(uploadsDir, generatedFileName);
 
       fs.writeFileSync(filePath, buffer);
+      // Durable copy: the disk is temporary on Render, the database is not
+      const persisted = await saveMediaToDb(generatedFileName, mimeType, buffer);
 
       const publicUrl = `/uploads/${generatedFileName}`;
 
@@ -475,7 +555,8 @@ async function startServer() {
         mediaType: isVideo ? 'video' : (isGif || ext === 'gif' ? 'gif' : 'image'),
         filename: generatedFileName,
         sizeKb: Math.round(buffer.length / 1024),
-        mimeType: mimeType
+        mimeType: mimeType,
+        persisted
       });
     } catch (err: any) {
       console.error('Upload error:', err);
