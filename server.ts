@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
 import dotenv from 'dotenv';
@@ -301,7 +302,27 @@ async function startServer() {
     lockoutUntil: number;
   }
   const loginAttempts = new Map<string, LoginAttempt>();
-  const activeAdminTokens = new Set<string>();
+  // Admin tokens are signed (HMAC) instead of kept in memory, so they survive restarts and redeploys
+  const ADMIN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  const adminTokenSecret = process.env.ADMIN_TOKEN_SECRET || `shopme:${process.env.ADMIN_PASSWORD || 'Abdo2004'}:admin-token`;
+  const signAdminToken = (expiresAt: number) =>
+    crypto.createHmac('sha256', adminTokenSecret).update(String(expiresAt)).digest('hex');
+  const createAdminToken = () => {
+    const expiresAt = Date.now() + ADMIN_TOKEN_TTL_MS;
+    return `shopme_sec_${expiresAt}_${signAdminToken(expiresAt)}`;
+  };
+  const isAdminRequest = (req: express.Request): boolean => {
+    const token = String(req.headers['x-admin-token'] || '');
+    const match = token.match(/^shopme_sec_(\d+)_([a-f0-9]{64})$/);
+    if (!match || Number(match[1]) < Date.now()) return false;
+    const expected = Buffer.from(signAdminToken(Number(match[1])));
+    const given = Buffer.from(match[2]);
+    return expected.length === given.length && crypto.timingSafeEqual(expected, given);
+  };
+  const requireAdmin: express.RequestHandler = (req, res, next) => {
+    if (isAdminRequest(req)) return next();
+    return res.status(401).json({ success: false, message: 'Session admin requise' });
+  };
 
   const getClientIp = (req: express.Request): string => {
     const forwarded = req.headers['x-forwarded-for'];
@@ -349,8 +370,7 @@ async function startServer() {
       // Clear brute-force counter on success
       loginAttempts.delete(ip);
 
-      const token = `shopme_sec_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-      activeAdminTokens.add(token);
+      const token = createAdminToken();
 
       return res.json({
         success: true,
@@ -672,7 +692,7 @@ async function startServer() {
   });
 
   // 5. Orders API (Get, Create, Status Update)
-  app.get('/api/orders', async (req, res) => {
+  app.get('/api/orders', requireAdmin, async (req, res) => {
     const { orders, source } = await loadAllOrders();
     return res.json({ success: true, orders, source });
   });
@@ -684,8 +704,23 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Données de commande invalides' });
       }
 
-      // Save to local file
+      // The phone re-sends an order until it gets an answer: a retry must not create a duplicate
       const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+      if (currentOrders.some(o => o && o.id === order.id)) {
+        return res.json({ success: true, order, duplicate: true });
+      }
+      if (isPgConnected) {
+        try {
+          const existing = await pgPool.query('SELECT 1 FROM orders WHERE id = $1', [order.id]);
+          if (existing.rowCount && existing.rowCount > 0) {
+            return res.json({ success: true, order, duplicate: true });
+          }
+        } catch (dbErr) {
+          console.warn('Postgres order lookup error:', dbErr);
+        }
+      }
+
+      // Save to local file
       currentOrders.unshift(order);
       writeJsonFile(ORDERS_FILE, currentOrders);
 
@@ -756,7 +791,7 @@ async function startServer() {
     return res.json({ success: true, id, status, whatsappConfirmation });
   });
 
-  app.delete('/api/orders/:id', async (req, res) => {
+  app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
     const filtered = currentOrders.filter(o => o.id !== id);
@@ -894,7 +929,7 @@ async function startServer() {
   });
 
   // Database production cleanup endpoint
-  app.post('/api/admin/clean-database', async (req, res) => {
+  app.post('/api/admin/clean-database', requireAdmin, async (req, res) => {
     try {
       // Clear orders and baileys conversations
       writeJsonFile(ORDERS_FILE, []);
@@ -1307,6 +1342,10 @@ async function startServer() {
     const indexTemplate = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
     // Hashed build assets never change, so browsers can cache them for a year
     app.use('/assets', express.static(path.join(distPath, 'assets'), { maxAge: '1y', immutable: true }));
+    // The service worker must always be re-checked so phones pick up new versions right away
+    app.get('/sw.js', (req, res) => {
+      res.set('Cache-Control', 'no-cache').sendFile(path.join(distPath, 'sw.js'));
+    });
     app.use(express.static(distPath, { index: false, maxAge: '1h' }));
     app.get('*', async (req, res) => {
       res.set('Cache-Control', 'no-cache').type('html').send(await renderPage(req, indexTemplate));

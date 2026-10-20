@@ -80,3 +80,32 @@ html {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Mobile comfort ---------- */
+
+/* iOS zooms into any field under 16px: keep form text at 16px on phones */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Keep the bottom menu above the iPhone home bar */
+.safe-area-bottom {
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+}
+
+/* Keep text size stable when the phone rotates */
+body {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Remove the 300ms tap delay and double-tap zoom on buttons */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}

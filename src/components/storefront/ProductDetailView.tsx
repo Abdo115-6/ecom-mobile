@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { normalizeMoroccanPhone, PHONE_ERROR_MESSAGE } from '../../services/phone';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { dataMiningService } from '../../services/dataMiningService';
@@ -410,6 +411,8 @@ export const ProductDetailView: React.FC = () => {
   // Handle Direct 1-Click Moroccan COD Order
   const handleDirectCodOrder = (e: React.FormEvent) => {
     e.preventDefault();
+    // Ignore the second tap of an impatient double-tap
+    if (isSubmittingOrder) return;
     setOrderError(null);
 
     clientMovementService.trackClick('Bouton Confirmer Commande COD', 'CTA', {
@@ -423,9 +426,9 @@ export const ProductDetailView: React.FC = () => {
       return;
     }
 
-    const cleanPhone = customerPhone.replace(/\s+/g, '');
-    if (cleanPhone.length < 9) {
-      setOrderError("Veuillez saisir un numéro de téléphone valide au Maroc (ex: 06 XX XX XX XX).");
+    const cleanPhone = normalizeMoroccanPhone(customerPhone);
+    if (!cleanPhone) {
+      setOrderError(PHONE_ERROR_MESSAGE);
       return;
     }
 
@@ -459,13 +462,13 @@ export const ProductDetailView: React.FC = () => {
     ];
     const visitUtm = trackingService.getUtm();
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const createdOrder = dbService.createOrder({
           customerId: "cust-" + Date.now(),
           customerName: customerName.trim(),
-          customerEmail: customerEmail.trim() || `${customerPhone.replace(/[^0-9]/g, '')}@client-shopme.ma`,
-          customerPhone: customerPhone.trim(),
+          customerEmail: customerEmail.trim() || `${cleanPhone}@client-shopme.ma`,
+          customerPhone: cleanPhone,
           status: 'PROCESSING',
           currency: 'MAD',
           subtotal: totalItemsPrice,
@@ -475,7 +478,7 @@ export const ProductDetailView: React.FC = () => {
           totalAmount: finalOrderTotal,
           shippingAddress: {
             fullName: customerName.trim(),
-            phone: customerPhone.trim(),
+            phone: cleanPhone,
             street: (isDigital || isService) 
               ? (customerEmail.trim() ? `Email: ${customerEmail.trim()}${playerIdOrAccount ? ` | ID: ${playerIdOrAccount}` : ''}` : 'Livraison Digitale Directe') 
               : (shippingAddress.trim() || 'Adresse confirmée par téléphone'),
@@ -523,7 +526,7 @@ export const ProductDetailView: React.FC = () => {
           },
           // Hashed server-side for Meta/TikTok match quality, never stored
           customer: {
-            phone: customerPhone.trim(),
+            phone: cleanPhone,
             email: customerEmail.trim() || undefined,
             firstName: customerName.trim().split(' ')[0],
             lastName: customerName.trim().split(' ').slice(1).join(' ') || undefined,
@@ -533,6 +536,9 @@ export const ProductDetailView: React.FC = () => {
 
         // Mark session as converted / purchased in client movement mining
         clientMovementService.markAsPurchased(createdOrder.orderNumber, packTotalPrice);
+
+        // Give a slow connection a few seconds; if it fails the order stays queued on the phone
+        await dbService.confirmOrderSynced(createdOrder.id, 8000);
 
         setIsSubmittingOrder(false);
         setLastConfirmedOrder(createdOrder);
@@ -548,14 +554,14 @@ export const ProductDetailView: React.FC = () => {
 
   // WhatsApp 1-Click Order Link (ShopMe)
   const whatsAppOrderText = `Salam ShopMe Maroc, je souhaite commander : *${product.name}*\n- Option : ${activeVariant?.title || 'Standard'}\n- Offre choisie : Pack ${packQuantity} article(s)\n- Total à payer : *${packTotalPrice} DH* (Paiement à la livraison)\n- Ville de livraison : *${selectedCity}*\nMerci de confirmer ma commande !`;
-  const whatsAppLink = `https://wa.me/212600000000?text=${encodeURIComponent(whatsAppOrderText)}`;
+  const whatsAppLink = `https://wa.me/${dbService.settings.whatsappPhoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsAppOrderText)}`;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 space-y-6 sm:space-y-10 pb-24 relative">
       
       {/* Floating Recent Moroccan Buyer Toast Notification */}
       {showBuyerToast && RECENT_MOROCCAN_BUYERS[buyerIndex] && (
-        <div className="fixed bottom-20 left-4 z-40 bg-slate-950/95 text-white border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-bottom-3 duration-300 max-w-sm">
+        <div className="fixed bottom-20 left-4 z-40 bg-slate-950/95 text-white border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-bottom-3 duration-300 max-w-[calc(100%-6.5rem)] sm:max-w-sm pointer-events-none">
           <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-4 h-4" />
           </div>
@@ -1235,6 +1241,9 @@ export const ProductDetailView: React.FC = () => {
                   <input
                     type="text"
                     required
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    enterKeyHint="next"
                     value={customerName}
                     onChange={(e) => handleInputChange('fullName', e.target.value)}
                     placeholder="Ex: Youssef El Mansouri"
@@ -1254,6 +1263,9 @@ export const ProductDetailView: React.FC = () => {
                   <input
                     type="tel"
                     required
+                    inputMode="tel"
+                    autoComplete="tel"
+                    enterKeyHint="next"
                     value={customerPhone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
                     placeholder="06 XX XX XX XX ou 07 XX XX XX XX"
@@ -1280,6 +1292,8 @@ export const ProductDetailView: React.FC = () => {
                   <div className="relative">
                     <input
                       type="email"
+                      inputMode="email"
+                      autoComplete="email"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
                       placeholder="votre-email@gmail.com"
@@ -1363,6 +1377,7 @@ export const ProductDetailView: React.FC = () => {
                     </label>
                     <input
                       type="text"
+                      autoComplete="street-address"
                       value={shippingAddress}
                       onChange={(e) => handleInputChange('address', e.target.value)}
                       placeholder="Ex: Quartier Maârif, Rue 14..."

@@ -153,9 +153,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
     return 'MAD';
   });
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  // Cart and wishlist survive the phone closing the tab (switching to WhatsApp, low memory, refresh)
+  const readSaved = <T,>(key: string, fallback: T): T => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => readSaved<CartItem[]>('shopme_cart_v1', []));
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(() => readSaved<string | null>('shopme_coupon_v1', null));
+  const [wishlistIds, setWishlistIds] = useState<string[]>(() => readSaved<string[]>('shopme_wishlist_v1', []));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('shopme_cart_v1', JSON.stringify(cartItems));
+      localStorage.setItem('shopme_coupon_v1', JSON.stringify(appliedCouponCode));
+      localStorage.setItem('shopme_wishlist_v1', JSON.stringify(wishlistIds));
+    } catch {
+      // storage blocked (private mode): cart stays in memory
+    }
+  }, [cartItems, appliedCouponCode, wishlistIds]);
   const [currentUser, setCurrentUser] = useState<User>(dbService.users[0]); // Default Super Admin
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState<boolean>(false);

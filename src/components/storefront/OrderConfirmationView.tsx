@@ -1,11 +1,22 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { CheckCircle2, MessageCircle, Package, Truck, Home } from 'lucide-react';
+import { dbService } from '../../services/dbService';
+import { CheckCircle2, MessageCircle, Package, Truck, Home, WifiOff } from 'lucide-react';
 
 export const OrderConfirmationView: React.FC = () => {
   const { lastConfirmedOrder, setCurrentView, formatMoney, t } = useApp();
 
   // Purchase is tracked once at order creation by trackingService (pixels + Conversions API)
+
+  // True while the order is still queued on the phone (weak network); updates live when it goes through
+  const orderId = lastConfirmedOrder?.id;
+  const [pendingSync, setPendingSync] = React.useState(() => !!orderId && dbService.isOrderPendingSync(orderId));
+  React.useEffect(() => {
+    if (!orderId) return;
+    const update = () => setPendingSync(dbService.isOrderPendingSync(orderId));
+    update();
+    return dbService.subscribeOrderOutbox(update);
+  }, [orderId]);
 
   if (!lastConfirmedOrder) {
     return (
@@ -34,6 +45,32 @@ export const OrderConfirmationView: React.FC = () => {
           {t.orderSuccessMsg} Votre colis est en cours de préparation par notre équipe logistique.
         </p>
       </div>
+
+      {/* Weak connection: the order is saved on the phone and retried; WhatsApp is the instant backup */}
+      {pendingSync && (
+        <div role="status" className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-3">
+          <div className="flex items-start gap-3">
+            <WifiOff className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-900 leading-relaxed">
+              <p className="font-bold">Connexion faible : envoi de votre commande en cours…</p>
+              <p>Elle est enregistrée sur votre téléphone et sera envoyée automatiquement. Pour être sûr, envoyez-la aussi sur WhatsApp.</p>
+            </div>
+          </div>
+          <a
+            href={`https://wa.me/${dbService.settings.whatsappPhoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+              `Salam ShopMe, voici ma commande ${lastConfirmedOrder.orderNumber} :\n` +
+              lastConfirmedOrder.items.map(i => `• ${i.variantTitle || i.productName} x${i.quantity}`).join('\n') +
+              `\nTotal : ${lastConfirmedOrder.totalAmount} DH\nNom : ${lastConfirmedOrder.shippingAddress.fullName}\nTél : ${lastConfirmedOrder.customerPhone}\nAdresse : ${lastConfirmedOrder.shippingAddress.street}, ${lastConfirmedOrder.shippingAddress.city}`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#25D366] text-white text-sm font-bold"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Envoyer ma commande sur WhatsApp
+          </a>
+        </div>
+      )}
 
       {/* Order Details Card */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">

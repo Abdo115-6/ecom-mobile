@@ -706,6 +706,18 @@ const INITIAL_SETTINGS: StoreSettings = {
   snapchatPixelId: "snap-pix-9821381"
 };
 
+const ORDER_OUTBOX_KEY = 'shopme_order_outbox_v1';
+
+/** Admin session token (signed by the server), sent with back-office requests */
+export function adminAuthHeaders(): Record<string, string> {
+  try {
+    const token = sessionStorage.getItem('aura_admin_token') || localStorage.getItem('aura_admin_token');
+    return token ? { 'x-admin-token': token } : {};
+  } catch {
+    return {};
+  }
+}
+
 // State Store Holder
 class DatabaseStore {
   categories: Category[] = INITIAL_CATEGORIES;
@@ -722,6 +734,12 @@ class DatabaseStore {
   settings: StoreSettings = INITIAL_SETTINGS;
 
   private productListeners: Array<(products: Product[]) => void> = [];
+
+  // Orders not yet confirmed by the server (weak 3G/4G, tunnel, closed tab...).
+  // Kept in localStorage and re-sent until the server accepts them, so no order is ever lost.
+  private orderOutbox: Order[] = [];
+  private outboxListeners = new Set<() => void>();
+  private outboxFlushing = false;
 
   subscribeProducts(listener: (products: Product[]) => void): () => void {
     this.productListeners.push(listener);
@@ -751,7 +769,91 @@ class DatabaseStore {
     this.loadFromStorage();
     if (typeof window !== 'undefined') {
       this.syncFromBackend();
+      this.loadOrderOutbox();
+      this.flushOrderOutbox();
+      window.addEventListener('online', () => this.flushOrderOutbox());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.flushOrderOutbox();
+      });
+      setInterval(() => this.flushOrderOutbox(), 30000);
     }
+  }
+
+  private loadOrderOutbox() {
+    try {
+      const saved = localStorage.getItem(ORDER_OUTBOX_KEY);
+      this.orderOutbox = saved ? JSON.parse(saved) : [];
+    } catch {
+      this.orderOutbox = [];
+    }
+  }
+
+  private saveOrderOutbox() {
+    try {
+      localStorage.setItem(ORDER_OUTBOX_KEY, JSON.stringify(this.orderOutbox));
+    } catch {
+      // storage full or blocked: the in-memory outbox still retries while the tab is open
+    }
+    this.outboxListeners.forEach(fn => fn());
+  }
+
+  isOrderPendingSync(orderId: string): boolean {
+    return this.orderOutbox.some(o => o.id === orderId);
+  }
+
+  subscribeOrderOutbox(listener: () => void): () => void {
+    this.outboxListeners.add(listener);
+    return () => this.outboxListeners.delete(listener);
+  }
+
+  private async postOrder(order: Order, timeoutMs: number): Promise<boolean> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+        signal: controller.signal,
+        keepalive: JSON.stringify(order).length < 60000
+      });
+      // 4xx (except 408/429) means the server will never accept it: stop retrying
+      return res.ok || (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429);
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Sends every queued order; resolves true when the outbox is empty */
+  async flushOrderOutbox(timeoutMs = 15000): Promise<boolean> {
+    if (this.outboxFlushing || this.orderOutbox.length === 0) return this.orderOutbox.length === 0;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+    this.outboxFlushing = true;
+    try {
+      for (const order of [...this.orderOutbox]) {
+        if (await this.postOrder(order, timeoutMs)) {
+          this.orderOutbox = this.orderOutbox.filter(o => o.id !== order.id);
+          this.saveOrderOutbox();
+        }
+      }
+    } finally {
+      this.outboxFlushing = false;
+    }
+    return this.orderOutbox.length === 0;
+  }
+
+  /** Waits (up to timeoutMs) for the server to confirm this order */
+  async confirmOrderSynced(orderId: string, timeoutMs = 10000): Promise<boolean> {
+    if (!this.isOrderPendingSync(orderId)) return true;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await this.flushOrderOutbox(Math.max(2000, deadline - Date.now()));
+      if (!this.isOrderPendingSync(orderId)) return true;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    return !this.isOrderPendingSync(orderId);
   }
 
   // Helper to filter out any fake template products
@@ -773,7 +875,9 @@ class DatabaseStore {
     try {
       const [prodRes, ordRes, setRes, catRes] = await Promise.all([
         fetch('/api/products').catch(() => null),
-        fetch('/api/orders').catch(() => null),
+        Object.keys(adminAuthHeaders()).length > 0
+          ? fetch('/api/orders', { headers: adminAuthHeaders() }).catch(() => null)
+          : Promise.resolve(null),
         fetch('/api/settings').catch(() => null),
         fetch('/api/categories').catch(() => null)
       ]);
@@ -894,11 +998,21 @@ class DatabaseStore {
   public saveToStorage() {
     try {
       if (typeof window === 'undefined') return;
-      localStorage.setItem("shopme_products_v3", JSON.stringify(this.products));
-      localStorage.setItem("shopme_categories_v3", JSON.stringify(this.categories));
-      localStorage.setItem("shopme_orders_v3", JSON.stringify(this.orders));
-      localStorage.setItem("shopme_reviews_v3", JSON.stringify(this.reviews));
-      localStorage.setItem("shopme_settings_v3", JSON.stringify(this.settings));
+      // Each key is saved on its own so one full/oversized entry does not block the others
+      const entries: Array<[string, unknown]> = [
+        ["shopme_products_v3", this.products],
+        ["shopme_categories_v3", this.categories],
+        ["shopme_orders_v3", this.orders],
+        ["shopme_reviews_v3", this.reviews],
+        ["shopme_settings_v3", this.settings]
+      ];
+      for (const [key, value] of entries) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+          // quota exceeded for this key
+        }
+      }
     } catch {
       // Ignore storage errors in restricted contexts
     }
@@ -1238,7 +1352,7 @@ class DatabaseStore {
 
     const newOrder: Order = {
       ...orderData,
-      id: "ord-" + Date.now(),
+      id: "ord-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
       orderNumber,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -1285,11 +1399,9 @@ class DatabaseStore {
     }
 
     if (typeof window !== 'undefined') {
-      fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOrder)
-      }).catch(err => console.warn('Backend createOrder notice:', err));
+      this.orderOutbox.push(newOrder);
+      this.saveOrderOutbox();
+      this.flushOrderOutbox();
     }
     return newOrder;
   }
@@ -1301,7 +1413,7 @@ class DatabaseStore {
     this.addAuditLog(user, 'DELETE', 'Order', orderId, `Suppression de la commande #${orderNum}`);
     this.saveToStorage();
     if (typeof window !== 'undefined') {
-      fetch(`/api/orders/${orderId}`, { method: 'DELETE' }).catch(err => console.warn('Backend deleteOrder notice:', err));
+      fetch(`/api/orders/${orderId}`, { method: 'DELETE', headers: adminAuthHeaders() }).catch(err => console.warn('Backend deleteOrder notice:', err));
     }
   }
 
@@ -1426,7 +1538,7 @@ class DatabaseStore {
       } catch (e) {
         console.warn('Storage cleanup notice:', e);
       }
-      fetch('/api/admin/clean-database', { method: 'POST' }).catch(() => {});
+      fetch('/api/admin/clean-database', { method: 'POST', headers: adminAuthHeaders() }).catch(() => {});
     }
   }
 

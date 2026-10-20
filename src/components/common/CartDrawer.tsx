@@ -92,7 +92,7 @@ export const CartDrawer: React.FC = () => {
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
         <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
           
           {/* Drawer Top Header */}
@@ -146,7 +146,7 @@ export const CartDrawer: React.FC = () => {
           )}
 
           {/* Drawer Body: Products in Cart */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
             {cartItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
                 <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400">
@@ -364,7 +364,7 @@ export const CartDrawer: React.FC = () => {
 
           {/* Drawer Footer with Subtotal and "Acheter maintenant" Button */}
           {cartItems.length > 0 && (
-            <div className="p-5 border-t border-slate-200 bg-slate-50/90 space-y-3 shadow-lg">
+            <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-slate-200 bg-slate-50/90 space-y-3 shadow-lg">
               
               {/* Financial Breakdown */}
               <div className="space-y-1.5 text-xs">

@@ -15,6 +15,7 @@ import {
   MessageCircle 
 } from 'lucide-react';
 import { PaymentMethod } from '../../types/ecommerce';
+import { normalizeMoroccanPhone, PHONE_ERROR_MESSAGE } from '../../services/phone';
 
 export const CheckoutView: React.FC = () => {
   const { 
@@ -41,6 +42,10 @@ export const CheckoutView: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH_ON_DELIVERY');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState(false);
+  // Blocks a second order when an impatient double-tap fires before React re-renders
+  const submittingRef = React.useRef(false);
 
   // InitiateCheckout (browser pixels + Conversions API, shared event_id)
   React.useEffect(() => {
@@ -87,13 +92,22 @@ export const CheckoutView: React.FC = () => {
     );
   }
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    setFormError(null);
     if (!fullName.trim() || !phone.trim() || !city.trim() || !street.trim()) {
-      alert("Veuillez renseigner toutes vos coordonnées de livraison.");
+      setFormError("Veuillez renseigner toutes vos coordonnées de livraison.");
+      return;
+    }
+    const cleanPhone = normalizeMoroccanPhone(phone);
+    if (!cleanPhone) {
+      setPhoneError(true);
+      setFormError(PHONE_ERROR_MESSAGE);
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     const utm = trackingService.getUtm();
@@ -103,7 +117,7 @@ export const CheckoutView: React.FC = () => {
       customerId: "cust-" + Date.now(),
       customerName: fullName,
       customerEmail: `${fullName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-      customerPhone: phone,
+      customerPhone: cleanPhone,
       status: "PENDING",
       currency,
       subtotal: cartSubtotal,
@@ -114,7 +128,7 @@ export const CheckoutView: React.FC = () => {
       couponCode: appliedCouponCode || undefined,
       shippingAddress: {
         fullName,
-        phone,
+        phone: cleanPhone,
         street,
         city,
         country: "Maroc"
@@ -162,7 +176,7 @@ export const CheckoutView: React.FC = () => {
       },
       // Hashed server-side for Meta/TikTok match quality, never stored
       customer: {
-        phone,
+        phone: cleanPhone,
         firstName: fullName.split(' ')[0],
         lastName: fullName.split(' ').slice(1).join(' ') || undefined,
         city
@@ -171,8 +185,13 @@ export const CheckoutView: React.FC = () => {
 
     clientMovementService.markAsPurchased(order.orderNumber, cartTotal);
 
+    // Give a slow connection a few seconds to deliver the order; if it can't, it stays queued
+    // on the phone and the confirmation page offers to send it by WhatsApp
+    await dbService.confirmOrderSynced(order.id, 8000);
+
     setLastConfirmedOrder(order);
     clearCart();
+    submittingRef.current = false;
     setIsSubmitting(false);
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     setCurrentView('order-confirmation');
@@ -213,6 +232,9 @@ export const CheckoutView: React.FC = () => {
                 <input
                   type="text"
                   required
+                  autoComplete="name"
+                  autoCapitalize="words"
+                  enterKeyHint="next"
                   value={fullName}
                   onChange={(e) => handleFieldChange('fullName', e.target.value)}
                   placeholder="Ex: Karim Benjelloun"
@@ -230,15 +252,20 @@ export const CheckoutView: React.FC = () => {
                 <input
                   type="tel"
                   required
+                  inputMode="tel"
+                  autoComplete="tel"
+                  enterKeyHint="next"
                   value={phone}
-                  onChange={(e) => handleFieldChange('phone', e.target.value)}
+                  onChange={(e) => { setPhoneError(false); handleFieldChange('phone', e.target.value); }}
+                  onBlur={() => setPhoneError(phone.trim() !== '' && !normalizeMoroccanPhone(phone))}
+                  aria-invalid={phoneError}
                   placeholder="Ex: 06 XX XX XX XX"
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white"
+                  className={`w-full p-3 bg-slate-50 border rounded-xl ${phoneError ? 'border-rose-400' : 'border-slate-200'} text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white`}
                 />
                 <Phone className="w-4 h-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2" />
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                Le livreur vous appellera sur ce numéro pour la livraison.
+              <span className={`text-[10px] mt-1 block ${phoneError ? 'text-rose-500 font-semibold' : 'text-slate-400'}`}>
+                {phoneError ? PHONE_ERROR_MESSAGE : 'Le livreur vous appellera sur ce numéro pour la livraison.'}
               </span>
             </div>
 
@@ -268,6 +295,8 @@ export const CheckoutView: React.FC = () => {
               <input
                 type="text"
                 required
+                autoComplete="street-address"
+                enterKeyHint="done"
                 value={street}
                 onChange={(e) => handleFieldChange('street', e.target.value)}
                 placeholder="Quartier, Rue, N° d'immeuble ou maison"
@@ -369,6 +398,12 @@ export const CheckoutView: React.FC = () => {
               <span className="text-amber-400 font-mono text-xl">{formatMoney(effectiveTotal)}</span>
             </div>
           </div>
+
+          {formError && (
+            <div role="alert" className="p-3 rounded-xl bg-rose-500/15 border border-rose-400/40 text-rose-200 text-xs font-semibold">
+              {formError}
+            </div>
+          )}
 
           <button
             type="submit"

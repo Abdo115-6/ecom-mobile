@@ -7,6 +7,7 @@ import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { CartDrawer } from './components/common/CartDrawer';
 import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
 import { CookieConsentBanner } from './components/common/CookieConsentBanner';
+import { ConnectionBanner } from './components/common/ConnectionBanner';
 
 // Storefront Views
 import { HomeView } from './components/storefront/HomeView';
@@ -206,7 +207,7 @@ const MainRouter: React.FC = () => {
 
   // Otherwise render Customer-Facing Storefront (No account page, no admin links)
   return (
-    <div className="shop-press min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="shop-press min-h-dvh bg-slate-50 flex flex-col font-sans">
       <Header onOpenSpecs={() => setSpecsModalOpen(true)} />
 
       <main className="flex-1">
@@ -236,6 +237,7 @@ const MainRouter: React.FC = () => {
       <CartDrawer />
       <FloatingWhatsAppButton />
       <CookieConsentBanner />
+      <ConnectionBanner />
 
       {/* Global Toast Notification */}
       {toastMessage && (
