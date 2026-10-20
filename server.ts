@@ -6,6 +6,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
+import { pageMeta, injectMeta, buildSitemap, buildRobots } from './server/seo.js';
 
 dotenv.config();
 
@@ -498,7 +499,7 @@ async function startServer() {
   });
 
   // 4. Products API (Get, Create, Update, Delete)
-  app.get('/api/products', async (req, res) => {
+  const loadProducts = async (): Promise<{ products: any[]; source: string }> => {
     if (isPgConnected) {
       try {
         const client = await pgPool.connect();
@@ -532,7 +533,7 @@ async function startServer() {
             createdAt: row.created_at,
             updatedAt: row.updated_at
           }));
-          return res.json({ success: true, products: mapped, source: 'postgres' });
+          return { products: mapped, source: 'postgres' };
         }
       } catch (err) {
         console.warn('Postgres products query error:', err);
@@ -548,10 +549,15 @@ async function startServer() {
         return b.includes('aura') || n.includes('parfum oud royal') || n.includes('tondeuse sans fil') || n.includes('montre chronographe') || n.includes('t-shirt minimaliste');
       };
       const clean = fileProducts.filter(p => !isFake(p));
-      return res.json({ success: true, products: clean, source: 'file' });
+      return { products: clean, source: 'file' };
     }
 
-    return res.json({ success: true, products: [], source: 'empty' });
+    return { products: [], source: 'empty' };
+  };
+
+  app.get('/api/products', async (req, res) => {
+    const { products, source } = await loadProducts();
+    return res.json({ success: true, products, source });
   });
 
   app.post('/api/products', async (req, res) => {
@@ -1246,18 +1252,64 @@ async function startServer() {
   // ==========================================
   // VITE DEV SERVER OR PRODUCTION STATIC
   // ==========================================
+  // Public site URL used in canonical links, sitemap and social previews
+  const siteBase = (req: express.Request): string => {
+    const configured = process.env.SITE_URL || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain;
+    if (configured && String(configured).trim()) return String(configured).trim().replace(/\/+$/, '');
+    const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+    return `${proto}://${req.get('host')}`;
+  };
+
+  // Products are re-read at most every 5 minutes for SEO pages, sitemap and previews
+  let seoProductsCache: { at: number; products: any[] } = { at: 0, products: [] };
+  const seoProducts = async () => {
+    if (Date.now() - seoProductsCache.at > 5 * 60 * 1000) {
+      seoProductsCache = { at: Date.now(), products: (await loadProducts()).products };
+    }
+    return seoProductsCache.products;
+  };
+
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(buildRobots(siteBase(req)));
+  });
+
+  app.get('/sitemap.xml', async (req, res) => {
+    const xml = buildSitemap(siteBase(req), await seoProducts());
+    res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
+  });
+
+  // Every storefront URL gets its own title, description, canonical, Open Graph image and JSON-LD
+  const renderPage = async (req: express.Request, template: string) => {
+    if (req.path.startsWith('/adminonly')) {
+      return template.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, '<title>ShopMe</title>\n    <meta name="robots" content="noindex, nofollow" />');
+    }
+    return injectMeta(template, pageMeta(siteBase(req), req.path, await seoProducts()));
+  };
+
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'spa'
+      appType: 'custom'
     });
     app.use(vite.middlewares);
+    app.get('*', async (req, res, next) => {
+      try {
+        const raw = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        const template = await vite.transformIndexHtml(req.originalUrl, raw);
+        res.status(200).set('Content-Type', 'text/html').send(await renderPage(req, template));
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    const indexTemplate = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
+    // Hashed build assets never change, so browsers can cache them for a year
+    app.use('/assets', express.static(path.join(distPath, 'assets'), { maxAge: '1y', immutable: true }));
+    app.use(express.static(distPath, { index: false, maxAge: '1h' }));
+    app.get('*', async (req, res) => {
+      res.set('Cache-Control', 'no-cache').type('html').send(await renderPage(req, indexTemplate));
     });
   }
 

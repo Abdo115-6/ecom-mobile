@@ -179,7 +179,7 @@ export const CartDrawer: React.FC = () => {
                       onClick={() => handleProductClick(item.productSlug)}
                       className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
                     >
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={item.imageUrl} 
                         alt={item.productName} 
                         className="w-full h-full object-cover"

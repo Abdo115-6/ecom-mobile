@@ -588,7 +588,7 @@ export const ProductDetailView: React.FC = () => {
         {/* Left Column: Gallery & Thumbnails (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
           <div className="relative aspect-square rounded-3xl overflow-hidden bg-white border border-slate-200 shadow-sm">
-            <img
+            <img fetchPriority="high" decoding="async"
               src={product.images[selectedImageIndex]?.imageUrl || product.images[0]?.imageUrl}
               alt={product.name}
               className="w-full h-full object-cover"
@@ -621,7 +621,7 @@ export const ProductDetailView: React.FC = () => {
                     selectedImageIndex === idx ? 'border-slate-900 shadow-sm' : 'border-slate-200 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                  <img loading="lazy" decoding="async" src={img.imageUrl} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -1485,14 +1485,14 @@ export const ProductDetailView: React.FC = () => {
           <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0">
-                <img src={product.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={product.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
               </div>
               <span className="text-xl font-bold text-slate-400">+</span>
               <div 
                 onClick={() => navigateToProduct(companionProduct.slug)}
                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:border-slate-400 transition-colors"
               >
-                <img src={companionProduct.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={companionProduct.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
               </div>
             </div>
 

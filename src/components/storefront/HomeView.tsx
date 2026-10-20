@@ -1,4 +1,6 @@
 import React from 'react';
+import { motion } from 'motion/react';
+import { revealOnScroll } from '../common/Reveal';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { whatsappService } from '../../services/whatsappService';
@@ -93,10 +95,10 @@ export const HomeView: React.FC = () => {
           {products.slice(0, 12).map(product => (
             <div
               key={product.id}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all relative"
+              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
             >
               <div className="relative aspect-square overflow-hidden bg-slate-50">
-                <img
+                <img loading="lazy" decoding="async"
                   src={product.images[0]?.imageUrl}
                   alt={product.name}
                   onClick={() => navigateToProduct(product.slug)}
@@ -230,7 +232,7 @@ export const HomeView: React.FC = () => {
           : defaultPacks;
 
         return (
-          <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
+          <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
@@ -258,7 +260,7 @@ export const HomeView: React.FC = () => {
               className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 flex items-center gap-4 cursor-pointer hover:border-slate-300 transition-colors shadow-xs"
             >
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
-                <img 
+                <img loading="lazy" decoding="async" 
                   src={productWithPacks.images[0]?.imageUrl} 
                   alt={productWithPacks.name}
                   className="w-full h-full object-cover" 
@@ -397,12 +399,12 @@ export const HomeView: React.FC = () => {
                 );
               })}
             </div>
-          </section>
+          </motion.section>
         );
       })()}
 
       {/* 5. COLLECTION HOMMES (User Request: "and under it category homme femme") */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
+      <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -436,7 +438,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80"
               alt="Montres Hommes"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -460,7 +462,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80"
               alt="High-Tech & Auto"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -484,7 +486,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm col-span-2 sm:col-span-1"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1624222247344-550fb60583dc?auto=format&fit=crop&w=800&q=80"
               alt="Ceintures & Maroquinerie"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -507,10 +509,10 @@ export const HomeView: React.FC = () => {
           {hommesProducts.slice(0, 3).map(product => (
             <div
               key={product.id}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
             >
               <div className="relative aspect-square overflow-hidden bg-slate-50">
-                <img
+                <img loading="lazy" decoding="async"
                   src={product.images[0]?.imageUrl}
                   alt={product.name}
                   onClick={() => navigateToProduct(product.slug)}
@@ -554,10 +556,10 @@ export const HomeView: React.FC = () => {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* 6. COLLECTION FEMMES (User Request: "and under it category homme femme") */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
+      <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -591,7 +593,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1508615039623-a25605d2b022?auto=format&fit=crop&w=800&q=80"
               alt="Montres Femmes"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -615,7 +617,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=80"
               alt="Sacs à Main"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -639,7 +641,7 @@ export const HomeView: React.FC = () => {
             }}
             className="group relative aspect-4/5 rounded-3xl overflow-hidden bg-slate-900 cursor-pointer shadow-sm col-span-2 sm:col-span-1"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src="https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=800&q=80"
               alt="Porte-Monnaie"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -662,10 +664,10 @@ export const HomeView: React.FC = () => {
           {femmesProducts.slice(0, 3).map(product => (
             <div
               key={product.id}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
             >
               <div className="relative aspect-square overflow-hidden bg-slate-50">
-                <img
+                <img loading="lazy" decoding="async"
                   src={product.images[0]?.imageUrl}
                   alt={product.name}
                   onClick={() => navigateToProduct(product.slug)}
@@ -709,10 +711,10 @@ export const HomeView: React.FC = () => {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* 7. ABONNEMENTS & COMPTES DIGITAUX (User Request: "and under the reset") */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
+      <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
@@ -742,10 +744,10 @@ export const HomeView: React.FC = () => {
           {digitalProducts.slice(0, 4).map(product => (
             <div
               key={product.id}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
             >
               <div className="relative aspect-square overflow-hidden bg-slate-900">
-                <img
+                <img loading="lazy" decoding="async"
                   src={product.images[0]?.imageUrl}
                   alt={product.name}
                   onClick={() => navigateToProduct(product.slug)}
@@ -785,10 +787,10 @@ export const HomeView: React.FC = () => {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* 8. TOUTES NOS COLLECTIONS (Interactive Categories Filter) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 border-t border-slate-200">
+      <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 border-t border-slate-200">
         <div className="flex items-center justify-between pb-3 mb-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
@@ -817,7 +819,7 @@ export const HomeView: React.FC = () => {
               }}
               className="group relative aspect-4/5 rounded-2xl overflow-hidden bg-slate-900 flex flex-col justify-end p-4 text-left border border-slate-200 hover:border-slate-400 transition-all cursor-pointer shadow-xs"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 src={cat.imageUrl}
                 alt={cat.name}
                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80"
@@ -834,10 +836,10 @@ export const HomeView: React.FC = () => {
             </button>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* 9. REASSURANCE GUARANTEE BANNER */}
-      <section className="max-w-7xl mx-auto px-4 pt-4">
+      <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 pt-4">
         <div className="py-5 px-6 bg-slate-900 text-white rounded-3xl flex flex-wrap items-center justify-around gap-4 text-xs font-bold shadow-lg">
           <div className="flex items-center gap-2">
             <Truck className="w-5 h-5 text-emerald-400" />
@@ -852,7 +854,7 @@ export const HomeView: React.FC = () => {
             <span>{t.qualityGuarantee}</span>
           </div>
         </div>
-      </section>
+      </motion.section>
 
     </div>
   );

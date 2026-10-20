@@ -127,7 +127,7 @@ export const OrderTrackingView: React.FC = () => {
                 <div key={item.id} className="flex items-center justify-between text-xs py-1.5">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-100 shrink-0">
-                      <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                     </div>
                     <div>
                       <div className="font-bold text-slate-900">{item.productName}</div>

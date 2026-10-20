@@ -259,7 +259,7 @@ export const RichProductDescription: React.FC<RichProductDescriptionProps> = ({
             className="flex-1 flex items-center justify-center p-2 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
+            <img loading="lazy" decoding="async"
               src={activeLightbox.url}
               alt={activeLightbox.caption || productName}
               className="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl transition-all"
@@ -437,7 +437,7 @@ function parseDescriptionBlocks(text: string): MediaBlock[] {
       continue;
     }
 
-    // 5. HTML tags: <img src="url" ... /> or <video src="url" ...>
+    // 5. HTML tags: <img loading="lazy" decoding="async" src="url" ... /> or <video src="url" ...>
     const htmlImgMatch = line.match(/<img\s+[^>]*src=["']([^"']+)["'][^>]*>/i);
     if (htmlImgMatch) {
       flushText();

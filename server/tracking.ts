@@ -302,7 +302,7 @@ export function createTracker(opts: TrackerOptions) {
             event_time: eventTime,
             event_id: ev.eventId,
             user: {
-              ttclid: ev.utm?.ttclid,
+              ttclid: ev.utm?.ttclid || raw.ttclid,
               ttp: raw.ttp,
               phone: user.ph,
               email: user.em,
@@ -417,7 +417,10 @@ export function createTracker(opts: TrackerOptions) {
         // raw.customer (phone/email) is only hashed for the Conversions APIs, never stored
       };
 
-      if (ev.eventName !== 'click' && ev.eventName !== 'heartbeat') {
+      // Visitors who refused advertising cookies are kept in first-party stats only
+      if (raw.adConsent === 'denied') {
+        ev.serverDispatch = { meta: 'SKIPPED', tiktok: 'SKIPPED' };
+      } else if (ev.eventName !== 'click' && ev.eventName !== 'heartbeat') {
         conversions.push(dispatchServerSide(ev, raw));
       }
       accepted.push(ev);

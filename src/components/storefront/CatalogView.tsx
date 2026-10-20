@@ -275,7 +275,7 @@ export const CatalogView: React.FC = () => {
                 >
                   {/* Image & Wishlist */}
                   <div className="relative aspect-square overflow-hidden bg-slate-100">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={product.images[0]?.imageUrl}
                       alt={product.name}
                       onClick={() => navigateToProduct(product.slug)}

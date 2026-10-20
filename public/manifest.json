@@ -1,6 +1,6 @@
 {
-  "short_name": "Aura Commerce",
-  "name": "Aura Commerce - Mobile Store & Back Office",
+  "short_name": "ShopMe",
+  "name": "ShopMe Maroc",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -16,7 +16,8 @@
   "start_url": "/",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "lang": "fr-MA",
   "display": "standalone",
   "orientation": "portrait",
-  "description": "Plateforme e-commerce mobile-first avec marketing tracking et back office RBAC."
+  "description": "Boutique en ligne ShopMe Maroc : livraison 24h et paiement à la livraison."
 }

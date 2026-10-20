@@ -1,5 +1,6 @@
 import { StandardEventName, UnifiedEventPayload, UTMParameters, TrackingItem } from '../types/tracking';
 import { classifyTrafficSource, TrafficSource } from './trafficSource';
+import { consentService, readCookie, writeCookie } from './consentService';
 
 type EventListener = (event: UnifiedEventPayload) => void;
 
@@ -41,14 +42,8 @@ const TIKTOK_EVENT_NAMES: Partial<Record<StandardEventName, string>> = {
   whatsapp_click: 'Contact'
 };
 
-function readCookie(name: string): string | undefined {
-  try {
-    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
-    return match ? decodeURIComponent(match[1]) : undefined;
-  } catch {
-    return undefined;
-  }
-}
+const WHATSAPP_LINK = /(wa\.me|api\.whatsapp\.com|web\.whatsapp\.com|whatsapp:\/\/)/i;
+const NINETY_DAYS = 60 * 60 * 24 * 90;
 
 function newId(prefix: string): string {
   const rand = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -66,6 +61,8 @@ class MarketingTrackingService {
   private queue: UnifiedEventPayload[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPageView: { url: string; at: number; payload: UnifiedEventPayload } | null = null;
+  // Pixel events fired before the visitor answers the cookie banner (sent with their original event_id on accept)
+  private pendingPixelEvents: Array<{ payload: UnifiedEventPayload; items?: TrackingItem[] }> = [];
 
   constructor() {
     this.anonymousId = this.getOrCreateAnonymousId();
@@ -73,6 +70,25 @@ class MarketingTrackingService {
     this.landing = this.getOrCreateLanding();
     this.loadEventHistory();
     this.installAutoTracking();
+    if (consentService.get() === 'granted') this.persistClickIds();
+    consentService.subscribe(choice => {
+      const pending = this.pendingPixelEvents.splice(0);
+      if (choice !== 'granted') return;
+      this.persistClickIds();
+      pending.forEach(({ payload, items }) => this.dispatchToBrowserPixels(payload, items));
+    });
+  }
+
+  /**
+   * Ad click IDs are kept in first-party cookies so a visitor who comes back days later
+   * (without the ?fbclid / ?ttclid in the URL) is still attributed to the ad that brought them.
+   */
+  private persistClickIds() {
+    const { fbclid, ttclid } = this.landing.utm;
+    if (fbclid && !readCookie('_fbc')) {
+      writeCookie('_fbc', `fb.1.${this.landing.startedAt}.${fbclid}`, NINETY_DAYS);
+    }
+    if (ttclid) writeCookie('ttclid', ttclid, NINETY_DAYS);
   }
 
   private getOrCreateAnonymousId(): string {
@@ -205,11 +221,15 @@ class MarketingTrackingService {
         (el as HTMLInputElement).value ||
         el.tagName
       ).replace(/\s+/g, ' ').trim().slice(0, 80);
+      const href = el instanceof HTMLAnchorElement ? el.href : undefined;
+      if (href && WHATSAPP_LINK.test(href)) {
+        this.track('whatsapp_click', { metadata: { label, view: window.location.pathname } });
+      }
       this.track('click', {
         click: {
           label,
           tag: el.tagName.toLowerCase(),
-          href: el instanceof HTMLAnchorElement ? el.href : undefined,
+          href,
           x: Math.round(e.clientX),
           y: Math.round(e.clientY)
         }
@@ -350,6 +370,8 @@ class MarketingTrackingService {
       fbp: readCookie('_fbp'),
       fbc: readCookie('_fbc') || (fbclid ? `fb.1.${this.landing.startedAt}.${fbclid}` : undefined),
       ttp: readCookie('_ttp'),
+      ttclid: this.landing.utm.ttclid || readCookie('ttclid'),
+      adConsent: consentService.get(),
       customer: options?.customer,
       dispatchedTo: {
         browserGA4: false,
@@ -367,7 +389,9 @@ class MarketingTrackingService {
     const isInternal = eventName === 'click' || eventName === 'heartbeat';
 
     if (!disabled && !isInternal) {
-      this.dispatchToBrowserPixels(payload, options?.items);
+      const consent = consentService.get();
+      if (consent === 'granted') this.dispatchToBrowserPixels(payload, options?.items);
+      else if (consent === 'pending') this.pendingPixelEvents.push({ payload, items: options?.items });
     }
 
     if (!isInternal) {

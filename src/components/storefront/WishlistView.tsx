@@ -44,7 +44,7 @@ export const WishlistView: React.FC = () => {
             className="bg-white border border-slate-200 rounded-2xl overflow-hidden p-3 flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow relative"
           >
             <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 mb-2">
-              <img
+              <img loading="lazy" decoding="async"
                 src={product.images[0]?.imageUrl}
                 alt={product.name}
                 onClick={() => navigateToProduct(product.slug)}

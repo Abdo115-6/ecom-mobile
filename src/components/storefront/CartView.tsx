@@ -120,7 +120,7 @@ export const CartView: React.FC = () => {
             >
               {/* Product Thumbnail */}
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-slate-100 shrink-0">
-                <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
               </div>
 
               {/* Product Info */}

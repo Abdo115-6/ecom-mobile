@@ -75,6 +75,10 @@ export interface UnifiedEventPayload {
   fbp?: string;
   fbc?: string;
   ttp?: string;
+  // TikTok click ID from the URL or the first-party cookie of an earlier ad click
+  ttclid?: string;
+  // Cookie banner choice: advertising pixels and Conversions APIs are skipped when denied
+  adConsent?: 'granted' | 'denied' | 'pending';
   // Customer data, only sent with conversion events (hashed server-side, never stored)
   customer?: {
     phone?: string;

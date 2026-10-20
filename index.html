@@ -3,23 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <title>ShopMe | E-Commerce Maroc</title>
-    <meta name="description" content="ShopMe Maroc : Commandez facilement avec livraison express 24h et paiement sécurisé à la livraison partout au Maroc." />
+    <!-- Page-specific SEO tags are injected here by the server (server/seo.ts) -->
+    <!--seo:start-->
+    <title>ShopMe Maroc | Livraison 24h & Paiement à la livraison</title>
+    <meta name="description" content="ShopMe Maroc : commandez en ligne avec livraison express 24h partout au Maroc et paiement en espèces à la livraison après vérification du colis." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ShopMe Maroc | Livraison 24h & Paiement à la livraison" />
+    <meta property="og:site_name" content="ShopMe Maroc" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!--seo:end-->
     <meta name="theme-color" content="#0f172a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ShopMe" />
-    
-    <!-- OpenGraph Tags -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="ShopMe | E-Commerce Maroc" />
-    <meta property="og:description" content="Commandez sur ShopMe Maroc avec livraison express 24h à domicile et paiement en espèces à la livraison après vérification du colis." />
-    <meta property="og:site_name" content="ShopMe Maroc" />
-    
-    <!-- Twitter / X Cards -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="ShopMe | E-Commerce Maroc" />
-    <meta name="twitter:description" content="ShopMe Maroc : Livraison express 24h et paiement cash à la livraison partout au Maroc." />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Pixel & analytics hosts: open connections early -->
+    <link rel="preconnect" href="https://connect.facebook.net" crossorigin>
+    <link rel="preconnect" href="https://analytics.tiktok.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.facebook.com">
 
     <!-- Google Fonts Inter & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,6 +35,8 @@
       "@context": "https://schema.org",
       "@type": "OnlineStore",
       "name": "ShopMe Maroc",
+      "areaServed": { "@type": "Country", "name": "Morocco" },
+      "contactPoint": { "@type": "ContactPoint", "contactType": "customer service", "availableLanguage": ["French", "Arabic"] },
       "description": "Boutique en ligne officielle ShopMe Maroc. Mode, parfumerie et accessoires avec paiement à la livraison",
       "currenciesAccepted": "MAD, EUR, USD",
       "paymentAccepted": "Cash on Delivery, Credit Card",
@@ -54,6 +59,8 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
+      // Cookie consent (src/services/consentService.ts): nothing is sent until the visitor accepts
+      if (!/(?:^|; )shopme_consent=granted/.test(document.cookie)) fbq('consent', 'revoke');
       fbq('init', '1937322180765245');
       // PageView is fired by trackingService with an event_id (deduplicated with the Conversions API)
     </script>
@@ -66,6 +73,7 @@
     var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
     ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
 
+      if (!/(?:^|; )shopme_consent=granted/.test(document.cookie)) ttq.holdConsent();
       ttq.load('DB98263C77UDN3PL17DG');
       // ttq.page() is fired by trackingService on every route change
     }(window, document, 'ttq');
@@ -73,18 +81,22 @@
     <!-- TikTok Pixel Code End -->
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-slate-900 selection:text-white">
-    <!-- Meta Pixel Fallback -->
-    <noscript>
-      <img height="1" width="1" style="display:none" 
-           src="https://www.facebook.com/tr?id=1937322180765245&ev=PageView&noscript=1" alt="" />
-    </noscript>
-
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Metricool Analytics Tracking -->
-    <script>function loadScript(a){var b=document.getElementsByTagName("head")[0],c=document.createElement("script");c.type="text/javascript",c.src="https://tracker.metricool.com/resources/be.js",c.onreadystatechange=a,c.onload=a,b.appendChild(c)}loadScript(function(){beTracker.t({hash:"157ea9db884321a7d7c1d3b2f211a3c0"})});</script>
-    <img src="https://tracker.metricool.com/c3po.jpg?hash=157ea9db884321a7d7c1d3b2f211a3c0" alt="" style="display:none;" width="1" height="1" aria-hidden="true" />
+    <!-- Metricool Analytics Tracking (loaded once cookies are accepted) -->
+    <script>
+      window.shopmeLoadAnalytics = function () {
+        if (window.__metricoolLoaded) return;
+        window.__metricoolLoaded = true;
+        var c = document.createElement('script');
+        c.src = 'https://tracker.metricool.com/resources/be.js';
+        c.async = true;
+        c.onload = function () { beTracker.t({ hash: '157ea9db884321a7d7c1d3b2f211a3c0' }); };
+        document.head.appendChild(c);
+      };
+      if (/(?:^|; )shopme_consent=granted/.test(document.cookie)) window.shopmeLoadAnalytics();
+    </script>
   </body>
 </html>
 

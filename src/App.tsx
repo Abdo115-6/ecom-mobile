@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
-import { SpecificationsModal } from './components/common/SpecificationsModal';
 import { CartDrawer } from './components/common/CartDrawer';
 import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
+import { CookieConsentBanner } from './components/common/CookieConsentBanner';
 
 // Storefront Views
 import { HomeView } from './components/storefront/HomeView';
@@ -18,23 +19,55 @@ import { OrderTrackingView } from './components/storefront/OrderTrackingView';
 import { WishlistView } from './components/storefront/WishlistView';
 
 // Admin Views & Protected Login
-import { AdminLoginView } from './components/admin/AdminLoginView';
-import { AdminLayout } from './components/admin/AdminLayout';
-import { DashboardView } from './components/admin/DashboardView';
-import { ProductsAdminView } from './components/admin/ProductsAdminView';
-import { CategoriesAdminView } from './components/admin/CategoriesAdminView';
-import { InventoryAdminView } from './components/admin/InventoryAdminView';
-import { OrdersAdminView } from './components/admin/OrdersAdminView';
-import { ReviewsAdminView } from './components/admin/ReviewsAdminView';
-import { CustomersAdminView } from './components/admin/CustomersAdminView';
-import { MarketingAdminView } from './components/admin/MarketingAdminView';
-import { TrackingInspectorView } from './components/admin/TrackingInspectorView';
-import { DataMiningView } from './components/admin/DataMiningView';
-import { WhatsAppAdminView } from './components/admin/WhatsAppAdminView';
-import { CalculationAdminView } from './components/admin/CalculationAdminView';
-import { UsersAdminView } from './components/admin/UsersAdminView';
-import { AuditLogsView } from './components/admin/AuditLogsView';
-import { SettingsAdminView } from './components/admin/SettingsAdminView';
+// The back office is loaded on demand so shoppers never download it
+const lazyNamed = <K extends string>(loader: () => Promise<Record<K, React.ComponentType<any>>>, name: K) =>
+  lazy(() => loader().then(m => ({ default: m[name] })));
+
+const SpecificationsModal = lazyNamed(() => import('./components/common/SpecificationsModal'), 'SpecificationsModal');
+const AdminLoginView = lazyNamed(() => import('./components/admin/AdminLoginView'), 'AdminLoginView');
+const AdminLayout = lazyNamed(() => import('./components/admin/AdminLayout'), 'AdminLayout');
+const DashboardView = lazyNamed(() => import('./components/admin/DashboardView'), 'DashboardView');
+const ProductsAdminView = lazyNamed(() => import('./components/admin/ProductsAdminView'), 'ProductsAdminView');
+const CategoriesAdminView = lazyNamed(() => import('./components/admin/CategoriesAdminView'), 'CategoriesAdminView');
+const InventoryAdminView = lazyNamed(() => import('./components/admin/InventoryAdminView'), 'InventoryAdminView');
+const OrdersAdminView = lazyNamed(() => import('./components/admin/OrdersAdminView'), 'OrdersAdminView');
+const ReviewsAdminView = lazyNamed(() => import('./components/admin/ReviewsAdminView'), 'ReviewsAdminView');
+const CustomersAdminView = lazyNamed(() => import('./components/admin/CustomersAdminView'), 'CustomersAdminView');
+const MarketingAdminView = lazyNamed(() => import('./components/admin/MarketingAdminView'), 'MarketingAdminView');
+const TrackingInspectorView = lazyNamed(() => import('./components/admin/TrackingInspectorView'), 'TrackingInspectorView');
+const DataMiningView = lazyNamed(() => import('./components/admin/DataMiningView'), 'DataMiningView');
+const WhatsAppAdminView = lazyNamed(() => import('./components/admin/WhatsAppAdminView'), 'WhatsAppAdminView');
+const CalculationAdminView = lazyNamed(() => import('./components/admin/CalculationAdminView'), 'CalculationAdminView');
+const UsersAdminView = lazyNamed(() => import('./components/admin/UsersAdminView'), 'UsersAdminView');
+const AuditLogsView = lazyNamed(() => import('./components/admin/AuditLogsView'), 'AuditLogsView');
+const SettingsAdminView = lazyNamed(() => import('./components/admin/SettingsAdminView'), 'SettingsAdminView');
+
+const AdminFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-950">
+    <span className="w-8 h-8 rounded-full border-2 border-slate-600 border-t-white animate-spin"></span>
+  </div>
+);
+
+// Browser tab titles per storefront page (the server sets the same tags for crawlers)
+const VIEW_TITLES: Record<string, string> = {
+  home: 'ShopMe Maroc | Livraison 24h & Paiement à la livraison',
+  catalog: 'Catalogue produits | ShopMe Maroc',
+  cart: 'Panier | ShopMe Maroc',
+  checkout: 'Commande | ShopMe Maroc',
+  'order-confirmation': 'Commande confirmée | ShopMe Maroc',
+  'track-order': 'Suivi de commande | ShopMe Maroc',
+  wishlist: 'Favoris | ShopMe Maroc'
+};
+
+const setCanonical = (href: string) => {
+  let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'canonical';
+    document.head.appendChild(link);
+  }
+  link.href = href;
+};
 
 // Toast and Floating trigger icons
 import { FileText } from 'lucide-react';
@@ -57,8 +90,25 @@ const isBotOrFetcher = (): boolean => {
 };
 
 const MainRouter: React.FC = () => {
-  const { currentView, isAdminMode, toastMessage, setCurrentView } = useApp();
+  const { currentView, isAdminMode, toastMessage, setCurrentView, products, selectedProductSlug } = useApp();
   const [specsModalOpen, setSpecsModalOpen] = useState(false);
+
+  // Title, description and canonical follow SPA navigation (also read by the pixels' page_view)
+  React.useLayoutEffect(() => {
+    if (currentView.startsWith('admin')) return;
+    const product = currentView === 'product-detail'
+      ? products.find(p => p.slug === selectedProductSlug)
+      : undefined;
+    document.title = product
+      ? product.seoTitle || `${product.name} | ShopMe Maroc`
+      : VIEW_TITLES[currentView] || VIEW_TITLES.home;
+    if (product) {
+      const description = (product.seoDescription || product.shortDescription || '').trim();
+      const meta = document.querySelector('meta[name="description"]');
+      if (description && meta) meta.setAttribute('content', description.slice(0, 160));
+    }
+    setCanonical(window.location.origin + window.location.pathname);
+  }, [currentView, products, selectedProductSlug]);
 
   // Scroll to top on every view navigation and record a page view on SPA route change
   React.useEffect(() => {
@@ -96,7 +146,7 @@ const MainRouter: React.FC = () => {
     }
 
     return (
-      <>
+      <Suspense fallback={<AdminFallback />}>
         <AdminLoginView />
         {toastMessage && (
           <div className="fixed top-5 right-5 z-50 bg-slate-950 text-white border border-slate-700 px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold animate-in slide-in-from-top-2 flex items-center gap-2">
@@ -104,14 +154,14 @@ const MainRouter: React.FC = () => {
             <span>{toastMessage}</span>
           </div>
         )}
-      </>
+      </Suspense>
     );
   }
 
   // If in Admin Mode, render inside AdminLayout
   if (isAdminMode) {
     return (
-      <>
+      <Suspense fallback={<AdminFallback />}>
         <AdminLayout>
           {currentView === 'admin-dashboard' && <DashboardView />}
           {currentView === 'admin-products' && <ProductsAdminView />}
@@ -150,30 +200,42 @@ const MainRouter: React.FC = () => {
             <span>{toastMessage}</span>
           </div>
         )}
-      </>
+      </Suspense>
     );
   }
 
   // Otherwise render Customer-Facing Storefront (No account page, no admin links)
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="shop-press min-h-screen bg-slate-50 flex flex-col font-sans">
       <Header onOpenSpecs={() => setSpecsModalOpen(true)} />
 
       <main className="flex-1">
-        {currentView === 'home' && <HomeView />}
-        {currentView === 'catalog' && <CatalogView />}
-        {currentView === 'product-detail' && <ProductDetailView />}
-        {currentView === 'cart' && <CartView />}
-        {currentView === 'checkout' && <CheckoutView />}
-        {currentView === 'order-confirmation' && <OrderConfirmationView />}
-        {currentView === 'track-order' && <OrderTrackingView />}
-        {currentView === 'wishlist' && <WishlistView />}
+        {/* Smooth fade/slide between pages */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={currentView === 'product-detail' ? `product-${selectedProductSlug}` : currentView}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            {currentView === 'home' && <HomeView />}
+            {currentView === 'catalog' && <CatalogView />}
+            {currentView === 'product-detail' && <ProductDetailView />}
+            {currentView === 'cart' && <CartView />}
+            {currentView === 'checkout' && <CheckoutView />}
+            {currentView === 'order-confirmation' && <OrderConfirmationView />}
+            {currentView === 'track-order' && <OrderTrackingView />}
+            {currentView === 'wishlist' && <WishlistView />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <Footer />
       <MobileBottomNav />
       <CartDrawer />
       <FloatingWhatsAppButton />
+      <CookieConsentBanner />
 
       {/* Global Toast Notification */}
       {toastMessage && (
@@ -189,7 +251,9 @@ const MainRouter: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <MainRouter />
+      <MotionConfig reducedMotion="user">
+        <MainRouter />
+      </MotionConfig>
     </AppProvider>
   );
 }
