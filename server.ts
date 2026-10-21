@@ -303,7 +303,27 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-    if (isProd) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    // Content-Security-Policy: blocks injected <object>/<base>, framing and mixed content, and
+    // forces HTTPS, while still allowing the store's analytics/pixel tags and Google Fonts.
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "connect-src 'self' https:",
+      "frame-src https:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+      "upgrade-insecure-requests"
+    ].join('; '));
+    // Enforce HTTPS on any secure request (Railway/Render terminate TLS at a proxy), not only
+    // when NODE_ENV is set, so the live site is never served without HSTS by accident.
+    if (isProd || req.secure || req.headers['x-forwarded-proto'] === 'https') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     next();
   });
 
@@ -319,10 +339,17 @@ async function startServer() {
   const loginAttempts = new Map<string, LoginAttempt>();
   // Admin tokens are signed (HMAC) instead of kept in memory, so they survive restarts and redeploys
   const ADMIN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  // In production the admin credentials MUST come from the environment. There is no source-code
+  // default any more, so this public repo never ships a working admin password. Fail fast if unset.
   if (isProd && (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_TOKEN_SECRET)) {
-    console.warn('[Security] ADMIN_PASSWORD / ADMIN_TOKEN_SECRET are not set: the admin panel is using the default password from the source code. Set both in the hosting dashboard.');
+    throw new Error('[Security] Refusing to start in production: set ADMIN_PASSWORD and ADMIN_TOKEN_SECRET in your host dashboard (Railway/Render > Variables), then redeploy.');
   }
-  const adminTokenSecret = process.env.ADMIN_TOKEN_SECRET || `shopme:${process.env.ADMIN_PASSWORD || 'Abdo2004'}:admin-token`;
+  // Outside production, use a random password generated for this run only, so no fixed default works.
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || crypto.randomBytes(9).toString('base64url');
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn(`[Security] ADMIN_PASSWORD not set; this run's temporary admin password is: ${ADMIN_PASSWORD}`);
+  }
+  const adminTokenSecret = process.env.ADMIN_TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
   const signAdminToken = (expiresAt: number) =>
     crypto.createHmac('sha256', adminTokenSecret).update(String(expiresAt)).digest('hex');
   const createAdminToken = () => {
@@ -449,7 +476,7 @@ async function startServer() {
 
     // Owner credentials: abdowbayda@gmail.com or abdo@store.com or abdo or admin with password Abdo2004
     const validEmails = ['abdowbayda@gmail.com', 'abdo@store.com', 'admin@shopme.ma', 'abdo', 'admin'];
-    const validPassword = process.env.ADMIN_PASSWORD || 'Abdo2004';
+    const validPassword = ADMIN_PASSWORD;
 
     if (validEmails.includes(cleanEmail) && cleanPass === validPassword) {
       // Clear brute-force counter on success
