@@ -31,6 +31,8 @@ export interface PageMeta {
   image?: string;
   ogType: 'website' | 'product';
   robots?: string;
+  // Image shown first on the page (its largest paint): preloaded so it downloads before the JS runs
+  preloadImage?: string;
   jsonLd?: Record<string, unknown>[];
   price?: number;
 }
@@ -75,9 +77,13 @@ const absoluteUrl = (base: string, url?: string) => {
 
 export function productMeta(base: string, p: SeoProduct): PageMeta {
   const canonical = `${base}/product/${encodeURIComponent(p.slug)}`;
+  // Without a custom SEO text, the snippet leads with the product, then the price and the offer
+  // Moroccan shoppers search for ("prix", "DH", "livraison", "paiement à la livraison")
+  const priceDh = `${Math.round(Number(p.price))} DH`;
+  const summary = stripTags(p.shortDescription || p.description || '').replace(/[.\s]+$/, '');
   const description = truncate(
-    stripTags(p.seoDescription || p.shortDescription || p.description || '') ||
-      `${p.name} au meilleur prix au Maroc. Livraison 24h et paiement à la livraison.`,
+    stripTags(p.seoDescription || '') ||
+      `${summary ? `${summary}. ` : ''}${p.name} à ${priceDh} : livraison 24-48h partout au Maroc, paiement à la livraison.`,
     160
   );
   const images = (p.images || []).map(i => absoluteUrl(base, i.imageUrl)).filter(Boolean) as string[];
@@ -132,10 +138,11 @@ export function productMeta(base: string, p: SeoProduct): PageMeta {
   };
 
   return {
-    title: truncate(p.seoTitle || `${p.name} | ${STORE_NAME}`, 70),
+    title: truncate(p.seoTitle || `${p.name} prix Maroc ${priceDh} | ShopMe`, 70),
     description,
     canonical,
     image: images[0],
+    preloadImage: images[0],
     ogType: 'product',
     jsonLd: [productLd, breadcrumbLd],
     price: Number(p.price)
@@ -197,6 +204,8 @@ export function pageMeta(base: string, pathname: string, products: SeoProduct[])
   const page = STATIC_PAGES[pathname] || STATIC_PAGES['/'];
   const firstImage = products.find(p => isPublicProduct(p) && p.images?.length)?.images?.[0]?.imageUrl;
   const isHome = !STATIC_PAGES[pathname] || pathname === '/';
+  // The home grid opens on the first published product, so its photo is the first big image
+  const firstProductImage = products.find(isPublicProduct)?.images?.[0]?.imageUrl;
   return {
     title: page.title,
     description: page.description,
@@ -204,6 +213,7 @@ export function pageMeta(base: string, pathname: string, products: SeoProduct[])
     image: absoluteUrl(base, firstImage),
     ogType: 'website',
     robots: page.robots,
+    preloadImage: isHome ? absoluteUrl(base, firstProductImage) : undefined,
     jsonLd: isHome ? storeJsonLd(base) : pathname === '/catalog' ? [catalogJsonLd(base, products)] : undefined
   };
 }
@@ -227,6 +237,9 @@ export function injectMeta(html: string, meta: PageMeta): string {
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`
   ];
+  if (meta.preloadImage) {
+    tags.push(`<link rel="preload" as="image" href="${escapeHtml(meta.preloadImage)}" fetchpriority="high" />`);
+  }
   if (meta.image) {
     const img = escapeHtml(meta.image);
     tags.push(
