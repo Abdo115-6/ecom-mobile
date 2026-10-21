@@ -89,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                   locale === 'fr' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
                 }`}
                 title="Français"
-                aria-label="Changer en Français"
+                aria-label="FR, changer en français"
               >
                 FR
               </button>
@@ -101,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                   locale === 'ar' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
                 }`}
                 title="العربية (المغرب)"
-                aria-label="التبديل إلى العربية"
+                aria-label="عربي، التبديل إلى العربية"
               >
                 عربي
               </button>
@@ -113,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                   locale === 'en' ? 'bg-amber-400 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
                 }`}
                 title="English"
-                aria-label="Switch to English"
+                aria-label="EN, switch to English"
               >
                 EN
               </button>
@@ -146,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSpecs }) => {
                 setCurrentView('home');
               }}
               className="cursor-pointer py-1 flex items-center justify-center"
-              aria-label="Accueil ShopMe"
+              title="Accueil"
             >
               <Logo size="md" />
             </button>

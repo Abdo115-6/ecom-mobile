@@ -30,6 +30,7 @@ export const HomeView: React.FC = () => {
     isWishlisted, 
     formatMoney, 
     products: allStoreProducts,
+    productsReady,
     isAdminAuthenticated,
     locale,
     t 
@@ -92,13 +93,26 @@ export const HomeView: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-          {products.slice(0, 12).map(product => (
+          {/* Same-size placeholders until the products arrive, so the page below doesn't jump */}
+          {!productsReady && Array.from({ length: 4 }, (_, i) => (
+            <div key={`skeleton-${i}`} aria-hidden="true" className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="aspect-square bg-slate-100 animate-pulse" />
+              <div className="p-3 sm:p-4 space-y-2">
+                <div className="h-3 bg-slate-100 rounded animate-pulse" />
+                <div className="h-3 w-2/3 bg-slate-100 rounded animate-pulse" />
+                <div className="mt-3 pt-2.5 border-t border-slate-100 h-11" />
+              </div>
+            </div>
+          ))}
+          {products.slice(0, 12).map((product, index) => (
             <div
               key={product.id}
               className="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
             >
               <div className="relative aspect-square overflow-hidden bg-slate-50">
-                <img loading="lazy" decoding="async"
+                {/* The first row is visible on load: fetch it right away (it is the page's largest image) */}
+                <img loading={index < 4 ? 'eager' : 'lazy'} decoding="async"
+                  fetchPriority={index < 2 ? 'high' : 'auto'}
                   src={product.images[0]?.imageUrl}
                   alt={product.name}
                   onClick={() => navigateToProduct(product.slug)}
@@ -122,12 +136,12 @@ export const HomeView: React.FC = () => {
               </div>
 
               <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
-                <h3
+                <h2
                   onClick={() => navigateToProduct(product.slug)}
                   className="font-bold text-xs sm:text-sm text-slate-950 group-hover:text-slate-700 transition-colors line-clamp-2 cursor-pointer leading-snug"
                 >
                   {product.name}
-                </h3>
+                </h2>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div>
@@ -135,7 +149,7 @@ export const HomeView: React.FC = () => {
                       {formatMoney(product.price)}
                     </div>
                     {product.compareAtPrice && product.compareAtPrice > product.price && (
-                      <div className="text-[11px] text-slate-400 line-through">
+                      <div className="text-[11px] text-slate-500 line-through">
                         {formatMoney(product.compareAtPrice)}
                       </div>
                     )}
@@ -145,6 +159,7 @@ export const HomeView: React.FC = () => {
                     onClick={() => addToCart(product)}
                     className="p-2 sm:p-2.5 bg-slate-950 text-white rounded-xl hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
                     title={t.addToCart}
+                    aria-label={t.addToCart}
                   >
                     <ShoppingBag className="w-4 h-4" />
                   </button>
@@ -154,7 +169,7 @@ export const HomeView: React.FC = () => {
           ))}
         </div>
 
-        {products.length === 0 && (
+        {productsReady && products.length === 0 && (
           <div className="text-center text-sm text-slate-500 py-10">
             {locale === 'ar' ? 'لا توجد منتجات في هذا القسم حالياً' : locale === 'en' ? 'No products in this category yet' : 'Aucun produit dans cette catégorie pour le moment'}
           </div>
@@ -267,7 +282,7 @@ export const HomeView: React.FC = () => {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-600">Offre Spéciale en Pack</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">Offre Spéciale en Pack</span>
                 <h3 className="font-black text-xs sm:text-sm text-slate-950 truncate">{productWithPacks.name}</h3>
                 <p className="text-[11px] text-slate-500 line-clamp-1">{productWithPacks.shortDescription || productWithPacks.description}</p>
               </div>
@@ -295,7 +310,7 @@ export const HomeView: React.FC = () => {
                   >
                     {pack.badge && (
                       <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-xs ${
-                        isPopular ? 'bg-emerald-600' : 'bg-slate-900'
+                        isPopular ? 'bg-emerald-700' : 'bg-slate-900'
                       }`}>
                         {pack.badge}
                       </span>
@@ -320,7 +335,7 @@ export const HomeView: React.FC = () => {
                             {formatMoney(pack.price)}
                           </span>
                           {pack.compareAtPrice && pack.compareAtPrice > pack.price && (
-                            <span className="text-xs text-slate-400 line-through font-bold">
+                            <span className="text-xs text-slate-500 line-through font-bold">
                               {formatMoney(pack.compareAtPrice)}
                             </span>
                           )}
@@ -407,7 +422,7 @@ export const HomeView: React.FC = () => {
       <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
               {locale === 'ar' ? 'عالم الرجال' : locale === 'en' ? "Men's World" : 'Univers Masculin'}
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight mt-1">
@@ -448,10 +463,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-amber-400 font-bold block">
                 Boîte Simple & Coffret
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>MONTRES LUXE</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
 
@@ -472,10 +487,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-sky-400 font-bold block">
                 Accessoires 5-en-1
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>HIGH-TECH AUTO</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
 
@@ -496,10 +511,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold block">
                 Cuir & Anti-RFID
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>CEINTURES & CUIR</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
         </div>
@@ -562,7 +577,7 @@ export const HomeView: React.FC = () => {
       <motion.section {...revealOnScroll} className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
               {locale === 'ar' ? 'عالم النساء' : locale === 'en' ? "Women's World" : 'Univers Féminin'}
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight mt-1">
@@ -603,10 +618,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-pink-300 font-bold block">
                 Maille & Nacre
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>MONTRES & COFFRETS</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
 
@@ -627,10 +642,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-amber-300 font-bold block">
                 Chic & Soirée
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>NOS SACS</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
 
@@ -651,10 +666,10 @@ export const HomeView: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest text-rose-300 font-bold block">
                 Zippé & Compact
               </span>
-              <h4 className="text-base sm:text-lg font-black flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black flex items-center justify-between">
                 <span>PORTE-MONNAIE</span>
                 <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </h4>
+              </h3>
             </div>
           </div>
         </div>
@@ -779,6 +794,7 @@ export const HomeView: React.FC = () => {
                   <button
                     onClick={() => addToCart(product)}
                     className="p-2 sm:p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors cursor-pointer"
+                    aria-label={t.addToCart}
                   >
                     <ShoppingBag className="w-4 h-4" />
                   </button>

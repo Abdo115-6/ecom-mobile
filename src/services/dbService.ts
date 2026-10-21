@@ -737,6 +737,9 @@ if (typeof window !== 'undefined') {
 class DatabaseStore {
   categories: Category[] = INITIAL_CATEGORIES;
   products: Product[] = [];
+  // True once the first /api/products answer (or failure) is in, so the storefront
+  // can show placeholders instead of an empty grid that later pushes the page down
+  productsSynced = false;
   orders: Order[] = INITIAL_ORDERS;
   reviews: Review[] = INITIAL_REVIEWS;
   coupons: Coupon[] = INITIAL_COUPONS;
@@ -945,6 +948,11 @@ class DatabaseStore {
       this.saveToStorage();
     } catch {
       // Background sync silent failover
+    } finally {
+      if (!this.productsSynced) {
+        this.productsSynced = true;
+        this.notifyProductsChange();
+      }
     }
   }
 

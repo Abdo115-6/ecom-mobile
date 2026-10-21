@@ -13,16 +13,35 @@ import { ConnectionBanner } from './components/common/ConnectionBanner';
 import { HomeView } from './components/storefront/HomeView';
 import { CatalogView } from './components/storefront/CatalogView';
 import { ProductDetailView } from './components/storefront/ProductDetailView';
-import { CartView } from './components/storefront/CartView';
-import { CheckoutView } from './components/storefront/CheckoutView';
-import { OrderConfirmationView } from './components/storefront/OrderConfirmationView';
-import { OrderTrackingView } from './components/storefront/OrderTrackingView';
-import { WishlistView } from './components/storefront/WishlistView';
+
+const lazyNamed = <K extends string>(loader: () => Promise<Record<K, React.ComponentType<any>>>, name: K) =>
+  lazy(() => loader().then(m => ({ default: m[name] })));
+
+// Pages nobody lands on first: kept out of the first download, then fetched in the
+// background once the page is idle so opening them later is still instant
+const loadCart = () => import('./components/storefront/CartView');
+const loadCheckout = () => import('./components/storefront/CheckoutView');
+const loadOrderConfirmation = () => import('./components/storefront/OrderConfirmationView');
+const loadOrderTracking = () => import('./components/storefront/OrderTrackingView');
+const loadWishlist = () => import('./components/storefront/WishlistView');
+const CartView = lazyNamed(loadCart, 'CartView');
+const CheckoutView = lazyNamed(loadCheckout, 'CheckoutView');
+const OrderConfirmationView = lazyNamed(loadOrderConfirmation, 'OrderConfirmationView');
+const OrderTrackingView = lazyNamed(loadOrderTracking, 'OrderTrackingView');
+const WishlistView = lazyNamed(loadWishlist, 'WishlistView');
+
+if (typeof window !== 'undefined') {
+  const prefetch = () => [loadCheckout, loadCart, loadOrderConfirmation, loadOrderTracking, loadWishlist].forEach(load => load().catch(() => {}));
+  window.addEventListener('load', () => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(prefetch, { timeout: 4000 });
+    else setTimeout(prefetch, 2000);
+  }, { once: true });
+}
+
+const PageFallback = () => <div className="min-h-[60vh]" />;
 
 // Admin Views & Protected Login
 // The back office is loaded on demand so shoppers never download it
-const lazyNamed = <K extends string>(loader: () => Promise<Record<K, React.ComponentType<any>>>, name: K) =>
-  lazy(() => loader().then(m => ({ default: m[name] })));
 
 const SpecificationsModal = lazyNamed(() => import('./components/common/SpecificationsModal'), 'SpecificationsModal');
 const AdminLoginView = lazyNamed(() => import('./components/admin/AdminLoginView'), 'AdminLoginView');
@@ -223,11 +242,13 @@ const MainRouter: React.FC = () => {
             {currentView === 'home' && <HomeView />}
             {currentView === 'catalog' && <CatalogView />}
             {currentView === 'product-detail' && <ProductDetailView />}
-            {currentView === 'cart' && <CartView />}
-            {currentView === 'checkout' && <CheckoutView />}
-            {currentView === 'order-confirmation' && <OrderConfirmationView />}
-            {currentView === 'track-order' && <OrderTrackingView />}
-            {currentView === 'wishlist' && <WishlistView />}
+            <Suspense fallback={<PageFallback />}>
+              {currentView === 'cart' && <CartView />}
+              {currentView === 'checkout' && <CheckoutView />}
+              {currentView === 'order-confirmation' && <OrderConfirmationView />}
+              {currentView === 'track-order' && <OrderTrackingView />}
+              {currentView === 'wishlist' && <WishlistView />}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

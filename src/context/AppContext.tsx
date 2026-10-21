@@ -54,6 +54,8 @@ interface AppContextType {
 
   // Reactive Products State
   products: Product[];
+  // false until the product list has been fetched once (show placeholders meanwhile)
+  productsReady: boolean;
   refreshProducts: () => void;
 
   // Localization & Currency
@@ -184,10 +186,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Reactive Products State
   const [products, setProducts] = useState<Product[]>(() => dbService.products);
+  const [productsReady, setProductsReady] = useState<boolean>(
+    () => dbService.productsSynced || dbService.products.length > 0
+  );
 
   useEffect(() => {
     const unsub = dbService.subscribeProducts((latestProducts) => {
       setProducts([...latestProducts]);
+      setProductsReady(dbService.productsSynced || latestProducts.length > 0);
     });
     return unsub;
   }, []);
@@ -745,6 +751,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toastMessage,
         showToast,
         products,
+        productsReady,
         refreshProducts,
       }}
     >
