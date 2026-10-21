@@ -7,7 +7,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
-import { pageMeta, injectMeta, buildSitemap, buildRobots } from './server/seo.js';
+import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
 
 dotenv.config();
 
@@ -293,13 +293,17 @@ async function startServer() {
   });
 
   const app = express();
+  app.disable('x-powered-by');
+  // Render (and most hosts) sit behind one proxy: req.ip then holds the real visitor IP and cannot be spoofed with X-Forwarded-For
+  app.set('trust proxy', 1);
 
   // Attack & Abuse Protection: Standard Hardened HTTP Security Headers
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    if (isProd) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     next();
   });
 
@@ -315,6 +319,9 @@ async function startServer() {
   const loginAttempts = new Map<string, LoginAttempt>();
   // Admin tokens are signed (HMAC) instead of kept in memory, so they survive restarts and redeploys
   const ADMIN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  if (isProd && (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_TOKEN_SECRET)) {
+    console.warn('[Security] ADMIN_PASSWORD / ADMIN_TOKEN_SECRET are not set: the admin panel is using the default password from the source code. Set both in the hosting dashboard.');
+  }
   const adminTokenSecret = process.env.ADMIN_TOKEN_SECRET || `shopme:${process.env.ADMIN_PASSWORD || 'Abdo2004'}:admin-token`;
   const signAdminToken = (expiresAt: number) =>
     crypto.createHmac('sha256', adminTokenSecret).update(String(expiresAt)).digest('hex');
@@ -335,11 +342,8 @@ async function startServer() {
     return res.status(401).json({ success: false, message: 'Session admin requise' });
   };
 
-  const getClientIp = (req: express.Request): string => {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
-    return req.socket.remoteAddress || 'unknown';
-  };
+  // With 'trust proxy' set, req.ip is resolved from the proxy chain, so a forged X-Forwarded-For cannot dodge the login lockout
+  const getClientIp = (req: express.Request): string => req.ip || req.socket.remoteAddress || 'unknown';
 
   // Ensure uploads directory exists in public/uploads
   const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
@@ -351,6 +355,7 @@ async function startServer() {
     webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
     svg: 'image/svg+xml', avif: 'image/avif', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime'
   };
+  const UPLOAD_EXTENSIONS = new Set(['webp', 'png', 'jpg', 'jpeg', 'gif', 'avif', 'mp4', 'webm', 'mov']);
   const isSafeMediaName = (name: string) => /^[a-zA-Z0-9_.-]+$/.test(name) && !name.includes('..');
 
   const saveMediaToDb = async (name: string, mimeType: string, buffer: Buffer) => {
@@ -392,6 +397,8 @@ async function startServer() {
     if (!isSafeMediaName(name)) return res.status(400).end();
     const filePath = path.join(uploadsDir, name);
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    // Media is only ever embedded; if a file is opened directly it can never run scripts on this domain
+    res.set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; sandbox");
 
     if (fs.existsSync(filePath)) return res.sendFile(filePath);
 
@@ -484,7 +491,7 @@ async function startServer() {
   });
 
   // 2. Upload PNG / JPG / GIF / WebP & Videos (MP4, WebM) from laptop
-  app.post('/api/upload', async (req, res) => {
+  app.post('/api/upload', requireAdmin, async (req, res) => {
     try {
       const { filename, dataUrl, format } = req.body;
 
@@ -507,7 +514,7 @@ async function startServer() {
       let isGif = false;
 
       if (format) {
-        ext = format.toLowerCase();
+        ext = String(format).toLowerCase();
       } else if (mimeType.includes('gif')) {
         ext = 'gif';
         isGif = true;
@@ -530,6 +537,11 @@ async function startServer() {
 
       if (mimeType.startsWith('video/')) {
         isVideo = true;
+      }
+
+      // Only real image/video files: an .html or .svg upload served from this domain could run scripts (stored XSS)
+      if (!UPLOAD_EXTENSIONS.has(ext) || !(mimeType.startsWith('image/') || mimeType.startsWith('video/')) || mimeType.includes('svg')) {
+        return res.status(400).json({ success: false, message: 'Type de fichier non autorisé' });
       }
 
       const prefix = isVideo ? 'vid' : (isGif || ext === 'gif' ? 'gif' : 'img');
@@ -565,7 +577,7 @@ async function startServer() {
   });
 
   // 3. PostgreSQL Database Status Check
-  app.get('/api/db-status', async (req, res) => {
+  app.get('/api/db-status', requireAdmin, async (req, res) => {
     let pgStatus = 'STANDBY';
     let version = 'PostgreSQL 16 (Local ready)';
     let tablesCount = 0;
@@ -661,7 +673,7 @@ async function startServer() {
     return res.json({ success: true, products, source });
   });
 
-  app.post('/api/products', async (req, res) => {
+  app.post('/api/products', requireAdmin, async (req, res) => {
     try {
       const product = req.body;
       if (!product || !product.id || !product.name) {
@@ -753,7 +765,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/products/:id', async (req, res) => {
+  app.delete('/api/products/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const currentProducts = readJsonFile<any[]>(PRODUCTS_FILE, []);
     const filtered = currentProducts.filter(p => p.id !== id);
@@ -865,7 +877,7 @@ async function startServer() {
     }
   });
 
-  app.patch('/api/orders/:id/status', async (req, res) => {
+  app.patch('/api/orders/:id/status', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status, whatsappConfirmation } = req.body;
     await updateOrderRecord(id, { status, whatsappConfirmation });
@@ -900,7 +912,7 @@ async function startServer() {
   // ==========================================
   // BAILEYS WHATSAPP BOT API (+212 668-381916)
   // ==========================================
-  app.get('/api/whatsapp/baileys/status', async (req, res) => {
+  app.get('/api/whatsapp/baileys/status', requireAdmin, async (req, res) => {
     try {
       const liveStatus = baileysManager.getStatus();
       return res.json({
@@ -919,7 +931,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/request-pairing-code', async (req, res) => {
+  app.post('/api/whatsapp/baileys/request-pairing-code', requireAdmin, async (req, res) => {
     try {
       const { phoneNumber } = req.body || {};
       const code = await baileysManager.requestPairingCode(phoneNumber || TARGET_PHONE_NUMBER);
@@ -938,7 +950,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/refresh-qr', async (req, res) => {
+  app.post('/api/whatsapp/baileys/refresh-qr', requireAdmin, async (req, res) => {
     try {
       const qrDataUrl = await baileysManager.refreshQr();
       return res.json({
@@ -951,7 +963,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/connect', async (req, res) => {
+  app.post('/api/whatsapp/baileys/connect', requireAdmin, async (req, res) => {
     try {
       await baileysManager.start();
       return res.json({ success: true, message: 'Démarrage de la connexion WhatsApp...' });
@@ -960,7 +972,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/disconnect', async (req, res) => {
+  app.post('/api/whatsapp/baileys/disconnect', requireAdmin, async (req, res) => {
     try {
       await baileysManager.disconnect();
       return res.json({ success: true, message: 'Bot WhatsApp déconnecté' });
@@ -969,7 +981,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/send-order-confirmation', async (req, res) => {
+  app.post('/api/whatsapp/baileys/send-order-confirmation', requireAdmin, async (req, res) => {
     try {
       const order = req.body.order || req.body;
       if (!order || (!order.customerPhone && !order.shippingAddress?.phone)) {
@@ -982,7 +994,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/whatsapp/baileys/send-message', async (req, res) => {
+  app.post('/api/whatsapp/baileys/send-message', requireAdmin, async (req, res) => {
     try {
       const { phone, text } = req.body;
       if (!phone || !text) {
@@ -995,12 +1007,12 @@ async function startServer() {
     }
   });
 
-  app.get('/api/whatsapp/baileys/conversations', (req, res) => {
+  app.get('/api/whatsapp/baileys/conversations', requireAdmin, (req, res) => {
     const conversations = readJsonFile<any[]>(BAILEYS_FILE, []);
     return res.json({ success: true, conversations });
   });
 
-  app.post('/api/whatsapp/baileys/conversations', (req, res) => {
+  app.post('/api/whatsapp/baileys/conversations', requireAdmin, (req, res) => {
     const { conversations } = req.body;
     if (Array.isArray(conversations)) {
       writeJsonFile(BAILEYS_FILE, conversations);
@@ -1049,7 +1061,7 @@ async function startServer() {
     return res.json({ success: true, categories: [] });
   });
 
-  app.post('/api/categories', (req, res) => {
+  app.post('/api/categories', requireAdmin, (req, res) => {
     const categories = req.body;
     if (Array.isArray(categories)) {
       writeJsonFile(CATEGORIES_FILE, categories);
@@ -1081,7 +1093,7 @@ async function startServer() {
     return res.json({ success: true, settings: null, source: 'default' });
   });
 
-  app.post('/api/settings', async (req, res) => {
+  app.post('/api/settings', requireAdmin, async (req, res) => {
     const settings = req.body;
     writeJsonFile(SETTINGS_FILE, settings);
 
@@ -1118,24 +1130,24 @@ async function startServer() {
     }
   });
 
-  app.get('/api/track/events', (req, res) => {
+  app.get('/api/track/events', requireAdmin, (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 200, 1000);
     return res.json({ success: true, events: tracker.recent(limit, req.query.technical === '1') });
   });
 
-  app.get('/api/track/stats', (req, res) => {
+  app.get('/api/track/stats', requireAdmin, (req, res) => {
     const allowed = ['today', '24h', '7d', '30d'] as const;
     const range = (allowed as readonly string[]).includes(String(req.query.range)) ? req.query.range as typeof allowed[number] : '24h';
     return res.json({ success: true, stats: tracker.stats(range) });
   });
 
-  app.delete('/api/track/events', async (req, res) => {
+  app.delete('/api/track/events', requireAdmin, async (req, res) => {
     await tracker.clear();
     return res.json({ success: true });
   });
 
   // 8. Data Mining Leads (Real-time capture of abandoned inputs)
-  app.get('/api/leads', async (req, res) => {
+  app.get('/api/leads', requireAdmin, async (req, res) => {
     if (isPgConnected) {
       try {
         const client = await pgPool.connect();
@@ -1227,7 +1239,7 @@ async function startServer() {
   // ==========================================
   // GITHUB DATA MINING & REPO INTELLIGENCE API
   // ==========================================
-  app.get('/api/github/mining', async (req, res) => {
+  app.get('/api/github/mining', requireAdmin, async (req, res) => {
     const targetRepo = (req.query.repo as string) || 'Abdo115-6/ecom-mobile';
     const cleanRepo = targetRepo.replace(/^https?:\/\/github\.com\//, '').trim();
 
@@ -1399,7 +1411,12 @@ async function startServer() {
     if (req.path.startsWith('/adminonly')) {
       return template.replace(/<!--seo:start-->[\s\S]*?<!--seo:end-->/, '<title>ShopMe</title>\n    <meta name="robots" content="noindex, nofollow" />');
     }
-    return injectMeta(template, pageMeta(siteBase(req), req.path, await seoProducts()));
+    const html = injectMeta(template, pageMeta(siteBase(req), req.path, await seoProducts()));
+    return injectGoogleTag(html, {
+      measurementId: process.env.GOOGLE_MEASUREMENT_ID,
+      adsId: process.env.GOOGLE_ADS_ID,
+      adsPurchaseLabel: process.env.GOOGLE_ADS_PURCHASE_LABEL
+    });
   };
 
   if (!isProd) {

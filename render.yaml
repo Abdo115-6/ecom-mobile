@@ -15,6 +15,16 @@ services:
         fromDatabase:
           name: aura-db
           property: connectionString
+      # Admin panel login. Without these the server falls back to the default
+      # password in the source code, which is public. Render prompts for the
+      # password on first deploy and generates the signing secret itself.
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_TOKEN_SECRET
+        generateValue: true
+      # Public site URL for canonical links, sitemap.xml and link previews
+      - key: SITE_URL
+        sync: false
       # WhatsApp automatic order confirmation (set values in the Render dashboard)
       - key: WHATSAPP_PROVIDER
         value: cloud

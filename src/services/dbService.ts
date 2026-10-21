@@ -718,6 +718,21 @@ export function adminAuthHeaders(): Record<string, string> {
   }
 }
 
+// Back-office API routes require the signed admin session: attach it to every same-origin /api call when logged in
+if (typeof window !== 'undefined') {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const auth = adminAuthHeaders();
+    if (!auth['x-admin-token'] || !(url.startsWith('/api/') || url.startsWith(`${location.origin}/api/`))) {
+      return nativeFetch(input, init);
+    }
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    if (!headers.has('x-admin-token')) headers.set('x-admin-token', auth['x-admin-token']);
+    return nativeFetch(input, { ...init, headers });
+  };
+}
+
 // State Store Holder
 class DatabaseStore {
   categories: Category[] = INITIAL_CATEGORIES;

@@ -47,7 +47,10 @@ class ConsentService {
       fbq?: (...args: unknown[]) => void;
       ttq?: { grantConsent?: () => void; revokeConsent?: () => void };
       shopmeLoadAnalytics?: () => void;
+      gtag?: (...args: unknown[]) => void;
     };
+    const state = choice === 'granted' ? 'granted' : 'denied';
+    win.gtag?.('consent', 'update', { ad_storage: state, ad_user_data: state, ad_personalization: state, analytics_storage: state });
     if (choice === 'granted') {
       win.fbq?.('consent', 'grant');
       win.ttq?.grantConsent?.();

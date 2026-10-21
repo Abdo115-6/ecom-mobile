@@ -97,6 +97,8 @@ export function productMeta(base: string, p: SeoProduct): PageMeta {
       url: canonical,
       priceCurrency: 'MAD',
       price: Number(p.price).toFixed(2),
+      // Google Merchant listings expect an end date for the price; it is rolled forward every year
+      priceValidUntil: `${new Date().getFullYear() + 1}-12-31`,
       availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: STORE_NAME },
@@ -140,6 +142,46 @@ export function productMeta(base: string, p: SeoProduct): PageMeta {
   };
 }
 
+/** Store identity for Google's knowledge panel and site name in results (home page only) */
+function storeJsonLd(base: string): Record<string, unknown>[] {
+  return [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'OnlineStore',
+      '@id': `${base}/#store`,
+      name: STORE_NAME,
+      url: `${base}/`,
+      description: DEFAULT_DESCRIPTION,
+      areaServed: { '@type': 'Country', name: 'Morocco' },
+      currenciesAccepted: 'MAD',
+      paymentAccepted: 'Cash on Delivery',
+      contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', availableLanguage: ['French', 'Arabic'] }
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: STORE_NAME,
+      url: `${base}/`,
+      inLanguage: 'fr-MA',
+      publisher: { '@id': `${base}/#store` }
+    }
+  ];
+}
+
+/** Lists the public products so crawlers discover every product page from the catalog */
+function catalogJsonLd(base: string, products: SeoProduct[]): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: products.filter(isPublicProduct).slice(0, 50).map((p, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: `${base}/product/${encodeURIComponent(p.slug)}`,
+      name: p.name
+    }))
+  };
+}
+
 export function pageMeta(base: string, pathname: string, products: SeoProduct[]): PageMeta {
   if (pathname.startsWith('/product/')) {
     let slug = pathname.slice('/product/'.length).replace(/\/+$/, '');
@@ -154,13 +196,15 @@ export function pageMeta(base: string, pathname: string, products: SeoProduct[])
 
   const page = STATIC_PAGES[pathname] || STATIC_PAGES['/'];
   const firstImage = products.find(p => isPublicProduct(p) && p.images?.length)?.images?.[0]?.imageUrl;
+  const isHome = !STATIC_PAGES[pathname] || pathname === '/';
   return {
     title: page.title,
     description: page.description,
     canonical: `${base}${STATIC_PAGES[pathname] ? pathname : '/'}`,
     image: absoluteUrl(base, firstImage),
     ogType: 'website',
-    robots: page.robots
+    robots: page.robots,
+    jsonLd: isHome ? storeJsonLd(base) : pathname === '/catalog' ? [catalogJsonLd(base, products)] : undefined
   };
 }
 
@@ -246,4 +290,39 @@ export function buildRobots(base: string): string {
     `Sitemap: ${base}/sitemap.xml`,
     ''
   ].join('\n');
+}
+
+export interface GoogleTagConfig {
+  measurementId?: string; // GA4, e.g. G-XXXXXXX
+  adsId?: string; // Google Ads, e.g. AW-123456789
+  adsPurchaseLabel?: string; // conversion label of the "Purchase" action
+}
+
+/**
+ * Google tag (GA4 + Google Ads) with Consent Mode v2. Storage stays denied until the visitor
+ * accepts the cookie banner (consentService flips it with gtag('consent', 'update')).
+ * IDs come from env vars, so nothing is loaded when they are not set.
+ */
+export function injectGoogleTag(html: string, cfg: GoogleTagConfig): string {
+  const isId = (v?: string) => !!v && /^[A-Z]{1,3}-[A-Z0-9]+$/i.test(v);
+  const ids = [cfg.measurementId, cfg.adsId].filter(isId) as string[];
+  if (ids.length === 0) return html;
+  const client = {
+    ga4: isId(cfg.measurementId) ? cfg.measurementId : undefined,
+    ads: isId(cfg.adsId) ? cfg.adsId : undefined,
+    purchaseLabel: cfg.adsPurchaseLabel && /^[\w-]+$/.test(cfg.adsPurchaseLabel) ? cfg.adsPurchaseLabel : undefined
+  };
+  const snippet = `<script async src="https://www.googletagmanager.com/gtag/js?id=${ids[0]}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      window.shopmeGoogle = ${JSON.stringify(client)};
+      var granted = /(?:^|; )shopme_consent=granted/.test(document.cookie) ? 'granted' : 'denied';
+      gtag('consent', 'default', { ad_storage: granted, ad_user_data: granted, ad_personalization: granted, analytics_storage: granted, wait_for_update: 500 });
+      gtag('set', 'url_passthrough', true);
+      gtag('js', new Date());
+      ${ids.map(id => `gtag('config', '${id}', { send_page_view: false });`).join('\n      ')}
+      // page_view and e-commerce events are sent by trackingService
+    </script>`;
+  return html.replace('</head>', `    ${snippet}\n  </head>`);
 }

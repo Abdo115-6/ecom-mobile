@@ -1,6 +1,7 @@
 import { StandardEventName, UnifiedEventPayload, UTMParameters, TrackingItem } from '../types/tracking';
 import { classifyTrafficSource, TrafficSource } from './trafficSource';
 import { consentService, readCookie, writeCookie } from './consentService';
+import { normalizeMoroccanPhone } from './phone';
 
 type EventListener = (event: UnifiedEventPayload) => void;
 
@@ -89,6 +90,7 @@ class MarketingTrackingService {
       writeCookie('_fbc', `fb.1.${this.landing.startedAt}.${fbclid}`, NINETY_DAYS);
     }
     if (ttclid) writeCookie('ttclid', ttclid, NINETY_DAYS);
+    // gclid is kept by the Google tag itself (_gcl_aw cookie) once consent is granted
   }
 
   private getOrCreateAnonymousId(): string {
@@ -420,6 +422,8 @@ class MarketingTrackingService {
       ttq?: { track?: (...args: unknown[]) => void; page?: (...args: unknown[]) => void };
     };
 
+    this.dispatchToGoogle(payload, items);
+
     win.dataLayer = win.dataLayer || [];
     win.dataLayer.push({
       event: payload.eventName,
@@ -466,6 +470,52 @@ class MarketingTrackingService {
           payload.dispatchedTo.browserTikTokPixel = true;
         }
       }
+    }
+  }
+
+  /** GA4 e-commerce events + Google Ads purchase conversion (tag loaded by server/seo.ts when GOOGLE_* env vars are set) */
+  private dispatchToGoogle(payload: UnifiedEventPayload, items?: TrackingItem[]) {
+    const win = window as unknown as {
+      gtag?: (...args: unknown[]) => void;
+      shopmeGoogle?: { ga4?: string; ads?: string; purchaseLabel?: string };
+    };
+    const cfg = win.shopmeGoogle;
+    if (!cfg || typeof win.gtag !== 'function') return;
+
+    const params: Record<string, unknown> = { currency: payload.currency };
+    if (payload.value !== undefined) params.value = payload.value;
+    if (payload.orderId) params.transaction_id = payload.orderId;
+    if (items?.length) {
+      params.items = items.map(i => ({
+        item_id: i.id,
+        item_name: i.name,
+        item_category: i.category,
+        item_variant: i.variant,
+        price: i.price,
+        quantity: i.quantity
+      }));
+    }
+    if (payload.eventName === 'page_view') {
+      win.gtag('event', 'page_view', { page_location: payload.pageUrl, page_title: payload.pageTitle });
+    } else {
+      win.gtag('event', payload.eventName === 'whatsapp_click' ? 'generate_lead' : payload.eventName, params);
+    }
+
+    if (payload.eventName === 'purchase' && cfg.ads && cfg.purchaseLabel) {
+      // Enhanced conversions: Google hashes the phone itself before sending it
+      const phone = normalizeMoroccanPhone(payload.customer?.phone || '');
+      if (phone) {
+        win.gtag('set', 'user_data', {
+          phone_number: `+212${phone.slice(1)}`,
+          address: { first_name: payload.customer?.firstName, last_name: payload.customer?.lastName, city: payload.customer?.city, country: 'MA' }
+        });
+      }
+      win.gtag('event', 'conversion', {
+        send_to: `${cfg.ads}/${cfg.purchaseLabel}`,
+        value: payload.value,
+        currency: payload.currency,
+        transaction_id: payload.orderId
+      });
     }
   }
 }
