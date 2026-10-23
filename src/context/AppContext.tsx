@@ -697,6 +697,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
 
+  // The server refused the admin token (expired or old session): send the owner back to the login screen
+  useEffect(() => {
+    const onExpired = () => {
+      setIsAdminAuthenticated(false);
+      setCurrentViewState(prev => (String(prev).startsWith('admin') ? 'admin-login' : prev));
+      showToast('Session admin expirée : reconnectez-vous');
+    };
+    window.addEventListener('shopme:admin-session-expired', onExpired);
+    return () => window.removeEventListener('shopme:admin-session-expired', onExpired);
+  }, []);
+
   return (
     <AppContext.Provider
       value={{

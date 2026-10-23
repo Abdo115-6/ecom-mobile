@@ -210,17 +210,27 @@ class MarketingTrackingService {
   private installAutoTracking() {
     if (typeof window === 'undefined') return;
 
-    // Every click on a button / link / card is recorded with its label, page and time
+    // Every click is recorded with its label, page and time: buttons and links first, then clickable cards
+    // (React onClick leaves no DOM attribute, so they are found by their pointer cursor), then the raw element
     document.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement | null;
-      const el = target?.closest?.('[data-track], button, a, [role="button"], input[type="submit"], label') as HTMLElement | null;
-      if (!el) return;
+      const target = e.target instanceof Element ? (e.target.closest('*') as HTMLElement | null) : null;
+      if (!target) return;
+      let el = target.closest('[data-track], button, a, [role="button"], input, select, textarea, label, summary') as HTMLElement | null;
+      if (!el) {
+        for (let n: HTMLElement | null = target; n && n !== document.body; n = n.parentElement) {
+          if (getComputedStyle(n).cursor === 'pointer') { el = n; break; }
+        }
+      }
+      el = el || target;
+      const img = el instanceof HTMLImageElement ? el : el.querySelector?.('img');
       const label = (
         el.getAttribute('data-track') ||
         el.getAttribute('aria-label') ||
+        (el instanceof HTMLInputElement && ['button', 'submit'].includes(el.type) ? el.value : '') ||
+        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement ? `Champ ${el.getAttribute('name') || el.getAttribute('placeholder') || el.id || el.tagName}` : '') ||
         el.innerText ||
         el.getAttribute('title') ||
-        (el as HTMLInputElement).value ||
+        img?.getAttribute('alt') ||
         el.tagName
       ).replace(/\s+/g, ' ').trim().slice(0, 80);
       const href = el instanceof HTMLAnchorElement ? el.href : undefined;

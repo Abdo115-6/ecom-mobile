@@ -701,9 +701,9 @@ const INITIAL_SETTINGS: StoreSettings = {
   whatsappOrderConfirmationTemplate: "Bonjour {{customer_name}} 👋\nMerci pour votre commande *{{order_number}}* sur ShopMe.\n📦 {{items}}\n💰 Total : {{total}} (paiement à la livraison)\n📍 {{address}}\n\nRépondez *OUI* pour confirmer votre commande ou *NON* pour l'annuler.",
   whatsappShippingTemplate: "Bonjour {{customer_name}}, votre colis pour la commande #{{order_number}} est en cours d'acheminement par notre livreur. Numéro de suivi : {{tracking_number}}.",
   metaPixelId: "1937322180765245",
-  googleAnalyticsId: "G-9K8L7M6N5P",
-  tiktokPixelId: "C1234567890ABCDEFGH",
-  snapchatPixelId: "snap-pix-9821381"
+  googleAnalyticsId: "",
+  tiktokPixelId: "DB98263C77UDN3PL17DG",
+  snapchatPixelId: ""
 };
 
 const ORDER_OUTBOX_KEY = 'shopme_order_outbox_v1';
@@ -729,7 +729,21 @@ if (typeof window !== 'undefined') {
     }
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     if (!headers.has('x-admin-token')) headers.set('x-admin-token', auth['x-admin-token']);
-    return nativeFetch(input, { ...init, headers });
+    return nativeFetch(input, { ...init, headers }).then(res => {
+      // Expired token, or one signed before ADMIN_TOKEN_SECRET changed: the back-office would show empty pages
+      if (res.status === 401 && !url.includes('/api/auth/')) {
+        try {
+          ['aura_admin_auth', 'aura_admin_token'].forEach(k => {
+            sessionStorage.removeItem(k);
+            localStorage.removeItem(k);
+          });
+        } catch {
+          // ignore
+        }
+        window.dispatchEvent(new Event('shopme:admin-session-expired'));
+      }
+      return res;
+    });
   };
 }
 

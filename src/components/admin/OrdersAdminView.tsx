@@ -4,6 +4,7 @@ import { dbService } from '../../services/dbService';
 import { Order, OrderStatus } from '../../types/ecommerce';
 import { OrderDeliveryTicket } from './OrderDeliveryTicket';
 import { WhatsAppConfirmationModal } from './WhatsAppConfirmationModal';
+import { OzonShipModal } from './OzonShipModal';
 import { 
   Search, 
   Download, 
@@ -21,7 +22,8 @@ import {
   CheckCheck,
   Trash2,
   AlertTriangle,
-  Send
+  Send,
+  RefreshCw
 } from 'lucide-react';
 import { whatsappService } from '../../services/whatsappService';
 
@@ -34,6 +36,34 @@ export const OrdersAdminView: React.FC = () => {
   const [ticketOrder, setTicketOrder] = useState<Order | null>(null);
   const [whatsappModalOrder, setWhatsappModalOrder] = useState<Order | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [ozonOrder, setOzonOrder] = useState<Order | null>(null);
+  const [ozonSyncing, setOzonSyncing] = useState(false);
+
+  const handleOzonSent = (orderId: string, shipment: Order['shipment'], status: Order['status']) => {
+    const order = dbService.orders.find(o => o.id === orderId);
+    if (order) {
+      order.shipment = shipment;
+      order.status = status;
+    }
+    setOrders([...dbService.orders]);
+    setOzonOrder(null);
+  };
+
+  const handleOzonSync = async () => {
+    setOzonSyncing(true);
+    try {
+      const res = await fetch('/api/ozon/sync', { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      await dbService.syncFromBackend();
+      setOrders([...dbService.orders]);
+      showToast(data.updated ? `✓ ${data.updated} colis Ozon mis à jour` : 'Aucun changement chez Ozon');
+    } catch (err: any) {
+      showToast(`Suivi Ozon impossible : ${err.message || 'erreur'}`);
+    } finally {
+      setOzonSyncing(false);
+    }
+  };
 
   const confirmDeleteOrder = () => {
     if (!orderToDelete) return;
@@ -135,13 +165,24 @@ export const OrdersAdminView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-700 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          <span>Exporter CSV</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleOzonSync}
+            disabled={ozonSyncing}
+            className="px-4 py-2 bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 border border-orange-500/30 cursor-pointer disabled:opacity-50"
+            title="Récupérer le statut de livraison des colis Ozon Express"
+          >
+            <RefreshCw className={`w-4 h-4 ${ozonSyncing ? 'animate-spin' : ''}`} />
+            <span>Suivi Ozon</span>
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-700 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exporter CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search */}
@@ -294,6 +335,22 @@ export const OrdersAdminView: React.FC = () => {
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Screen WA</span>
+                        </button>
+
+                        {/* Ozon Express parcel: create it, or show its tracking number once sent */}
+                        <button
+                          onClick={() => setOzonOrder(order)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs ${
+                            order.shipment?.carrier === 'Ozon Express' && order.shipment?.trackingNumber
+                              ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400'
+                              : 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-400'
+                          }`}
+                          title={order.shipment?.trackingNumber ? `Ozon : ${order.shipment.trackingNumber} · ${order.shipment.status}` : 'Envoyer le colis à Ozon Express'}
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">
+                            {order.shipment?.carrier === 'Ozon Express' && order.shipment?.trackingNumber ? order.shipment.status || 'Ozon' : 'Ozon'}
+                          </span>
                         </button>
 
                         {/* Ticket Colis & QR Code Button */}
@@ -504,6 +561,14 @@ export const OrdersAdminView: React.FC = () => {
 
           </div>
         </div>
+      )}
+
+      {ozonOrder && (
+        <OzonShipModal
+          order={ozonOrder}
+          onClose={() => setOzonOrder(null)}
+          onSent={(shipment, status) => handleOzonSent(ozonOrder.id, shipment, status)}
+        />
       )}
 
       {/* QR Code Delivery Ticket Modal */}

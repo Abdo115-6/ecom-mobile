@@ -86,11 +86,15 @@ export const TrackingInspectorView: React.FC = () => {
         fetch(`/api/track/stats?range=${range}`),
         fetch('/api/track/events?limit=300')
       ]);
+      if (statsRes.status === 401 || eventsRes.status === 401) {
+        setLoadError('Session admin expirée : reconnectez-vous pour voir le tracking');
+        return;
+      }
       const statsJson = await statsRes.json();
       const eventsJson = await eventsRes.json();
       if (statsJson.success) setStats(statsJson.stats);
       if (eventsJson.success) setEvents(eventsJson.events);
-      setLoadError(null);
+      setLoadError(statsJson.success ? null : statsJson.message || 'Erreur de chargement du tracking');
     } catch {
       setLoadError('Serveur de tracking injoignable');
     } finally {

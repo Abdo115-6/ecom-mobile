@@ -7,6 +7,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
+import { isOzonConfigured, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
 
 dotenv.config();
@@ -255,12 +256,13 @@ async function startServer() {
     return { orders: readJsonFile<any[]>(ORDERS_FILE, []), source: 'file' };
   }
 
-  async function updateOrderRecord(id: string, patch: { status?: string; whatsappConfirmation?: any }) {
+  async function updateOrderRecord(id: string, patch: { status?: string; whatsappConfirmation?: any; shipment?: any }) {
     const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
     const order = currentOrders.find(o => o.id === id);
     if (order) {
       if (patch.status) order.status = patch.status;
       if (patch.whatsappConfirmation) order.whatsappConfirmation = patch.whatsappConfirmation;
+      if (patch.shipment) order.shipment = patch.shipment;
       order.updatedAt = new Date().toISOString();
       writeJsonFile(ORDERS_FILE, currentOrders);
     }
@@ -272,9 +274,10 @@ async function startServer() {
              status = COALESCE($1, status),
              extra = CASE WHEN $2::jsonb IS NULL THEN COALESCE(extra, '{}'::jsonb)
                           ELSE COALESCE(extra, '{}'::jsonb) || jsonb_build_object('whatsappConfirmation', $2::jsonb) END,
+             shipment = COALESCE($4::jsonb, shipment),
              updated_at = NOW()
            WHERE id = $3`,
-          [patch.status || null, patch.whatsappConfirmation ? JSON.stringify(patch.whatsappConfirmation) : null, id]
+          [patch.status || null, patch.whatsappConfirmation ? JSON.stringify(patch.whatsappConfirmation) : null, id, patch.shipment ? JSON.stringify(patch.shipment) : null]
         );
       } catch (err) {
         console.warn('Postgres update order error:', err);
@@ -915,6 +918,67 @@ async function startServer() {
     await updateOrderRecord(id, { status, whatsappConfirmation });
     return res.json({ success: true, id, status, whatsappConfirmation });
   });
+
+  // Ozon Express: send confirmed orders to the carrier and follow the delivery status
+  app.get('/api/ozon/status', requireAdmin, (req, res) => res.json({ success: true, configured: isOzonConfigured() }));
+
+  app.get('/api/ozon/cities', requireAdmin, async (req, res) => {
+    try {
+      const cities = await listOzonCities();
+      const match = req.query.city ? await matchOzonCity(String(req.query.city)) : undefined;
+      return res.json({ success: true, cities, match: match?.id });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, message: `Villes Ozon indisponibles : ${err.message}` });
+    }
+  });
+
+  app.post('/api/orders/:id/ozon', requireAdmin, async (req, res) => {
+    const order = (await loadAllOrders()).orders.find(o => o.id === req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Commande introuvable' });
+    // One parcel per order: a second click must not create a duplicate pickup
+    if (order.shipment?.carrier === 'Ozon Express' && order.shipment?.trackingNumber) {
+      return res.status(409).json({ success: false, message: `Déjà envoyée à Ozon : ${order.shipment.trackingNumber}`, shipment: order.shipment });
+    }
+    try {
+      const shipment = await createOzonParcel(order, { cityId: Number(req.body?.cityId) || undefined, note: req.body?.note });
+      const status = ['PENDING', 'CONFIRMED', 'PROCESSING'].includes(order.status) ? 'SHIPPED' : undefined;
+      await updateOrderRecord(order.id, { shipment, status });
+      console.log(`[Ozon] Order ${order.orderNumber} → parcel ${shipment.trackingNumber}`);
+      return res.json({ success: true, shipment, status: status || order.status });
+    } catch (err: any) {
+      console.warn(`[Ozon] Parcel error for ${order.orderNumber}:`, err.message);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+  });
+
+  async function syncOzonStatuses(): Promise<number> {
+    if (!isOzonConfigured()) return 0;
+    const open = (await loadAllOrders()).orders.filter(o =>
+      o.shipment?.carrier === 'Ozon Express' && o.shipment?.trackingNumber && !['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(o.status));
+    const statuses = await fetchOzonStatuses(open.map(o => o.shipment.trackingNumber));
+    let changed = 0;
+    for (const o of open) {
+      const label = statuses.get(o.shipment.trackingNumber);
+      const now = new Date().toISOString();
+      if (!label || label === o.shipment.status) continue;
+      const shipment = { ...o.shipment, status: label, lastCheckedAt: now, history: [...(o.shipment.history || []), { status: label, at: now }].slice(-30) };
+      await updateOrderRecord(o.id, { shipment, status: orderStatusFromOzon(label) });
+      changed++;
+    }
+    return changed;
+  }
+
+  app.post('/api/ozon/sync', requireAdmin, async (req, res) => {
+    try {
+      return res.json({ success: true, updated: await syncOzonStatuses() });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, message: err.message });
+    }
+  });
+
+  setInterval(() => {
+    syncOzonStatuses().catch(err => console.warn('[Ozon] Sync error:', err.message));
+  }, 30 * 60 * 1000).unref();
 
   app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
