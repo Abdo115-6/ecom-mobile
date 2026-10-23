@@ -1,5 +1,5 @@
 // Ozon Express (Moroccan COD carrier): create parcels from orders and follow their delivery status.
-// Credentials stay on the server: OZON_CUSTOMER_ID + OZON_API_KEY (Ozon dashboard → API).
+// Credentials stay on the server: entered in Admin → Paramètres (stored server-side), or OZON_CUSTOMER_ID + OZON_API_KEY.
 
 const API = 'https://api.ozonexpress.ma';
 
@@ -23,10 +23,48 @@ export interface OzonShipment {
   history?: Array<{ status: string; at: string }>;
 }
 
-export const isOzonConfigured = () => !!(process.env.OZON_CUSTOMER_ID && process.env.OZON_API_KEY);
+export interface OzonCredentials {
+  customerId: string;
+  apiKey: string;
+}
 
-const endpoint = (action: string) =>
-  `${API}/customers/${encodeURIComponent(process.env.OZON_CUSTOMER_ID || '')}/${encodeURIComponent(process.env.OZON_API_KEY || '')}/${action}`;
+// Saved from the admin panel; takes precedence over the environment variables
+let saved: OzonCredentials | null = null;
+export const setOzonCredentials = (c: OzonCredentials | null) => { saved = c && c.customerId && c.apiKey ? c : null; };
+
+const creds = (): OzonCredentials => ({
+  customerId: saved?.customerId || process.env.OZON_CUSTOMER_ID || '',
+  apiKey: saved?.apiKey || process.env.OZON_API_KEY || ''
+});
+
+export const isOzonConfigured = () => { const c = creds(); return !!(c.customerId && c.apiKey); };
+
+/** What the admin panel may show: the ID and the last characters of the key only */
+export function ozonCredentialSummary() {
+  const c = creds();
+  return {
+    configured: isOzonConfigured(),
+    source: saved ? 'admin' : c.apiKey ? 'env' : 'none',
+    customerId: c.customerId,
+    apiKeyHint: c.apiKey ? `••••${c.apiKey.slice(-4)}` : ''
+  };
+}
+
+const endpointFor = (c: OzonCredentials, action: string) =>
+  `${API}/customers/${encodeURIComponent(c.customerId)}/${encodeURIComponent(c.apiKey)}/${action}`;
+const endpoint = (action: string) => endpointFor(creds(), action);
+
+/** Read-only check of an ID + key pair: asks for a parcel that does not exist and reads Ozon's key / customer checks */
+export async function verifyOzonCredentials(c: OzonCredentials): Promise<{ ok: boolean; message: string }> {
+  const form = new FormData();
+  form.append('tracking-number', 'VERIFY000000');
+  const res = await fetch(endpointFor(c, 'parcel-info'), { method: 'POST', body: form, signal: AbortSignal.timeout(15000) });
+  const data: any = await res.json().catch(() => null);
+  if (!data) return { ok: false, message: `Réponse Ozon illisible (HTTP ${res.status})` };
+  if (data.CHECK_API?.RESULT !== 'SUCCESS') return { ok: false, message: data.CHECK_API?.MESSAGE || 'Clé API refusée par Ozon' };
+  if (data['PARCEL-INFO']?.CUSTOMER?.RESULT !== 'SUCCESS') return { ok: false, message: data['PARCEL-INFO']?.CUSTOMER?.MESSAGE || 'ID client refusé par Ozon' };
+  return { ok: true, message: 'Clé API et ID client valides' };
+}
 
 /** Lowercase, no accents, letters only: "Fès" → "fes", "El-Jadida" → "eljadida" */
 const norm = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
@@ -96,7 +134,7 @@ function ozonError(data: any): string | undefined {
 }
 
 export async function createOzonParcel(order: any, opts: { cityId?: number; note?: string } = {}): Promise<OzonShipment> {
-  if (!isOzonConfigured()) throw new Error('Ozon Express non configuré : ajoutez OZON_CUSTOMER_ID et OZON_API_KEY');
+  if (!isOzonConfigured()) throw new Error('Ozon Express non configuré : ajoutez votre ID et clé API dans Admin → Paramètres');
   const city = opts.cityId
     ? (await listOzonCities()).find(c => c.id === Number(opts.cityId))
     : await matchOzonCity(order.shippingAddress?.city || '');

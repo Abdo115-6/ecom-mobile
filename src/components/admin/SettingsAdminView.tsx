@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { clientMovementService } from '../../services/clientMovementService';
+import { OzonSettingsCard } from './OzonSettingsCard';
 import { 
   Settings, 
   Save, 
@@ -335,6 +336,8 @@ export const SettingsAdminView: React.FC = () => {
         </div>
 
       </form>
+
+      <OzonSettingsCard />
 
       {/* Production Launch: Database Cleaner Box */}
       <div className="bg-slate-900 border border-rose-500/30 rounded-3xl p-5 sm:p-6 space-y-4">

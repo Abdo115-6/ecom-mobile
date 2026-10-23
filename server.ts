@@ -7,7 +7,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
-import { isOzonConfigured, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
+import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
 
 dotenv.config();
@@ -284,6 +284,32 @@ async function startServer() {
       }
     }
   }
+
+  // Third-party credentials entered in the admin panel: Postgres (survives redeploys) + a private file outside /public
+  const INTEGRATIONS_FILE = path.resolve(process.cwd(), 'data', 'integrations.json');
+  async function loadIntegration(name: string): Promise<any | null> {
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT data FROM store_settings WHERE id = $1', [`integration_${name}`]);
+        if (result.rows[0]?.data) return result.rows[0].data;
+      } catch (err: any) {
+        console.warn(`[Integrations] Load ${name} notice:`, err.message);
+      }
+    }
+    return readJsonFile<Record<string, any>>(INTEGRATIONS_FILE, {})[name] || null;
+  }
+  async function saveIntegration(name: string, data: unknown) {
+    fs.mkdirSync(path.dirname(INTEGRATIONS_FILE), { recursive: true });
+    writeJsonFile(INTEGRATIONS_FILE, { ...readJsonFile<Record<string, any>>(INTEGRATIONS_FILE, {}), [name]: data });
+    if (isPgConnected) {
+      await pgPool.query(
+        `INSERT INTO store_settings (id, data, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+        [`integration_${name}`, JSON.stringify(data)]
+      ).catch(err => console.warn(`[Integrations] Save ${name} notice:`, err.message));
+    }
+  }
+  setOzonCredentials(await loadIntegration('ozon'));
 
   // WhatsApp bot: session + outbox in PostgreSQL so it survives restarts and redeploys
   baileysManager.configure({
@@ -920,7 +946,25 @@ async function startServer() {
   });
 
   // Ozon Express: send confirmed orders to the carrier and follow the delivery status
-  app.get('/api/ozon/status', requireAdmin, (req, res) => res.json({ success: true, configured: isOzonConfigured() }));
+  app.get('/api/ozon/status', requireAdmin, (req, res) => res.json({ success: true, ...ozonCredentialSummary() }));
+
+  // ID + API key entered in the admin panel: verified with Ozon, then kept server-side only (never in /api/settings)
+  app.post('/api/ozon/config', requireAdmin, async (req, res) => {
+    const customerId = String(req.body?.customerId || '').trim();
+    const apiKey = String(req.body?.apiKey || '').trim();
+    if (!/^\d+$/.test(customerId) || apiKey.length < 8) {
+      return res.status(400).json({ success: false, message: 'ID client (chiffres) et clé API requis' });
+    }
+    try {
+      const check = await verifyOzonCredentials({ customerId, apiKey });
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, message: `Ozon injoignable : ${err.message}` });
+    }
+    await saveIntegration('ozon', { customerId, apiKey });
+    setOzonCredentials({ customerId, apiKey });
+    return res.json({ success: true, ...ozonCredentialSummary() });
+  });
 
   app.get('/api/ozon/cities', requireAdmin, async (req, res) => {
     try {
