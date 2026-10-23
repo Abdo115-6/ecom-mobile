@@ -166,6 +166,34 @@ export const ProductsAdminView: React.FC = () => {
   const [formGuaranteeText, setFormGuaranteeText] = useState('Satisfait ou retravaillé jusqu\'à validation finale.');
 
   const categories = dbService.categories;
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showNewCategory, setShowNewCategory] = useState(false);
+
+  // Creates a category of the product type being edited (e.g. the first physical category) and selects it
+  const handleCreateCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const slug = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `categorie-${Date.now()}`;
+    const id = categories.some(c => c.id === `cat-${slug}`) ? `cat-${slug}-${Date.now().toString().slice(-4)}` : `cat-${slug}`;
+    dbService.saveCategory({
+      id,
+      name,
+      slug,
+      description: '',
+      imageUrl: '',
+      displayOrder: categories.length + 1,
+      isActive: true,
+      productKind: formProductKind,
+      subcategories: []
+    }, currentUser);
+    setFormCategoryId(id);
+    setFormCategoryName(name);
+    setFormSubcategoryId('');
+    setFormSubcategoryName('');
+    setNewCategoryName('');
+    setShowNewCategory(false);
+    showToast(`✓ Catégorie « ${name} » créée`);
+  };
 
   // Check PostgreSQL Database status from backend
   const checkDbStatus = async () => {
@@ -1349,7 +1377,43 @@ Découvrez notre création exclusive confectionnée avec un savoir-faire d'excep
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">Catégorie *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-300">Catégorie *</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewCategory(v => !v)}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer"
+                      >
+                        {showNewCategory ? '← Choisir liste' : '+ Nouvelle catégorie'}
+                      </button>
+                    </div>
+                    {(showNewCategory || !categories.some(c => categoryKindOf(c) === formProductKind)) && (
+                      <div className="mb-2 p-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2">
+                        {!categories.some(c => categoryKindOf(c) === formProductKind) && (
+                          <p className="text-[11px] text-amber-300 font-semibold">
+                            Aucune catégorie {formProductKind === 'PHYSICAL' ? 'physique' : formProductKind === 'DIGITAL' ? 'digitale' : 'service'} : créez-en une (ex : High-Tech & Accessoires).
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); } }}
+                            placeholder="Nom de la catégorie"
+                            className="flex-1 p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateCategory}
+                            disabled={!newCategoryName.trim()}
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold cursor-pointer"
+                          >
+                            Créer
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <select
                       value={formCategoryId}
                       onChange={(e) => handleCategorySelectChange(e.target.value)}

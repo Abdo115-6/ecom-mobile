@@ -1204,7 +1204,18 @@ async function startServer() {
   });
 
   // 5b. Categories API (CRUD)
-  app.get('/api/categories', (req, res) => {
+  // Categories live in Postgres: the file alone is erased by every Railway redeploy
+  app.get('/api/categories', async (req, res) => {
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT data FROM store_settings WHERE id = $1', ['categories']);
+        if (Array.isArray(result.rows[0]?.data) && result.rows[0].data.length > 0) {
+          return res.json({ success: true, categories: result.rows[0].data });
+        }
+      } catch (err: any) {
+        console.warn('Postgres categories query notice:', err.message);
+      }
+    }
     const fileCategories = readJsonFile<any[]>(CATEGORIES_FILE, []);
     if (fileCategories && Array.isArray(fileCategories) && fileCategories.length > 0) {
       return res.json({ success: true, categories: fileCategories });
@@ -1212,10 +1223,17 @@ async function startServer() {
     return res.json({ success: true, categories: [] });
   });
 
-  app.post('/api/categories', requireAdmin, (req, res) => {
+  app.post('/api/categories', requireAdmin, async (req, res) => {
     const categories = req.body;
     if (Array.isArray(categories)) {
       writeJsonFile(CATEGORIES_FILE, categories);
+      if (isPgConnected) {
+        await pgPool.query(
+          `INSERT INTO store_settings (id, data, updated_at) VALUES ('categories', $1, NOW())
+           ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+          [JSON.stringify(categories)]
+        ).catch(err => console.warn('Postgres categories save notice:', err.message));
+      }
       return res.json({ success: true, categories });
     }
     return res.status(400).json({ success: false, message: 'Format invalide de catégories' });
