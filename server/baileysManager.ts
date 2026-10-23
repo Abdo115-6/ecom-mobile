@@ -13,6 +13,7 @@ import path from 'path';
 import fs from 'fs';
 import type pg from 'pg';
 import { createWaStore, useStoreAuthState, WaStore } from './waAuthState.js';
+import { generateSalesReply, isSalesBotEnabled, AdContext, ChatTurn } from './salesBot.js';
 
 export const TARGET_PHONE_NUMBER = '212668381916';
 export const DISPLAY_PHONE_NUMBER = '+212 668-381916';
@@ -67,12 +68,32 @@ export interface BotOrderStore {
   updateOrder(id: string, patch: { status?: string; whatsappConfirmation?: any }): Promise<void>;
 }
 
+/** Catalog and public URL for the AI sales assistant, provided by server.ts */
+export interface BotCatalog {
+  listProducts(): Promise<any[]>;
+  siteUrl(): string;
+}
+
+/** Per-customer AI chat memory, kept in the WhatsApp store (PostgreSQL) so it survives redeploys */
+interface AiChat {
+  turns: ChatTurn[];
+  ad?: AdContext;
+  pausedUntil?: number;
+  day: string;
+  repliesToday: number;
+}
+
 const OUTBOX_KEY = 'shop-outbox';
 const PROCESSED_KEY = 'shop-processed-ids';
 const MAX_BACKOFF_MS = 60_000;
 const WATCHDOG_INTERVAL_MS = 60_000;
 const OUTBOX_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
 const INCOMING_MAX_AGE_S = 3 * 24 * 3600;
+// The AI waits for the shopper to finish typing (they often send several short messages) before answering once
+const AI_DEBOUNCE_MS = 6000;
+// After the team writes in a chat (from the phone or WhatsApp Web), the AI stays silent in that chat
+const HUMAN_TAKEOVER_MS = 12 * 3600 * 1000;
+const AI_MAX_REPLIES_PER_DAY = 40;
 
 // Word-level intent detection (\b does not work with Arabic, so tokens are compared)
 const YES_WORDS = ['oui', 'ouii', 'ouiii', 'yes', 'ok', 'okay', 'daccord', "d'accord", 'wakha', 'wakhaa', 'waxa', 'confirme', 'confirmer', 'confirmé', 'je confirme', 'valide', 'je valide', 'iyeh', 'نعم', 'واخا', 'موافق', 'أكيد', 'اكيد', '👍', '✅'];
@@ -90,6 +111,15 @@ export function detectIntent(text: string): 'YES' | 'NO' | 'UNKNOWN' {
   return 'UNKNOWN';
 }
 
+/** Click-to-WhatsApp ads (Facebook / Instagram) attach the ad that was clicked to the shopper's first message */
+function adContextOf(msg: WAMessage): AdContext | undefined {
+  const m: any = msg.message || {};
+  const info = m.extendedTextMessage?.contextInfo || m.imageMessage?.contextInfo || m.videoMessage?.contextInfo;
+  const ad = info?.externalAdReply;
+  if (!ad) return undefined;
+  return { title: ad.title || undefined, body: ad.body || undefined, sourceUrl: ad.sourceUrl || undefined };
+}
+
 const pnOf = (jid?: string | null) =>
   jid && jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : undefined;
 
@@ -99,6 +129,9 @@ class BaileysManager {
   private pool: pg.Pool | null = null;
   private usePostgres = false;
   private orderStore: BotOrderStore | null = null;
+  private catalog: BotCatalog | null = null;
+  private aiTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private botSendingAt = new Map<string, number>();
   private status: BaileysManagerStatus;
   private isInitializing = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -121,10 +154,11 @@ class BaileysManager {
   }
 
   /** Called once by server.ts before start() */
-  public configure(opts: { pool: pg.Pool; usePostgres: boolean; orderStore: BotOrderStore }) {
+  public configure(opts: { pool: pg.Pool; usePostgres: boolean; orderStore: BotOrderStore; catalog?: BotCatalog }) {
     this.pool = opts.pool;
     this.usePostgres = opts.usePostgres;
     this.orderStore = opts.orderStore;
+    this.catalog = opts.catalog || null;
   }
 
   private async getStore(): Promise<WaStore> {
@@ -354,7 +388,8 @@ class BaileysManager {
   }
 
   private async handleIncoming(msg: WAMessage) {
-    if (!msg.message || msg.key.fromMe || !msg.key.id) return;
+    if (msg.key.fromMe) return this.noteTeamMessage(msg);
+    if (!msg.message || !msg.key.id) return;
     if (this.processedIds.includes(msg.key.id)) return;
     const ts = Number(msg.messageTimestamp || 0);
     if (ts && Date.now() / 1000 - ts > INCOMING_MAX_AGE_S) return;
@@ -375,11 +410,147 @@ class BaileysManager {
     this.appendConversation(phone, 'client', text);
 
     const intent = detectIntent(text);
-    if (intent === 'YES') {
-      await this.handleClientConfirmation(phone, text);
-    } else if (intent === 'NO') {
-      this.setConversationStatus(phone, 'IN_DISCUSSION');
+    if (intent === 'YES' && (await this.handleClientConfirmation(phone, text))) return;
+    if (intent === 'NO') this.setConversationStatus(phone, 'IN_DISCUSSION');
+
+    // Everything else (questions, shoppers coming from an ad…) is answered by the AI sales assistant.
+    // Messages that piled up while the bot was offline for hours are left to the team.
+    const fresh = !ts || Date.now() / 1000 - ts < 6 * 3600;
+    if (isSalesBotEnabled() && fresh) {
+      if (this.ensureLeadConversation(phone, msg.pushName || undefined, adContextOf(msg))) {
+        this.appendConversation(phone, 'client', text);
+      }
+      await this.queueAiReply(phone, text, adContextOf(msg));
     }
+  }
+
+  /**
+   * A message written by the team (phone app or WhatsApp Web) in a customer's chat hands the chat over to a human.
+   * Messages the bot sends itself also come back here, so they are recognised by their send time.
+   */
+  private async noteTeamMessage(msg: WAMessage) {
+    const phone = await this.senderPhone(msg);
+    if (!phone) return;
+    const sentByBot = Date.now() - (this.botSendingAt.get(phone) || 0) < 15_000 || (!!msg.key.id && this.sentCache.has(msg.key.id));
+    if (sentByBot) return;
+    const ts = Number(msg.messageTimestamp || 0) * 1000;
+    if (ts && Date.now() - ts > HUMAN_TAKEOVER_MS) return;
+    const chat = await this.readAiChat(phone);
+    chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
+    await this.writeAiChat(phone, chat);
+  }
+
+  private aiChatKey(phone: string) {
+    return `ai-chat-${normalizeMoroccanPhone(phone)}`;
+  }
+
+  private async readAiChat(phone: string): Promise<AiChat> {
+    const store = await this.getStore();
+    const today = new Date().toISOString().slice(0, 10);
+    const chat = (await store.read<AiChat>(this.aiChatKey(phone)).catch(() => null)) || { turns: [], day: today, repliesToday: 0 };
+    if (chat.day !== today) {
+      chat.day = today;
+      chat.repliesToday = 0;
+    }
+    return chat;
+  }
+
+  private async writeAiChat(phone: string, chat: AiChat) {
+    chat.turns = chat.turns.slice(-30);
+    const store = await this.getStore();
+    await store.write(this.aiChatKey(phone), chat).catch(err => console.warn('[SalesBot] Chat save error:', err.message));
+  }
+
+  private async queueAiReply(phone: string, text: string, ad: AdContext | undefined) {
+    const chat = await this.readAiChat(phone);
+    chat.turns.push({ role: 'client', text, at: new Date().toISOString() });
+    if (ad) chat.ad = ad;
+    await this.writeAiChat(phone, chat);
+
+    const pending = this.aiTimers.get(phone);
+    if (pending) clearTimeout(pending);
+    this.aiTimers.set(phone, setTimeout(() => {
+      this.aiTimers.delete(phone);
+      this.answerWithAi(phone).catch(err => console.error('[SalesBot] Reply error:', err));
+    }, AI_DEBOUNCE_MS));
+  }
+
+  private async answerWithAi(phone: string) {
+    const chat = await this.readAiChat(phone);
+    if (chat.pausedUntil && chat.pausedUntil > Date.now()) return;
+    if (chat.repliesToday >= AI_MAX_REPLIES_PER_DAY) return;
+    if (chat.turns[chat.turns.length - 1]?.role !== 'client') return;
+
+    const [products, openOrder] = await Promise.all([
+      this.catalog ? this.catalog.listProducts().catch(() => []) : Promise.resolve([]),
+      this.findOpenOrder(phone)
+    ]);
+    const result = await generateSalesReply({
+      history: chat.turns,
+      products,
+      siteUrl: this.catalog?.siteUrl() || '',
+      ad: chat.ad,
+      openOrder
+    });
+
+    this.botSendingAt.set(phone, Date.now());
+    if (!(await this.sendMessage(phone, result.reply))) return;
+    chat.turns.push({ role: 'bot', text: result.reply, at: new Date().toISOString() });
+    chat.repliesToday++;
+
+    if (result.needsHuman || result.order) {
+      // The team takes over: the AI stays silent in this chat until the pause ends
+      chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
+      const o = result.order;
+      const note = o
+        ? `COMMANDE A CREER : ${o.product || '?'} x${o.quantity || 1} - ${o.fullName || '?'}, ${o.city || '?'}, ${o.address || '?'}`
+        : `A TRAITER PAR L'EQUIPE : ${result.reason || 'demande du client'}`;
+      this.flagLeadConversation(phone, note);
+      console.log(`[SalesBot] ${phone} handed over to the team: ${note}`);
+    }
+    await this.writeAiChat(phone, chat);
+    this.appendConversation(phone, 'bot', result.reply);
+  }
+
+  private async findOpenOrder(phone: string): Promise<any | undefined> {
+    if (!this.orderStore) return undefined;
+    const target = normalizeMoroccanPhone(phone).slice(-9);
+    const orders = await this.orderStore.listOrders().catch(() => [] as any[]);
+    return orders
+      .filter(o => normalizeMoroccanPhone(o.customerPhone || o.shippingAddress?.phone || '').slice(-9) === target)
+      .filter(o => !['DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'].includes(o.status))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  }
+
+  /** Shoppers who write without an order get their own entry on the admin WhatsApp page (true when created) */
+  private ensureLeadConversation(phone: string, name: string | undefined, ad: AdContext | undefined): boolean {
+    const list = this.readConversations();
+    if (this.findConversation(list, phone)) return false;
+    list.unshift({
+      id: `lead-${normalizeMoroccanPhone(phone)}`,
+      customerPhone: `+${normalizeMoroccanPhone(phone)}`,
+      customerName: name || 'Prospect WhatsApp',
+      customerCity: '',
+      customerAddress: '',
+      orderId: '',
+      orderNumber: ad ? 'PUB' : 'PROSPECT',
+      orderTotal: 0,
+      orderItemsSummary: ad?.title ? `Pub : ${ad.title}` : "Discussion avec l'assistant IA",
+      status: 'IN_DISCUSSION',
+      messages: [],
+      lastActivity: new Date().toISOString()
+    });
+    this.writeConversations(list);
+    return true;
+  }
+
+  private flagLeadConversation(phone: string, note: string) {
+    const list = this.readConversations();
+    const conv = this.findConversation(list, phone);
+    if (!conv) return;
+    conv.orderItemsSummary = note;
+    conv.lastActivity = new Date().toISOString();
+    this.writeConversations(list);
   }
 
   /**
@@ -670,8 +841,8 @@ Merci pour votre commande sur ShopMe Maroc 🇲🇦
   /**
    * Confirms the customer's most recent unconfirmed order when they reply "OUI"
    */
-  private async handleClientConfirmation(senderPhone: string, replyText: string): Promise<void> {
-    if (!this.orderStore) return;
+  private async handleClientConfirmation(senderPhone: string, replyText: string): Promise<boolean> {
+    if (!this.orderStore) return false;
     const target = normalizeMoroccanPhone(senderPhone).slice(-9);
     const orders = await this.orderStore.listOrders();
     const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
@@ -684,7 +855,7 @@ Merci pour votre commande sur ShopMe Maroc 🇲🇦
 
     if (!matchingOrder) {
       console.log(`[Baileys] "${replyText}" from ${senderPhone}: no unconfirmed order found`);
-      return;
+      return false;
     }
 
     const now = new Date();
@@ -711,6 +882,7 @@ Merci pour votre confiance ! 🇲🇦📦`;
     if (await this.sendMessage(senderPhone, confirmReply, matchingOrder.orderNumber)) {
       this.appendConversation(senderPhone, 'bot', confirmReply);
     }
+    return true;
   }
 }
 

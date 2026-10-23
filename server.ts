@@ -289,6 +289,11 @@ async function startServer() {
     orderStore: {
       listOrders: async () => (await loadAllOrders()).orders,
       updateOrder: updateOrderRecord
+    },
+    // The AI sales assistant answers from the real catalog and links to the public site
+    catalog: {
+      listProducts: async () => (await loadProducts()).products,
+      siteUrl: () => String(process.env.SITE_URL || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain || '').trim().replace(/\/+$/, '')
     }
   });
 
