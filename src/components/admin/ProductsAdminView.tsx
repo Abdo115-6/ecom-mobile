@@ -64,6 +64,7 @@ import {
   Users
 } from 'lucide-react';
 import { RichProductDescription } from '../common/RichProductDescription';
+import { productKindOf, categoryKindOf } from '../../utils/productKind';
 
 export const ProductsAdminView: React.FC = () => {
   const { currentUser, formatMoney, showToast, navigateToProduct, getProductShareUrl, products: appProducts, refreshProducts } = useApp();
@@ -198,7 +199,7 @@ export const ProductsAdminView: React.FC = () => {
   const filtered = products.filter(p => {
     if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (kindFilter !== 'all') {
-      const pKind = p.productKind || (p.categoryId === 'cat-digital' ? 'DIGITAL' : p.categoryId === 'cat-services' ? 'SERVICE' : 'PHYSICAL');
+      const pKind = productKindOf(p);
       if (pKind !== kindFilter) return false;
     }
     if (searchTerm.trim()) {
@@ -233,7 +234,7 @@ export const ProductsAdminView: React.FC = () => {
       }
       setFormWarranty('Garantie satisfait ou remboursé');
     } else {
-      const physCat = categories.find(c => c.id !== 'cat-digital' && c.id !== 'cat-services') || categories[0];
+      const physCat = categories.find(c => categoryKindOf(c) === 'PHYSICAL') || categories[0];
       if (physCat) {
         setFormCategoryId(physCat.id);
         setFormCategoryName(physCat.name);
@@ -251,15 +252,7 @@ export const ProductsAdminView: React.FC = () => {
     const selectedCat = categories.find(c => c.id === newCatId);
     setFormCategoryName(selectedCat?.name || '');
     
-    let targetKind: ProductKind = 'PHYSICAL';
-    if (selectedCat?.productKind) {
-      targetKind = selectedCat.productKind;
-    } else if (newCatId === 'cat-digital') {
-      targetKind = 'DIGITAL';
-    } else if (newCatId === 'cat-services') {
-      targetKind = 'SERVICE';
-    }
-    setFormProductKind(targetKind);
+    setFormProductKind(categoryKindOf(selectedCat));
 
     if (selectedCat?.subcategories && selectedCat.subcategories.length > 0) {
       const firstSub = selectedCat.subcategories[0];
@@ -299,7 +292,7 @@ export const ProductsAdminView: React.FC = () => {
     setFormSku(`SKU-${Date.now().toString().slice(-6)}`);
     setFormBrand('ShopMe');
     const firstCat = categories[0];
-    const initialKind = firstCat?.productKind || (firstCat?.id === 'cat-digital' ? 'DIGITAL' : firstCat?.id === 'cat-services' ? 'SERVICE' : 'PHYSICAL');
+    const initialKind = categoryKindOf(firstCat);
     setFormProductKind(initialKind);
     setFormCategoryId(firstCat?.id || '');
     setFormCategoryName(firstCat?.name || '');
@@ -411,7 +404,7 @@ export const ProductsAdminView: React.FC = () => {
     setFormSku(p.sku);
     setFormBrand(p.brand);
     
-    const pKind = p.productKind || (p.categoryId === 'cat-digital' ? 'DIGITAL' : p.categoryId === 'cat-services' ? 'SERVICE' : 'PHYSICAL');
+    const pKind = productKindOf(p);
     setFormProductKind(pKind);
 
     setFormCategoryId(p.categoryId);
@@ -1084,7 +1077,7 @@ Découvrez notre création exclusive confectionnée avec un savoir-faire d'excep
             </thead>
             <tbody className="divide-y divide-slate-700/50">
               {filtered.map(p => {
-                const pKind = p.productKind || (p.categoryId === 'cat-digital' ? 'DIGITAL' : p.categoryId === 'cat-services' ? 'SERVICE' : 'PHYSICAL');
+                const pKind = productKindOf(p);
                 return (
                 <tr key={p.id} className="hover:bg-slate-700/30 transition-colors">
                   <td className="py-3 px-4">
@@ -1362,8 +1355,16 @@ Découvrez notre création exclusive confectionnée avec un savoir-faire d'excep
                       onChange={(e) => handleCategorySelectChange(e.target.value)}
                       className="w-full p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none cursor-pointer"
                     >
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                      {/* Only the categories of the chosen product type; a mismatched saved category stays visible so it can be fixed */}
+                      {(categories.some(c => categoryKindOf(c) === formProductKind)
+                        ? categories.filter(c => categoryKindOf(c) === formProductKind || c.id === formCategoryId)
+                        : categories
+                      ).map(c => (
+                        <option key={c.id} value={c.id}>
+                          {categoryKindOf(c) !== formProductKind
+                            ? `⚠ ${c.name} (catégorie ${{ DIGITAL: 'digitale', SERVICE: 'service', PHYSICAL: 'physique' }[categoryKindOf(c)]} : à changer)`
+                            : c.name}
+                        </option>
                       ))}
                     </select>
                   </div>

@@ -14,6 +14,7 @@ import {
   X,
   Gift 
 } from 'lucide-react';
+import { productKindOf } from '../../utils/productKind';
 
 export const CartView: React.FC = () => {
   const { 
@@ -197,7 +198,7 @@ export const CartView: React.FC = () => {
                 {/* In-Cart Pack Chooser (Customer can choose/change packs directly) */}
                 {(() => {
                   const prod = dbService.getProductById(item.productId);
-                  if (!prod || prod.productKind === 'DIGITAL' || prod.productKind === 'SERVICE' || prod.categoryId === 'cat-digital' || prod.categoryId === 'cat-services') {
+                  if (!prod || productKindOf(prod) !== 'PHYSICAL') {
                     return null;
                   }
 

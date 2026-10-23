@@ -18,6 +18,7 @@ import {
   Tag,
   ChevronRight
 } from 'lucide-react';
+import { productKindOf } from '../../utils/productKind';
 
 export const HomeView: React.FC = () => {
   const { 
@@ -50,7 +51,7 @@ export const HomeView: React.FC = () => {
   // Filtered lists for dedicated sections
   const hommesProducts = allPublished.filter(p => p.categoryId === 'cat-hommes');
   const femmesProducts = allPublished.filter(p => p.categoryId === 'cat-femmes');
-  const digitalProducts = allPublished.filter(p => p.categoryId === 'cat-digital' || p.productKind === 'DIGITAL');
+  const digitalProducts = allPublished.filter(p => productKindOf(p) === 'DIGITAL');
 
   return (
     <div className="space-y-8 sm:space-y-12 pb-24 overflow-x-hidden">

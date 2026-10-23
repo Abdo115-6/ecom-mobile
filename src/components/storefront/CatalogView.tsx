@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   ChevronDown
 } from 'lucide-react';
+import { productKindOf } from '../../utils/productKind';
 
 export const CatalogView: React.FC = () => {
   const { 
@@ -282,11 +283,11 @@ export const CatalogView: React.FC = () => {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
                     />
 
-                    {(product.productKind === 'DIGITAL' || product.categoryId === 'cat-digital') ? (
+                    {productKindOf(product) === 'DIGITAL' ? (
                       <div className="absolute top-2 left-2 px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-md tracking-wider flex items-center gap-1 shadow-xs">
                         ⚡ {product.digitalSpecs?.digitalType === 'GAME_KEY' ? 'CLÉ JEU' : product.digitalSpecs?.digitalType === 'ACCOUNT' ? 'COMPTE' : product.digitalSpecs?.digitalType === 'SOFTWARE' ? 'LOGICIEL' : 'DIGITAL'}
                       </div>
-                    ) : (product.productKind === 'SERVICE' || product.categoryId === 'cat-services') ? (
+                    ) : productKindOf(product) === 'SERVICE' ? (
                       <div className="absolute top-2 left-2 px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded-md tracking-wider flex items-center gap-1 shadow-xs">
                         🛠️ SERVICE
                       </div>

@@ -41,6 +41,7 @@ import {
   Mail,
   FileText
 } from 'lucide-react';
+import { productKindOf } from '../../utils/productKind';
 
 export const ProductDetailView: React.FC = () => {
   const { 
@@ -285,8 +286,8 @@ export const ProductDetailView: React.FC = () => {
     );
   }
 
-  const isDigital = product.productKind === 'DIGITAL' || product.categoryId === 'cat-digital';
-  const isService = product.productKind === 'SERVICE' || product.categoryId === 'cat-services';
+  const isDigital = productKindOf(product) === 'DIGITAL';
+  const isService = productKindOf(product) === 'SERVICE';
 
   const selectedDuration = product.digitalSpecs?.durationOptions?.find(d => d.id === selectedDurationId);
   const selectedDenomination = product.digitalSpecs?.topUpDenominations?.find(d => d.id === selectedDenomId);

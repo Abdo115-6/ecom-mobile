@@ -987,7 +987,9 @@ async function startServer() {
     const products = (await loadProducts()).products;
     const nonPhysical = (order.items || []).find((i: any) => {
       const p = products.find((x: any) => x.id === i.productId);
-      return p && (p.productKind === 'DIGITAL' || p.productKind === 'SERVICE' || p.categoryId === 'cat-digital');
+      // The product type wins over its category (a physical cable may be filed under a digital category)
+      const kind = p?.productKind || (p?.categoryId === 'cat-digital' ? 'DIGITAL' : p?.categoryId === 'cat-services' ? 'SERVICE' : 'PHYSICAL');
+      return p && kind !== 'PHYSICAL';
     });
     if (nonPhysical) {
       return res.status(400).json({ success: false, message: `« ${nonPhysical.productName} » est un produit digital/service : pas de colis Ozon` });
