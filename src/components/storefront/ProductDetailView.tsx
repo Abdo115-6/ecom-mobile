@@ -556,6 +556,360 @@ export const ProductDetailView: React.FC = () => {
   const whatsAppOrderText = `Salam ShopMe Maroc, je souhaite commander : *${product.name}*\n- Option : ${activeVariant?.title || 'Standard'}\n- Offre choisie : Pack ${packQuantity} article(s)\n- Total à payer : *${packTotalPrice} DH* (Paiement à la livraison)\n- Ville de livraison : *${selectedCity}*\nMerci de confirmer ma commande !`;
   const whatsAppLink = `https://wa.me/${dbService.settings.whatsappPhoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsAppOrderText)}`;
 
+  // The COD order form is shown twice: right under the price, and again at the bottom of the page (same fields, same state)
+  const renderCodForm = (placement: 'top' | 'bottom') => (
+      <div id={placement === 'top' ? 'direct-cod-form' : 'direct-cod-form-bottom'} className={`bg-gradient-to-b from-white to-slate-50 border-2 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 transition-all ${
+        directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : isDigital ? 'border-emerald-500/60' : isService ? 'border-purple-500/60' : 'border-emerald-500/50'
+      }`}>
+        
+        <div className="border-b border-slate-200 pb-3">
+          <div className="flex items-center justify-between">
+            <div className={`flex items-center gap-2 font-black text-sm uppercase tracking-wide ${
+              isDigital ? 'text-emerald-700' : isService ? 'text-purple-700' : 'text-emerald-700'
+            }`}>
+              {isDigital ? <Zap className="w-4 h-4 text-emerald-600" /> : isService ? <Sparkles className="w-4 h-4 text-purple-600" /> : <Sparkles className="w-4 h-4 text-emerald-600" />}
+              <span>
+                {isDigital ? 'Passer Commande · Livraison Digitale Instantanée' : isService ? 'Réserver la Prestation · Prise en Charge Rapide' : 'Commander en 1 Clic · Paiement à la Livraison'}
+              </span>
+            </div>
+            {directBuyMode && (
+              <span className="px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-md animate-pulse">
+                ⚡ Lien d'achat direct actif
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {isDigital 
+              ? 'Livraison sans frais (0 DH). Vous recevrez vos clés / accès directement par WhatsApp & Email sous 2 minutes.' 
+              : isService 
+              ? 'Pas de frais de dossier (0 DH). Un expert ShopMe vous contactera directement par WhatsApp pour convenir des détails.' 
+              : 'Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.'}
+          </p>
+        </div>
+
+        {orderError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{orderError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleDirectCodOrder} className="space-y-3.5">
+          
+          {/* Form Embedded Pack Choice (For Physical Products with multiple packs) */}
+          {!isDigital && !isService && packsList.length > 1 && (
+            <div className="space-y-2 p-3 sm:p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Formule / Pack sélectionné :</span>
+                </span>
+                <span className="text-[10px] font-black text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Cliquez pour changer d'offre
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {packsList.map((pack, idx) => {
+                  const isSelected = selectedPackIndex === idx;
+                  return (
+                    <button
+                      key={`cod-pack-${idx}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPackIndex(idx);
+                        setCustomQuantity(1);
+                      }}
+                      className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer relative ${
+                        isSelected 
+                          ? 'border-emerald-600 bg-white shadow-sm ring-2 ring-emerald-500/20' 
+                          : 'border-slate-200 bg-white/70 hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-900 leading-tight">{pack.title}</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
+                        }`}>
+                          {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="text-xs sm:text-sm font-black text-emerald-800">{formatMoney(pack.price)}</span>
+                        {pack.quantity > 1 && (
+                          <span className="text-[9px] text-slate-500 font-semibold">
+                            ({formatMoney(pack.unitPrice)}/pc)
+                          </span>
+                        )}
+                      </div>
+                      {pack.badge && (
+                        <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tight mt-0.5 truncate">
+                          {pack.badge}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Name */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+              <span>{isService ? 'Nom & Prénom / Société' : 'Nom & Prénom'}</span>
+              <span className="text-[11px] text-slate-400 font-normal">الاسم الكامل</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                autoComplete="name"
+                autoCapitalize="words"
+                enterKeyHint="next"
+                value={customerName}
+                onChange={(e) => handleInputChange('fullName', e.target.value)}
+                placeholder="Ex: Youssef El Mansouri"
+                className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              />
+              <UserCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+          </div>
+
+          {/* Customer Phone & WhatsApp (Morocco) */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+              <span>{isDigital ? 'Numéro WhatsApp (Pour envoi direct)' : 'Numéro de Téléphone'}</span>
+              <span className="text-[11px] text-slate-400 font-normal">رقم الواتساب / الهاتف</span>
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                required
+                inputMode="tel"
+                autoComplete="tel"
+                enterKeyHint="next"
+                value={customerPhone}
+                onChange={(e) => handleInputChange('phone', e.target.value)}
+                placeholder="06 XX XX XX XX ou 07 XX XX XX XX"
+                className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              />
+              <PhoneCall className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {isDigital 
+                ? '⚡ Vous recevrez immédiatement les codes et instructions sur ce numéro WhatsApp.' 
+                : isService 
+                ? 'Notre équipe d\'experts vous contactera directement pour coordonner la prestation.' 
+                : 'Notre équipe vous contactera par téléphone ou WhatsApp pour confirmer l\'adresse exacte.'}
+            </div>
+          </div>
+
+          {/* Digital & Service specific fields: Email */}
+          {(isDigital || isService) && (
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                <span>Adresse Email (Pour réception de la licence / facture)</span>
+                <span className="text-[11px] text-slate-400 font-normal">البريد الإلكتروني</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="votre-email@gmail.com"
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+          )}
+
+          {/* Digital Player ID / Account Tag if needed */}
+          {isDigital && (product.digitalSpecs?.digitalType === 'GAME_TOPUP' || product.digitalSpecs?.digitalType === 'ACCOUNT') && (
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                <span>ID Joueur / Riot ID / Tag du compte (Optionnel ou Requis pour recharge)</span>
+                <span className="text-[11px] text-slate-400 font-normal">معرف اللاعب</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={playerIdOrAccount}
+                  onChange={(e) => setPlayerIdOrAccount(e.target.value)}
+                  placeholder="Ex: Player#EUW ou ID numérique..."
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                />
+                <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+          )}
+
+          {/* Service Requirements / Description */}
+          {isService && (
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                <span>Détails ou instructions sur votre besoin</span>
+                <span className="text-[11px] text-slate-400 font-normal">تفاصيل المشروع</span>
+              </label>
+              <div className="relative">
+                <textarea
+                  rows={2}
+                  value={serviceRequirements}
+                  onChange={(e) => setServiceRequirements(e.target.value)}
+                  placeholder="Précisez brièvement vos attentes ou URL du projet..."
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-all"
+                />
+                <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              </div>
+            </div>
+          )}
+
+          {/* Physical Only: City and Street Address */}
+          {!isDigital && !isService && (
+            <>
+              {/* City Selection */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Ville de Livraison</span>
+                  <span className="text-[11px] text-slate-400 font-normal">المدينة</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCity}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-8 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                  >
+                    {MOROCCAN_CITIES.map(c => (
+                      <option key={c.name} value={c.name}>
+                        {c.name} - {c.arabicName} ({c.deliveryNote})
+                      </option>
+                    ))}
+                  </select>
+                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              {/* Street Address */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Adresse ou Quartier (Optionnel)</span>
+                  <span className="text-[11px] text-slate-400 font-normal">العنوان</span>
+                </label>
+                <input
+                  type="text"
+                  autoComplete="street-address"
+                  value={shippingAddress}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  placeholder="Ex: Quartier Maârif, Rue 14..."
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Order Recap Banner with Dynamic Delivery Fee */}
+          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 text-xs">
+            <div className="flex justify-between text-slate-600">
+              <span>Article :</span>
+              <span className="font-bold text-slate-900">
+                {product.name}
+              </span>
+            </div>
+            {effectivePack && effectivePack.quantity > 1 && (
+              <div className="flex justify-between text-slate-600">
+                <span>Offre promotionnelle :</span>
+                <span className="font-bold text-emerald-700">
+                  {effectivePack.title} ({effectivePack.quantity} pièces)
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-slate-600">
+              <span>Quantité commandée :</span>
+              <span className="font-bold text-slate-900">
+                {customQuantity} {effectivePack && effectivePack.quantity > 1 ? `pack${customQuantity > 1 ? 's' : ''} (${effectivePack.quantity * customQuantity} pièces au total)` : `pièce${customQuantity > 1 ? 's' : ''}`}
+              </span>
+            </div>
+            {effectiveDiscount > 0 && !isDigital && !isService && (
+              <div className="flex justify-between text-emerald-700 font-bold">
+                <span>Remise Pack appliquée :</span>
+                <span>-{formatMoney(effectiveDiscount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-slate-700">
+              <span>{isDigital ? 'Livraison Instantanée WhatsApp & Email :' : isService ? 'Frais de prise en charge :' : `Frais de livraison (${selectedCity}) :`}</span>
+              <span className={`font-bold px-2 py-0.5 rounded-md ${deliveryFee === 0 ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-white border border-slate-200'}`}>
+                {deliveryFee === 0 ? 'GRATUITE (0 DH)' : formatMoney(deliveryFee)}
+              </span>
+            </div>
+            <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200/80 text-sm font-black text-slate-900">
+              <span>{isDigital ? 'Total Net à régler :' : isService ? 'Total Prestation :' : 'Total Cash on Delivery à régler :'}</span>
+              <span className="text-xl text-emerald-700 font-mono">{formatMoney(finalOrderTotal)}</span>
+            </div>
+          </div>
+
+          {/* Big High-Converting Pulsing Order Button */}
+          <button
+            type="submit"
+            disabled={isSubmittingOrder || (!isDigital && !isService && activeStock <= 0)}
+            className={`w-full py-4 px-6 text-white font-black text-sm sm:text-base rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-98 animate-pulse hover:animate-none ${
+              isDigital 
+                ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30' 
+                : isService 
+                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-purple-600/30' 
+                : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30'
+            }`}
+          >
+            {isSubmittingOrder ? (
+              <span className="inline-block w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+            ) : isDigital ? (
+              <>
+                <Zap className="w-5 h-5" />
+                <span>⚡ RECEVOIR MES ACCÈS IMMÉDIATEMENT (0 DH LIVRAISON)</span>
+              </>
+            ) : isService ? (
+              <>
+                <Sparkles className="w-5 h-5" />
+                <span>🚀 CONFIRMER MA COMMANDE DE SERVICE</span>
+              </>
+            ) : (
+              <>
+                <ShoppingBag className="w-5 h-5" />
+                <span>CONFIRMER MA COMMANDE (الدفع عند الاستلام)</span>
+              </>
+            )}
+          </button>
+
+          <div className="text-[10px] text-slate-500 text-center flex items-center justify-center gap-1.5 pt-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>
+              {isDigital 
+                ? 'Accès garanti 100% fonctionnel · Remplacement immédiat en cas de blocage' 
+                : isService 
+                ? 'Intervention de techniciens qualifiés · Suivi direct par WhatsApp' 
+                : 'Paiement en espèces seulement après ouverture et vérification de votre colis'}
+            </span>
+          </div>
+        </form>
+
+        {/* Alternative: Order via WhatsApp */}
+        <div className="pt-2 border-t border-slate-200/80">
+          <a
+            href={whatsAppLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 px-4 bg-white hover:bg-slate-50 border-2 border-emerald-600 text-emerald-700 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer shadow-xs"
+          >
+            <MessageCircle className="w-4 h-4 fill-emerald-600 text-emerald-600" />
+            <span>Ou Commandez directement par WhatsApp (طلب عبر الواتساب)</span>
+          </a>
+        </div>
+
+      </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 space-y-6 sm:space-y-10 pb-24 relative">
       
@@ -780,110 +1134,57 @@ export const ProductDetailView: React.FC = () => {
             </div>
           </div>
 
-          {/* Colors & Variants Selector (User Request: "more control in colors and quantity") */}
+          {/* Model / colour: one compact row of chips */}
           {product.variants.length > 0 && (
-            <div className="space-y-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                <span>Choisissez votre modèle / coloris :</span>
-                <span className="text-blue-600">{activeVariant?.title}</span>
-              </div>
-
-              {/* Color Swatches if available */}
-              {product.variants.some(v => v.colorHex || v.colorOption) && (
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold text-slate-500 block">Coloris disponible :</span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {product.variants.map(v => {
-                      const isSelected = selectedVariantId === v.id;
-                      const hexColor = v.colorHex || (
-                        v.colorOption?.toLowerCase().includes('noir') ? '#0f172a' :
-                        v.colorOption?.toLowerCase().includes('blanc') ? '#f8fafc' :
-                        v.colorOption?.toLowerCase().includes('bleu') ? '#1e3a8a' :
-                        v.colorOption?.toLowerCase().includes('vert') ? '#047857' :
-                        v.colorOption?.toLowerCase().includes('or') || v.colorOption?.toLowerCase().includes('gold') ? '#d97706' :
-                        v.colorOption?.toLowerCase().includes('argent') ? '#94a3b8' :
-                        v.colorOption?.toLowerCase().includes('camel') ? '#b45309' :
-                        v.colorOption?.toLowerCase().includes('rose') ? '#e11d48' : '#334155'
-                      );
-
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedVariantId(v.id);
-                            if (v.imageUrl) {
-                              const imgIdx = product.images.findIndex(img => img.imageUrl === v.imageUrl);
-                              if (imgIdx >= 0) setSelectedImageIndex(imgIdx);
-                            }
-                            clientMovementService.trackClick(`Sélection Couleur: ${v.colorOption || v.title}`, 'COLOR', {
-                              productSlug: product.slug,
-                              productName: product.name
-                            });
-                          }}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'border-blue-600 bg-blue-50/80 text-blue-950 ring-2 ring-blue-500/20' 
-                              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                          }`}
-                        >
-                          <span 
-                            className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-xs" 
-                            style={{ backgroundColor: hexColor }} 
-                          />
-                          <span>{v.colorOption || v.title}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Variant Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {product.variants.map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => {
-                      setSelectedVariantId(v.id);
-                      if (v.imageUrl) {
-                        const imgIdx = product.images.findIndex(img => img.imageUrl === v.imageUrl);
-                        if (imgIdx >= 0) setSelectedImageIndex(imgIdx);
-                      }
-                    }}
-                    className={`p-2.5 rounded-xl text-xs font-bold border transition-all text-left cursor-pointer ${
-                      selectedVariantId === v.id
-                        ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-2 ring-blue-500/30'
-                        : 'border-slate-200 bg-white text-slate-800 hover:border-slate-400'
-                    }`}
-                  >
-                    <div className="truncate">{v.title}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">
-                      {v.stockQuantity > 0 ? `${v.stockQuantity} en stock` : 'Rupture'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Stock Status Indicator */}
-              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                <span className="text-slate-500 font-medium">Disponibilité :</span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                <span>Modèle / coloris : <span className="text-blue-600">{activeVariant?.colorOption || activeVariant?.title}</span></span>
                 {activeStock <= 0 ? (
-                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 font-bold text-[10px]">
-                    Rupture de stock
-                  </span>
+                  <span className="text-rose-600">Rupture de stock</span>
                 ) : activeStock <= 5 ? (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                    Plus que {activeStock} exemplaires restants !
-                  </span>
+                  <span className="text-amber-700">Plus que {activeStock} en stock !</span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                    ✓ En stock ({activeStock} unités prêtes à expédier)
-                  </span>
+                  <span className="text-emerald-700">✓ En stock</span>
                 )}
               </div>
+              {product.variants.length > 1 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {product.variants.map(v => {
+                    const isSelected = selectedVariantId === v.id;
+                    const label = v.colorOption || v.title;
+                    const c = label.toLowerCase();
+                    const hexColor = v.colorHex || (
+                      c.includes('noir') ? '#0f172a' : c.includes('blanc') ? '#f8fafc' : c.includes('bleu') ? '#1e3a8a' :
+                      c.includes('vert') ? '#047857' : c.includes('or') || c.includes('gold') ? '#d97706' :
+                      c.includes('argent') ? '#94a3b8' : c.includes('camel') ? '#b45309' : c.includes('rose') ? '#e11d48' : ''
+                    );
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        disabled={v.stockQuantity <= 0}
+                        onClick={() => {
+                          setSelectedVariantId(v.id);
+                          if (v.imageUrl) {
+                            const imgIdx = product.images.findIndex(img => img.imageUrl === v.imageUrl);
+                            if (imgIdx >= 0) setSelectedImageIndex(imgIdx);
+                          }
+                          clientMovementService.trackClick(`Sélection Couleur: ${label}`, 'COLOR', {
+                            productSlug: product.slug,
+                            productName: product.name
+                          });
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:line-through ${
+                          isSelected ? 'border-blue-600 bg-blue-50 text-blue-950 ring-1 ring-blue-500/30' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {hexColor && <span className="w-3 h-3 rounded-full border border-black/20 shrink-0" style={{ backgroundColor: hexColor }} />}
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -968,522 +1269,41 @@ export const ProductDetailView: React.FC = () => {
             </div>
           )}
 
-          {/* DYNAMIC OFFER PACKS SELECTOR (FOR PHYSICAL PRODUCTS ONLY) */}
-          {!isDigital && !isService && (
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-slate-950 flex items-center gap-1.5 uppercase tracking-wide">
-                  <span className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] shadow-xs">🎁</span>
-                  <span>Choisissez votre formule / Pack Promo :</span>
-                </label>
-                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${deliveryFee === 0 ? 'text-emerald-800 bg-emerald-100/90 border-emerald-300' : 'text-slate-700 bg-slate-100 border-slate-300'}`}>
-                  {deliveryFee === 0 ? '✓ Livraison 0 DH Gratuite' : `🚚 ${deliveryLabel}`}
-                </span>
-              </div>
+          {/* ORDER FORM FIRST: the shopper can buy without scrolling */}
+          {renderCodForm('top')}
 
-              <div className={`grid grid-cols-1 ${packsList.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2.5`}>
-                {packsList.map((pack, idx) => {
-                  const isSelected = selectedPackIndex === idx;
-                  const savings = pack.savings || 0;
-
-                  return (
-                    <div
-                      key={pack.id || `pack-${idx}`}
-                      onClick={() => {
-                        setSelectedPackIndex(idx);
-                        setCustomQuantity(1);
-                        handleInputChange('fullName', customerName);
-                        clientMovementService.trackClick(`Choix ${pack.title}`, 'PACK', {
-                          productSlug: product.slug,
-                          productName: product.name
-                        });
-                      }}
-                      className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                        isSelected 
-                          ? 'border-emerald-600 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/25 scale-[1.01]' 
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      {pack.badge && (
-                        <span className={`absolute -top-2.5 right-3 px-2 py-0.5 text-white text-[9px] font-black rounded-md tracking-wider uppercase shadow-xs ${
-                          isSelected ? 'bg-emerald-600' : 'bg-slate-900'
-                        }`}>
-                          {pack.badge}
-                        </span>
-                      )}
-                      
-                      {/* Pack Title with Radio Indicator */}
-                      <div className="flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                            isSelected ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs' : 'border-slate-300 bg-white'
-                          }`}>
-                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                          </div>
-                          <span className="text-xs font-black text-slate-950 leading-tight">{pack.title}</span>
-                        </div>
-                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0 ${
-                          isSelected ? 'bg-emerald-200 text-emerald-950' : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {pack.quantity} {pack.quantity > 1 ? 'pièces' : 'pièce'}
-                        </span>
-                      </div>
-
-                      {/* Price & Unit Breakdown */}
-                      <div className="mt-2 pl-6">
-                        <div className="text-base sm:text-lg font-black text-emerald-800">
-                          {formatMoney(pack.price)}
-                        </div>
-                        {pack.quantity > 1 && (
-                          <div className="text-[11px] font-bold text-emerald-700 mt-0.5">
-                            Soit {formatMoney(pack.unitPrice)} / pièce
-                          </div>
-                        )}
-                        {savings > 0 ? (
-                          <div className="flex items-center gap-1.5 text-[10px] mt-0.5 font-bold">
-                            {pack.compareAtPrice && (
-                              <span className="text-slate-400 line-through">{formatMoney(pack.compareAtPrice)}</span>
-                            )}
-                            <span className="text-emerald-700">Économie {formatMoney(savings)}</span>
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-slate-500 mt-0.5">Offre standard individuelle</div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ADD TO CART ACTION BLOCK (Ajouter au Panier & Voir Sidebar) */}
-          <div className="bg-white border-2 border-slate-900 rounded-3xl p-4 sm:p-5 shadow-md space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                  <ShoppingBag className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-black text-slate-950 uppercase tracking-wider">Ajouter au Panier</h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Cumulez plusieurs articles ou finalisez votre commande</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                ✓ 0 DH Frais de Port
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              {/* Quantity Stepper */}
-              <div className="flex items-center justify-between border-2 border-slate-200 rounded-2xl bg-slate-50 p-1 min-w-[130px]">
-                <button
-                  type="button"
-                  onClick={() => setCustomQuantity(q => Math.max(1, q - 1))}
-                  disabled={customQuantity <= 1}
-                  className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-white rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Diminuer la quantité"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <div className="flex flex-col items-center px-2">
-                  <span className="text-[9px] text-slate-400 uppercase font-black leading-none">
-                    {effectivePack && effectivePack.quantity > 1 ? 'Packs' : 'Qté'}
-                  </span>
-                  <span className="font-black text-sm text-slate-950 leading-tight">
-                    {customQuantity}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomQuantity(q => Math.min(activeStock || 99, q + 1))}
-                  disabled={customQuantity >= (activeStock || 99)}
-                  className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-white rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Augmenter la quantité"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Primary "Ajouter au Panier" Button */}
+          {/* Add to cart: compact secondary action under the order form */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50">
               <button
                 type="button"
-                onClick={handleAddToCart}
-                disabled={!isDigital && !isService && activeStock <= 0}
-                className="flex-1 py-3.5 px-6 bg-slate-950 hover:bg-slate-800 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+                onClick={() => setCustomQuantity(q => Math.max(1, q - 1))}
+                disabled={customQuantity <= 1}
+                className="w-8 h-9 flex items-center justify-center text-slate-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Diminuer la quantité"
               >
-                <ShoppingBag className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                <span>AJOUTER AU PANIER</span>
-                <span className="text-xs font-semibold text-slate-300 ml-1">
-                  · {formatMoney(totalItemsPrice)}
-                </span>
+                <Minus className="w-3.5 h-3.5" />
               </button>
-            </div>
-
-            {/* Clear Pack & Quantity Confirmation Helper */}
-            {effectivePack && effectivePack.quantity > 1 && (
-              <div className="flex items-center justify-between text-[11px] text-emerald-900 bg-emerald-50/90 border border-emerald-200 px-3.5 py-2 rounded-xl">
-                <div className="flex items-center gap-1.5 font-bold">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>
-                    Sélection : <strong>{customQuantity} × {effectivePack.title}</strong> ({customQuantity * effectivePack.quantity} pièces au total)
-                  </span>
-                </div>
-                <span className="font-black text-emerald-700">{formatMoney(totalItemsPrice)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* DIRECT EXPRESS ORDER FORM (TAILORED FOR DIGITAL, SERVICE, AND PHYSICAL) */}
-          <div id="direct-cod-form" className={`bg-gradient-to-b from-white to-slate-50 border-2 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 transition-all ${
-            directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : isDigital ? 'border-emerald-500/60' : isService ? 'border-purple-500/60' : 'border-emerald-500/50'
-          }`}>
-            
-            <div className="border-b border-slate-200 pb-3">
-              <div className="flex items-center justify-between">
-                <div className={`flex items-center gap-2 font-black text-sm uppercase tracking-wide ${
-                  isDigital ? 'text-emerald-700' : isService ? 'text-purple-700' : 'text-emerald-700'
-                }`}>
-                  {isDigital ? <Zap className="w-4 h-4 text-emerald-600" /> : isService ? <Sparkles className="w-4 h-4 text-purple-600" /> : <Sparkles className="w-4 h-4 text-emerald-600" />}
-                  <span>
-                    {isDigital ? 'Passer Commande · Livraison Digitale Instantanée' : isService ? 'Réserver la Prestation · Prise en Charge Rapide' : 'Commander en 1 Clic · Paiement à la Livraison'}
-                  </span>
-                </div>
-                {directBuyMode && (
-                  <span className="px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-md animate-pulse">
-                    ⚡ Lien d'achat direct actif
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {isDigital 
-                  ? 'Livraison sans frais (0 DH). Vous recevrez vos clés / accès directement par WhatsApp & Email sous 2 minutes.' 
-                  : isService 
-                  ? 'Pas de frais de dossier (0 DH). Un expert ShopMe vous contactera directement par WhatsApp pour convenir des détails.' 
-                  : 'Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.'}
-              </p>
-            </div>
-
-            {orderError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{orderError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleDirectCodOrder} className="space-y-3.5">
-              
-              {/* Form Embedded Pack Choice (For Physical Products with multiple packs) */}
-              {!isDigital && !isService && packsList.length > 1 && (
-                <div className="space-y-2 p-3 sm:p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
-                      <Gift className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Formule / Pack sélectionné :</span>
-                    </span>
-                    <span className="text-[10px] font-black text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full">
-                      Cliquez pour changer d'offre
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {packsList.map((pack, idx) => {
-                      const isSelected = selectedPackIndex === idx;
-                      return (
-                        <button
-                          key={`cod-pack-${idx}`}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPackIndex(idx);
-                            setCustomQuantity(1);
-                          }}
-                          className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer relative ${
-                            isSelected 
-                              ? 'border-emerald-600 bg-white shadow-sm ring-2 ring-emerald-500/20' 
-                              : 'border-slate-200 bg-white/70 hover:bg-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-slate-900 leading-tight">{pack.title}</span>
-                            <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                              isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
-                            }`}>
-                              {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
-                            </div>
-                          </div>
-                          <div className="flex items-baseline gap-1 mt-0.5">
-                            <span className="text-xs sm:text-sm font-black text-emerald-800">{formatMoney(pack.price)}</span>
-                            {pack.quantity > 1 && (
-                              <span className="text-[9px] text-slate-500 font-semibold">
-                                ({formatMoney(pack.unitPrice)}/pc)
-                              </span>
-                            )}
-                          </div>
-                          {pack.badge && (
-                            <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tight mt-0.5 truncate">
-                              {pack.badge}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Customer Name */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>{isService ? 'Nom & Prénom / Société' : 'Nom & Prénom'}</span>
-                  <span className="text-[11px] text-slate-400 font-normal">الاسم الكامل</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    autoComplete="name"
-                    autoCapitalize="words"
-                    enterKeyHint="next"
-                    value={customerName}
-                    onChange={(e) => handleInputChange('fullName', e.target.value)}
-                    placeholder="Ex: Youssef El Mansouri"
-                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                  />
-                  <UserCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                </div>
-              </div>
-
-              {/* Customer Phone & WhatsApp (Morocco) */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>{isDigital ? 'Numéro WhatsApp (Pour envoi direct)' : 'Numéro de Téléphone'}</span>
-                  <span className="text-[11px] text-slate-400 font-normal">رقم الواتساب / الهاتف</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    required
-                    inputMode="tel"
-                    autoComplete="tel"
-                    enterKeyHint="next"
-                    value={customerPhone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    placeholder="06 XX XX XX XX ou 07 XX XX XX XX"
-                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                  />
-                  <PhoneCall className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                </div>
-                <div className="text-[10px] text-slate-500">
-                  {isDigital 
-                    ? '⚡ Vous recevrez immédiatement les codes et instructions sur ce numéro WhatsApp.' 
-                    : isService 
-                    ? 'Notre équipe d\'experts vous contactera directement pour coordonner la prestation.' 
-                    : 'Notre équipe vous contactera par téléphone ou WhatsApp pour confirmer l\'adresse exacte.'}
-                </div>
-              </div>
-
-              {/* Digital & Service specific fields: Email */}
-              {(isDigital || isService) && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                    <span>Adresse Email (Pour réception de la licence / facture)</span>
-                    <span className="text-[11px] text-slate-400 font-normal">البريد الإلكتروني</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="votre-email@gmail.com"
-                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                    />
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
-              )}
-
-              {/* Digital Player ID / Account Tag if needed */}
-              {isDigital && (product.digitalSpecs?.digitalType === 'GAME_TOPUP' || product.digitalSpecs?.digitalType === 'ACCOUNT') && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                    <span>ID Joueur / Riot ID / Tag du compte (Optionnel ou Requis pour recharge)</span>
-                    <span className="text-[11px] text-slate-400 font-normal">معرف اللاعب</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={playerIdOrAccount}
-                      onChange={(e) => setPlayerIdOrAccount(e.target.value)}
-                      placeholder="Ex: Player#EUW ou ID numérique..."
-                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                    />
-                    <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
-              )}
-
-              {/* Service Requirements / Description */}
-              {isService && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                    <span>Détails ou instructions sur votre besoin</span>
-                    <span className="text-[11px] text-slate-400 font-normal">تفاصيل المشروع</span>
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      rows={2}
-                      value={serviceRequirements}
-                      onChange={(e) => setServiceRequirements(e.target.value)}
-                      placeholder="Précisez brièvement vos attentes ou URL du projet..."
-                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-all"
-                    />
-                    <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  </div>
-                </div>
-              )}
-
-              {/* Physical Only: City and Street Address */}
-              {!isDigital && !isService && (
-                <>
-                  {/* City Selection */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                      <span>Ville de Livraison</span>
-                      <span className="text-[11px] text-slate-400 font-normal">المدينة</span>
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedCity}
-                        onChange={(e) => handleInputChange('city', e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-8 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
-                      >
-                        {MOROCCAN_CITIES.map(c => (
-                          <option key={c.name} value={c.name}>
-                            {c.name} - {c.arabicName} ({c.deliveryNote})
-                          </option>
-                        ))}
-                      </select>
-                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    </div>
-                  </div>
-
-                  {/* Street Address */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                      <span>Adresse ou Quartier (Optionnel)</span>
-                      <span className="text-[11px] text-slate-400 font-normal">العنوان</span>
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="street-address"
-                      value={shippingAddress}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      placeholder="Ex: Quartier Maârif, Rue 14..."
-                      className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Order Recap Banner with Dynamic Delivery Fee */}
-              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-600">
-                  <span>Article :</span>
-                  <span className="font-bold text-slate-900">
-                    {product.name}
-                  </span>
-                </div>
-                {effectivePack && effectivePack.quantity > 1 && (
-                  <div className="flex justify-between text-slate-600">
-                    <span>Offre promotionnelle :</span>
-                    <span className="font-bold text-emerald-700">
-                      {effectivePack.title} ({effectivePack.quantity} pièces)
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-slate-600">
-                  <span>Quantité commandée :</span>
-                  <span className="font-bold text-slate-900">
-                    {customQuantity} {effectivePack && effectivePack.quantity > 1 ? `pack${customQuantity > 1 ? 's' : ''} (${effectivePack.quantity * customQuantity} pièces au total)` : `pièce${customQuantity > 1 ? 's' : ''}`}
-                  </span>
-                </div>
-                {effectiveDiscount > 0 && !isDigital && !isService && (
-                  <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>Remise Pack appliquée :</span>
-                    <span>-{formatMoney(effectiveDiscount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-slate-700">
-                  <span>{isDigital ? 'Livraison Instantanée WhatsApp & Email :' : isService ? 'Frais de prise en charge :' : `Frais de livraison (${selectedCity}) :`}</span>
-                  <span className={`font-bold px-2 py-0.5 rounded-md ${deliveryFee === 0 ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-white border border-slate-200'}`}>
-                    {deliveryFee === 0 ? 'GRATUITE (0 DH)' : formatMoney(deliveryFee)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200/80 text-sm font-black text-slate-900">
-                  <span>{isDigital ? 'Total Net à régler :' : isService ? 'Total Prestation :' : 'Total Cash on Delivery à régler :'}</span>
-                  <span className="text-xl text-emerald-700 font-mono">{formatMoney(finalOrderTotal)}</span>
-                </div>
-              </div>
-
-              {/* Big High-Converting Pulsing Order Button */}
+              <span className="w-6 text-center font-black text-sm text-slate-950">{customQuantity}</span>
               <button
-                type="submit"
-                disabled={isSubmittingOrder || (!isDigital && !isService && activeStock <= 0)}
-                className={`w-full py-4 px-6 text-white font-black text-sm sm:text-base rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-98 animate-pulse hover:animate-none ${
-                  isDigital 
-                    ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30' 
-                    : isService 
-                    ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-purple-600/30' 
-                    : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-emerald-600/30'
-                }`}
+                type="button"
+                onClick={() => setCustomQuantity(q => Math.min(activeStock || 99, q + 1))}
+                disabled={customQuantity >= (activeStock || 99)}
+                className="w-8 h-9 flex items-center justify-center text-slate-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Augmenter la quantité"
               >
-                {isSubmittingOrder ? (
-                  <span className="inline-block w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                ) : isDigital ? (
-                  <>
-                    <Zap className="w-5 h-5" />
-                    <span>⚡ RECEVOIR MES ACCÈS IMMÉDIATEMENT (0 DH LIVRAISON)</span>
-                  </>
-                ) : isService ? (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    <span>🚀 CONFIRMER MA COMMANDE DE SERVICE</span>
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag className="w-5 h-5" />
-                    <span>CONFIRMER MA COMMANDE (الدفع عند الاستلام)</span>
-                  </>
-                )}
+                <Plus className="w-3.5 h-3.5" />
               </button>
-
-              <div className="text-[10px] text-slate-500 text-center flex items-center justify-center gap-1.5 pt-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>
-                  {isDigital 
-                    ? 'Accès garanti 100% fonctionnel · Remplacement immédiat en cas de blocage' 
-                    : isService 
-                    ? 'Intervention de techniciens qualifiés · Suivi direct par WhatsApp' 
-                    : 'Paiement en espèces seulement après ouverture et vérification de votre colis'}
-                </span>
-              </div>
-            </form>
-
-            {/* Alternative: Order via WhatsApp */}
-            <div className="pt-2 border-t border-slate-200/80">
-              <a
-                href={whatsAppLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 bg-white hover:bg-slate-50 border-2 border-emerald-600 text-emerald-700 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer shadow-xs"
-              >
-                <MessageCircle className="w-4 h-4 fill-emerald-600 text-emerald-600" />
-                <span>Ou Commandez directement par WhatsApp (طلب عبر الواتساب)</span>
-              </a>
             </div>
-
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!isDigital && !isService && activeStock <= 0}
+              className="flex-1 h-9 px-4 bg-white hover:bg-slate-50 border border-slate-900 text-slate-900 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Ajouter au panier · {formatMoney(totalItemsPrice)}</span>
+            </button>
           </div>
 
         </div>
@@ -1743,6 +1563,11 @@ export const ProductDetailView: React.FC = () => {
             ))
           )}
         </div>
+      </section>
+
+      {/* Second order form at the bottom, for shoppers who read the description and reviews first */}
+      <section className="max-w-2xl mx-auto w-full">
+        {renderCodForm('bottom')}
       </section>
 
       {/* Submit Review Modal */}
