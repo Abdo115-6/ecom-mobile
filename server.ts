@@ -983,6 +983,15 @@ async function startServer() {
     if (order.shipment?.carrier === 'Ozon Express' && order.shipment?.trackingNumber) {
       return res.status(409).json({ success: false, message: `Déjà envoyée à Ozon : ${order.shipment.trackingNumber}`, shipment: order.shipment });
     }
+    // Digital products and services are delivered by message: a parcel would send a driver for nothing
+    const products = (await loadProducts()).products;
+    const nonPhysical = (order.items || []).find((i: any) => {
+      const p = products.find((x: any) => x.id === i.productId);
+      return p && (p.productKind === 'DIGITAL' || p.productKind === 'SERVICE' || p.categoryId === 'cat-digital');
+    });
+    if (nonPhysical) {
+      return res.status(400).json({ success: false, message: `« ${nonPhysical.productName} » est un produit digital/service : pas de colis Ozon` });
+    }
     try {
       const shipment = await createOzonParcel(order, { cityId: Number(req.body?.cityId) || undefined, note: req.body?.note });
       const status = ['PENDING', 'CONFIRMED', 'PROCESSING'].includes(order.status) ? 'SHIPPED' : undefined;

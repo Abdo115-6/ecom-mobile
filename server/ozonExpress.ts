@@ -124,11 +124,24 @@ async function postForm(action: string, fields: Record<string, string>): Promise
   return data;
 }
 
-/** Ozon error answers are not uniform: look for a message anywhere at the top level */
-function ozonError(data: any): string | undefined {
-  // Answers are nested per check, e.g. {"CHECK_API":{"RESULT":"ERROR","MESSAGE":"Please verify your API Key"}}
-  for (const part of [data?.CHECK_API, data?.ADD_PARCEL?.CUSTOMER, data?.ADD_PARCEL, data]) {
-    if (part?.RESULT && String(part.RESULT).toUpperCase() !== 'SUCCESS') return String(part.MESSAGE || part.RESULT);
+/** Ozon nests its answers per check ("CHECK_API", "ADD-PARCEL", "NEW-PARCEL"…): find the first object holding `key` */
+function findWithKey(data: any, key: string, depth = 0): any {
+  if (!data || typeof data !== 'object' || depth > 5) return undefined;
+  if (key in data) return data;
+  for (const v of Object.values(data)) {
+    const found = findWithKey(v, key, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** First failed check in an Ozon answer, e.g. {"CHECK_API":{"RESULT":"ERROR","MESSAGE":"Please verify your API Key"}} */
+function ozonError(data: any, depth = 0): string | undefined {
+  if (!data || typeof data !== 'object' || depth > 5) return undefined;
+  if (data.RESULT && String(data.RESULT).toUpperCase() !== 'SUCCESS') return String(data.MESSAGE || data.RESULT);
+  for (const v of Object.values(data)) {
+    const msg = ozonError(v, depth + 1);
+    if (msg) return msg;
   }
   return undefined;
 }
@@ -160,9 +173,12 @@ export async function createOzonParcel(order: any, opts: { cityId?: number; note
   if (price <= 0 || price > 5000) fields['parcel-declared-value'] = String(Math.max(50, price));
 
   const data = await postForm('add-parcel', fields);
-  const parcel = data?.ADD_PARCEL?.['NEW-PARCEL'] || data?.['NEW-PARCEL'] || data;
+  const parcel = findWithKey(data, 'TRACKING-NUMBER');
   const trackingNumber = parcel?.['TRACKING-NUMBER'];
-  if (!trackingNumber) throw new Error(ozonError(data) || 'Ozon n\'a pas renvoyé de numéro de suivi');
+  if (!trackingNumber) {
+    console.warn('[Ozon] add-parcel answer without tracking number:', JSON.stringify(data).slice(0, 1000));
+    throw new Error(`Ozon : ${ozonError(data) || JSON.stringify(data).slice(0, 200)}`);
+  }
 
   const now = new Date().toISOString();
   return {
