@@ -88,9 +88,9 @@ async function postForm(action: string, fields: Record<string, string>): Promise
 
 /** Ozon error answers are not uniform: look for a message anywhere at the top level */
 function ozonError(data: any): string | undefined {
-  const r = data?.ADD_PARCEL?.RESULT || data?.RESULT || data?.result;
-  if (r && String(r).toUpperCase() !== 'SUCCESS') {
-    return String(data?.ADD_PARCEL?.MESSAGE || data?.MESSAGE || data?.message || r);
+  // Answers are nested per check, e.g. {"CHECK_API":{"RESULT":"ERROR","MESSAGE":"Please verify your API Key"}}
+  for (const part of [data?.CHECK_API, data?.ADD_PARCEL?.CUSTOMER, data?.ADD_PARCEL, data]) {
+    if (part?.RESULT && String(part.RESULT).toUpperCase() !== 'SUCCESS') return String(part.MESSAGE || part.RESULT);
   }
   return undefined;
 }
