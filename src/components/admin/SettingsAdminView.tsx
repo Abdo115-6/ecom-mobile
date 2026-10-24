@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { dbService } from '../../services/dbService';
 import { clientMovementService } from '../../services/clientMovementService';
 import { OzonSettingsCard } from './OzonSettingsCard';
+import { SalesBotSettingsCard } from './SalesBotSettingsCard';
 import { 
   Settings, 
   Save, 
@@ -336,6 +337,8 @@ export const SettingsAdminView: React.FC = () => {
         </div>
 
       </form>
+
+      <SalesBotSettingsCard />
 
       <OzonSettingsCard />
 

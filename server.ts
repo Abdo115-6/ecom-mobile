@@ -7,6 +7,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
+import { setSalesBotConfig, salesBotSummary, generateSalesReply, MAX_INSTRUCTIONS } from './server/salesBot.js';
 import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
 
@@ -310,6 +311,13 @@ async function startServer() {
     }
   }
   setOzonCredentials(await loadIntegration('ozon'));
+  setSalesBotConfig(await loadIntegration('salesbot'));
+
+  // The AI sales assistant answers from the real catalog and links to the public site
+  const botCatalog = {
+    listProducts: async () => (await loadProducts()).products,
+    siteUrl: () => String(process.env.SITE_URL || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain || '').trim().replace(/\/+$/, '')
+  };
 
   // WhatsApp bot: session + outbox in PostgreSQL so it survives restarts and redeploys
   baileysManager.configure({
@@ -319,11 +327,7 @@ async function startServer() {
       listOrders: async () => (await loadAllOrders()).orders,
       updateOrder: updateOrderRecord
     },
-    // The AI sales assistant answers from the real catalog and links to the public site
-    catalog: {
-      listProducts: async () => (await loadProducts()).products,
-      siteUrl: () => String(process.env.SITE_URL || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain || '').trim().replace(/\/+$/, '')
-    }
+    catalog: botCatalog
   });
 
   const app = express();
@@ -1080,6 +1084,40 @@ async function startServer() {
         error: err.message
       });
     }
+  });
+
+  // AI sales assistant ("Salma"): ON/OFF switch, owner's rules + FAQ, and a test chat that never writes to WhatsApp
+  app.get('/api/salesbot/config', requireAdmin, (req, res) => res.json({ success: true, ...salesBotSummary(), maxInstructions: MAX_INSTRUCTIONS }));
+
+  app.post('/api/salesbot/config', requireAdmin, async (req, res) => {
+    const { enabled, instructions } = req.body || {};
+    if (typeof enabled !== 'boolean' || typeof instructions !== 'string') {
+      return res.status(400).json({ success: false, message: 'Données invalides' });
+    }
+    if (instructions.length > MAX_INSTRUCTIONS) {
+      return res.status(400).json({ success: false, message: `Consignes trop longues (max ${MAX_INSTRUCTIONS} caractères)` });
+    }
+    const cfg = { enabled, instructions };
+    await saveIntegration('salesbot', cfg);
+    setSalesBotConfig(cfg);
+    console.log(`[SalesBot] Config saved from admin: ${enabled ? 'ON' : 'OFF'}, ${instructions.length} chars of instructions`);
+    return res.json({ success: true, ...salesBotSummary(), maxInstructions: MAX_INSTRUCTIONS });
+  });
+
+  app.post('/api/salesbot/test', requireAdmin, async (req, res) => {
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages.slice(-16) : [];
+    const history = messages
+      .filter((m: any) => (m?.role === 'client' || m?.role === 'bot') && typeof m.text === 'string' && m.text.trim())
+      .map((m: any) => ({ role: m.role, text: m.text.slice(0, 1000), at: new Date().toISOString() }));
+    if (!history.length || history[history.length - 1].role !== 'client') {
+      return res.status(400).json({ success: false, message: 'Écrivez un message client' });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({ success: false, message: 'GEMINI_API_KEY manquante dans Railway' });
+    }
+    const products = await botCatalog.listProducts().catch(() => []);
+    const result = await generateSalesReply({ history, products, siteUrl: botCatalog.siteUrl() });
+    return res.json({ success: true, ...result });
   });
 
   app.post('/api/whatsapp/baileys/request-pairing-code', requireAdmin, async (req, res) => {
