@@ -527,6 +527,11 @@ class BaileysManager {
     chat.pausedUntil = undefined;
     await this.writeAiChat(phone, chat);
     this.note(phone, 'Salma réactivée dans ce chat par l\'admin');
+    // A customer message that arrived during the pause (less than 6 h ago) is answered now
+    const last = chat.turns[chat.turns.length - 1];
+    if (isSalesBotEnabled() && last?.role === 'client' && Date.now() - new Date(last.at).getTime() < 6 * 3600 * 1000) {
+      this.answerWithAi(phone).catch(err => this.note(phone, `Erreur pendant la réponse : ${String(err?.message || err).slice(0, 160)}`));
+    }
   }
 
   private aiChatKey(phone: string) {
@@ -629,8 +634,9 @@ class BaileysManager {
     if (result.order) {
       await this.saveChatOrder(phone, chat, products, settings, result.order, { botText: previousBotText, clientText: lastClientText });
     } else if (result.needsHuman) {
-      // The team takes over: the AI stays silent in this chat until the pause ends
-      chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
+      // The team takes over: the AI stays silent in this chat until the pause ends.
+      // Not when the AI itself failed: Salma must be able to answer the next message once it is back.
+      if (!result.reason?.startsWith('IA indisponible')) chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
       const note = `A TRAITER PAR L'EQUIPE : ${result.reason || 'demande du client'}`;
       this.flagLeadConversation(phone, note);
       console.log(`[SalesBot] ${phone} handed over to the team: ${note}`);
