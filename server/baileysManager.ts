@@ -139,6 +139,17 @@ function adContextOf(msg: WAMessage): AdContext | undefined {
   return { title: ad.title || undefined, body: ad.body || undefined, sourceUrl: ad.sourceUrl || undefined };
 }
 
+/** Rejects when a step takes longer than `ms` (a WhatsApp or AI call that never answers would block the reply forever) */
+function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    work,
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what} : pas de réponse après ${Math.round(ms / 1000)} s`)), ms);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 const pnOf = (jid?: string | null) =>
   jid && jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : undefined;
 
@@ -546,7 +557,10 @@ class BaileysManager {
     if (pending) clearTimeout(pending);
     this.aiTimers.set(phone, setTimeout(() => {
       this.aiTimers.delete(phone);
-      this.answerWithAi(phone).catch(err => console.error('[SalesBot] Reply error:', err));
+      this.answerWithAi(phone).catch(err => {
+        console.error('[SalesBot] Reply error:', err);
+        this.note(phone, `Erreur pendant la réponse : ${String(err?.message || err).slice(0, 160)}`);
+      });
     }, AI_DEBOUNCE_MS));
   }
 
@@ -561,25 +575,39 @@ class BaileysManager {
       this.note(phone, `Limite de ${AI_MAX_REPLIES_PER_DAY} réponses par jour atteinte pour ce client`);
       return;
     }
-    if (chat.turns[chat.turns.length - 1]?.role !== 'client') return;
+    if (chat.turns[chat.turns.length - 1]?.role !== 'client') {
+      this.note(phone, 'Rien à répondre (le dernier message de ce chat vient déjà de Salma)');
+      return;
+    }
 
-    const [products, openOrder, settings] = await Promise.all([
-      this.catalog ? this.catalog.listProducts().catch(() => []) : Promise.resolve([]),
-      this.findOpenOrder(phone),
-      this.catalog ? this.catalog.settings().catch(() => null) : Promise.resolve(null)
-    ]);
-    const result = await generateSalesReply({
-      history: chat.turns,
-      products,
-      siteUrl: this.catalog?.siteUrl() || '',
-      settings,
-      ad: chat.ad,
-      openOrder
-    });
+    this.note(phone, 'Salma prépare la réponse…');
+    const started = Date.now();
+    const [products, openOrder, settings] = await withTimeout(
+      Promise.all([
+        this.catalog ? this.catalog.listProducts().catch(() => []) : Promise.resolve([]),
+        this.findOpenOrder(phone).catch(() => undefined),
+        this.catalog ? this.catalog.settings().catch(() => null) : Promise.resolve(null)
+      ]),
+      30_000,
+      'Lecture du catalogue'
+    );
+    const result = await withTimeout(
+      generateSalesReply({
+        history: chat.turns,
+        products,
+        siteUrl: this.catalog?.siteUrl() || '',
+        settings,
+        ad: chat.ad,
+        openOrder
+      }),
+      120_000,
+      "Réponse de l'IA"
+    );
+    this.note(phone, `Réponse IA prête en ${Math.round((Date.now() - started) / 1000)} s, envoi sur WhatsApp…`);
 
     if (result.reason?.startsWith('IA indisponible')) this.note(phone, result.reason);
     this.botSendingAt.set(phone, Date.now());
-    if (!(await this.sendMessage(phone, result.reply))) {
+    if (!(await withTimeout(this.sendMessage(phone, result.reply), 60_000, 'Envoi WhatsApp'))) {
       this.note(phone, 'Échec de l\'envoi WhatsApp (message mis en attente)');
       return;
     }
@@ -813,9 +841,12 @@ class BaileysManager {
     if (!this.sock || this.status.status !== 'CONNECTED') return 'FAILED';
     const jid = `${cleanPhone}@s.whatsapp.net`;
     try {
-      const [exists] = (await this.sock.onWhatsApp(jid)) || [];
+      const [exists] = (await withTimeout(this.sock.onWhatsApp(jid), 8_000, 'Vérification du numéro').catch(err => {
+        console.warn(`[Baileys] ${err.message} (${cleanPhone}), sending anyway`);
+        return undefined;
+      })) || [];
       if (exists && exists.exists === false) return 'NOT_ON_WHATSAPP';
-      const sent = await this.sock.sendMessage(jid, { text });
+      const sent = await withTimeout(this.sock.sendMessage(jid, { text }), 30_000, 'Envoi WhatsApp');
       if (sent?.key.id && sent.message) {
         this.sentCache.set(sent.key.id, sent.message);
         if (this.sentCache.size > 500) this.sentCache.delete(this.sentCache.keys().next().value as string);
