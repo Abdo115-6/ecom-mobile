@@ -35,6 +35,7 @@ export interface SalesReply {
 }
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const FALLBACK_MODEL = 'gemini-2.5-flash';
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI | null {
@@ -252,7 +253,7 @@ export async function generateSalesReply(opts: {
   followUp?: number;
 }): Promise<SalesReply> {
   const ai = getClient();
-  if (!ai) return FALLBACK;
+  if (!ai) return opts.followUp ? { reply: '', needsHuman: false } : { ...FALLBACK, reason: 'IA indisponible : GEMINI_API_KEY manquante' };
 
   const contents = opts.history.slice(-20).map(t => ({
     role: t.role === 'client' ? 'user' : 'model',
@@ -262,27 +263,54 @@ export async function generateSalesReply(opts: {
     contents.push({ role: 'user', parts: [{ text: `(message système : le client n'a pas répondu, écris la relance n°${opts.followUp})` }] });
   }
 
+  const failed = (why: string): SalesReply => {
+    console.warn('[SalesBot] AI error, using fallback:', why);
+    return opts.followUp ? { reply: '', needsHuman: false } : { ...FALLBACK, reason: `IA indisponible : ${why.slice(0, 180)}` };
+  };
+
+  let parsed: any = null;
+  let lastError = '';
+  // The configured model first, then a stable one: a retired or mistyped model name must not silence Salma
+  for (const model of [...new Set([MODEL, FALLBACK_MODEL])]) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: systemPrompt(opts),
+          responseMimeType: 'application/json',
+          temperature: 0.4,
+          // Thinking models spend part of this budget before writing, so keep room for the JSON answer
+          maxOutputTokens: 4096
+        }
+      });
+      parsed = parseJsonReply(response.text || '');
+      if (parsed) break;
+      lastError = `${model} : réponse illisible (${response.candidates?.[0]?.finishReason || 'vide'})`;
+    } catch (err: any) {
+      lastError = `${model} : ${err.message || err}`;
+    }
+  }
+  if (!parsed) return failed(lastError);
+
+  const reply = String(parsed.reply || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1200);
+  if (!reply) return failed('réponse vide');
+  if (opts.followUp) return { reply, needsHuman: false };
+  const order = parsed.order && typeof parsed.order === 'object' ? (parsed.order as CollectedOrder) : undefined;
+  const video = typeof parsed.video === 'string' && parsed.video.trim() ? parsed.video.trim() : undefined;
+  return { reply, needsHuman: !!parsed.needsHuman, reason: clean(parsed.reason, 200) || undefined, order, video };
+}
+
+/** The JSON object of the answer, even when the model wraps it in a code fence or adds text around it */
+function parseJsonReply(text: string): any | null {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents,
-      config: {
-        systemInstruction: systemPrompt(opts),
-        responseMimeType: 'application/json',
-        temperature: 0.4,
-        maxOutputTokens: 700
-      }
-    });
-    const parsed = JSON.parse(response.text || '{}');
-    const reply = String(parsed.reply || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1200);
-    if (!reply) return opts.followUp ? { reply: '', needsHuman: false } : FALLBACK;
-    if (opts.followUp) return { reply, needsHuman: false };
-    const order = parsed.order && typeof parsed.order === 'object' ? (parsed.order as CollectedOrder) : undefined;
-    const video = typeof parsed.video === 'string' && parsed.video.trim() ? parsed.video.trim() : undefined;
-    return { reply, needsHuman: !!parsed.needsHuman, reason: clean(parsed.reason, 200) || undefined, order, video };
-  } catch (err: any) {
-    console.warn('[SalesBot] AI error, using fallback:', err.message || err);
-    return opts.followUp ? { reply: '', needsHuman: false } : FALLBACK;
+    const value = JSON.parse(text.slice(start, end + 1));
+    return value && typeof value === 'object' ? value : null;
+  } catch {
+    return null;
   }
 }
 
