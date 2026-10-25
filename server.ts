@@ -257,6 +257,68 @@ async function startServer() {
     return { orders: readJsonFile<any[]>(ORDERS_FILE, []), source: 'file' };
   }
 
+  /** Saves a new order (file + Postgres); false when an order with this id already exists */
+  async function insertOrderRecord(order: any): Promise<boolean> {
+    const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
+    if (currentOrders.some(o => o && o.id === order.id)) return false;
+    if (isPgConnected) {
+      try {
+        const existing = await pgPool.query('SELECT 1 FROM orders WHERE id = $1', [order.id]);
+        if (existing.rowCount && existing.rowCount > 0) return false;
+      } catch (dbErr) {
+        console.warn('Postgres order lookup error:', dbErr);
+      }
+    }
+
+    // Save to local file
+    currentOrders.unshift(order);
+    writeJsonFile(ORDERS_FILE, currentOrders);
+
+    // Save to Postgres
+    if (isPgConnected) {
+      try {
+        await pgPool.query(`
+          INSERT INTO orders (
+            id, order_number, customer_id, customer_name, customer_email,
+            customer_phone, status, currency, subtotal, discount_amount,
+            shipping_fee, total_amount, shipping_address, payment_method,
+            payment_status, shipment, items, utm_source, utm_campaign, notes, extra, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            status = EXCLUDED.status,
+            updated_at = NOW();
+        `, [
+          order.id,
+          order.orderNumber,
+          order.customerId || 'guest',
+          order.customerName,
+          order.customerEmail || '',
+          order.customerPhone,
+          order.status || 'PENDING',
+          order.currency || 'MAD',
+          order.subtotal,
+          order.discountAmount || 0,
+          order.shippingFee || 0,
+          order.totalAmount,
+          JSON.stringify(order.shippingAddress || {}),
+          order.paymentMethod || 'CASH_ON_DELIVERY',
+          order.paymentStatus || 'PENDING',
+          JSON.stringify(order.shipment || {}),
+          JSON.stringify(order.items || []),
+          order.utmSource || 'direct',
+          order.utmCampaign || '',
+          order.notes || '',
+          JSON.stringify({ whatsappConfirmation: order.whatsappConfirmation, whatsappNotification: order.whatsappNotification })
+        ]);
+      } catch (dbErr) {
+        console.warn('Postgres order insert error:', dbErr);
+      }
+    }
+    return true;
+  }
+
   async function updateOrderRecord(id: string, patch: { status?: string; whatsappConfirmation?: any; shipment?: any }) {
     const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
     const order = currentOrders.find(o => o.id === id);
@@ -313,10 +375,39 @@ async function startServer() {
   setOzonCredentials(await loadIntegration('ozon'));
   setSalesBotConfig(await loadIntegration('salesbot'));
 
+  // Store settings for the AI assistant (delivery fees, domain), read from Postgres first and cached for a minute
+  let botSettingsCache: { at: number; data: any } = { at: 0, data: null };
+  async function loadStoreSettings(): Promise<any> {
+    if (Date.now() - botSettingsCache.at < 60_000) return botSettingsCache.data;
+    let data: any = null;
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT data FROM store_settings WHERE id = $1', ['main']);
+        data = result.rows[0]?.data || null;
+      } catch (err: any) {
+        console.warn('[SalesBot] Settings load notice:', err.message);
+      }
+    }
+    data = data || readJsonFile<any>(SETTINGS_FILE, null);
+    botSettingsCache = { at: Date.now(), data };
+    return data;
+  }
+
   // The AI sales assistant answers from the real catalog and links to the public site
   const botCatalog = {
     listProducts: async () => (await loadProducts()).products,
-    siteUrl: () => String(process.env.SITE_URL || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain || '').trim().replace(/\/+$/, '')
+    siteUrl: () => String(process.env.SITE_URL || botSettingsCache.data?.publicDomain || readJsonFile<any>(SETTINGS_FILE, null)?.publicDomain || '').trim().replace(/\/+$/, ''),
+    settings: loadStoreSettings,
+    loadMedia: async (url: string) => {
+      const name = String(url).replace(/^\/uploads\//, '');
+      if (!isSafeMediaName(name)) return null;
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+      const filePath = path.join(uploadsDir, name);
+      if (fs.existsSync(filePath)) return { data: fs.readFileSync(filePath), mimeType: MEDIA_MIME[ext] || 'video/mp4' };
+      if (!isPgConnected) return null;
+      const result = await pgPool.query('SELECT mime_type, data FROM media_files WHERE name = $1', [name]);
+      return result.rows[0] ? { data: result.rows[0].data as Buffer, mimeType: result.rows[0].mime_type } : null;
+    }
   };
 
   // WhatsApp bot: session + outbox in PostgreSQL so it survives restarts and redeploys
@@ -325,7 +416,10 @@ async function startServer() {
     usePostgres: isPgConnected,
     orderStore: {
       listOrders: async () => (await loadAllOrders()).orders,
-      updateOrder: updateOrderRecord
+      updateOrder: updateOrderRecord,
+      createOrder: async (order: any) => {
+        await insertOrderRecord(order);
+      }
     },
     catalog: botCatalog
   });
@@ -863,68 +957,8 @@ async function startServer() {
       }
 
       // The phone re-sends an order until it gets an answer: a retry must not create a duplicate
-      const currentOrders = readJsonFile<any[]>(ORDERS_FILE, []);
-      if (currentOrders.some(o => o && o.id === order.id)) {
+      if (!(await insertOrderRecord(order))) {
         return res.json({ success: true, order, duplicate: true });
-      }
-      if (isPgConnected) {
-        try {
-          const existing = await pgPool.query('SELECT 1 FROM orders WHERE id = $1', [order.id]);
-          if (existing.rowCount && existing.rowCount > 0) {
-            return res.json({ success: true, order, duplicate: true });
-          }
-        } catch (dbErr) {
-          console.warn('Postgres order lookup error:', dbErr);
-        }
-      }
-
-      // Save to local file
-      currentOrders.unshift(order);
-      writeJsonFile(ORDERS_FILE, currentOrders);
-
-      // Save to Postgres
-      if (isPgConnected) {
-        try {
-          const client = await pgPool.connect();
-          await client.query(`
-            INSERT INTO orders (
-              id, order_number, customer_id, customer_name, customer_email,
-              customer_phone, status, currency, subtotal, discount_amount,
-              shipping_fee, total_amount, shipping_address, payment_method,
-              payment_status, shipment, items, utm_source, utm_campaign, notes, extra, created_at, updated_at
-            ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
-            )
-            ON CONFLICT (id) DO UPDATE SET
-              status = EXCLUDED.status,
-              updated_at = NOW();
-          `, [
-            order.id,
-            order.orderNumber,
-            order.customerId || 'guest',
-            order.customerName,
-            order.customerEmail || '',
-            order.customerPhone,
-            order.status || 'PENDING',
-            order.currency || 'MAD',
-            order.subtotal,
-            order.discountAmount || 0,
-            order.shippingFee || 0,
-            order.totalAmount,
-            JSON.stringify(order.shippingAddress || {}),
-            order.paymentMethod || 'CASH_ON_DELIVERY',
-            order.paymentStatus || 'PENDING',
-            JSON.stringify(order.shipment || {}),
-            JSON.stringify(order.items || []),
-            order.utmSource || 'direct',
-            order.utmCampaign || '',
-            order.notes || '',
-            JSON.stringify({ whatsappConfirmation: order.whatsappConfirmation, whatsappNotification: order.whatsappNotification })
-          ]);
-          client.release();
-        } catch (dbErr) {
-          console.warn('Postgres order insert error:', dbErr);
-        }
       }
 
       // Automatically trigger WhatsApp order confirmation to customer phone number via Baileys
@@ -1090,14 +1124,14 @@ async function startServer() {
   app.get('/api/salesbot/config', requireAdmin, (req, res) => res.json({ success: true, ...salesBotSummary(), maxInstructions: MAX_INSTRUCTIONS }));
 
   app.post('/api/salesbot/config', requireAdmin, async (req, res) => {
-    const { enabled, instructions } = req.body || {};
+    const { enabled, instructions, followUps } = req.body || {};
     if (typeof enabled !== 'boolean' || typeof instructions !== 'string') {
       return res.status(400).json({ success: false, message: 'Données invalides' });
     }
     if (instructions.length > MAX_INSTRUCTIONS) {
       return res.status(400).json({ success: false, message: `Consignes trop longues (max ${MAX_INSTRUCTIONS} caractères)` });
     }
-    const cfg = { enabled, instructions };
+    const cfg = { enabled, instructions, followUps: followUps !== false };
     await saveIntegration('salesbot', cfg);
     setSalesBotConfig(cfg);
     console.log(`[SalesBot] Config saved from admin: ${enabled ? 'ON' : 'OFF'}, ${instructions.length} chars of instructions`);
@@ -1115,8 +1149,8 @@ async function startServer() {
     if (!process.env.GEMINI_API_KEY) {
       return res.status(400).json({ success: false, message: 'GEMINI_API_KEY manquante dans Railway' });
     }
-    const products = await botCatalog.listProducts().catch(() => []);
-    const result = await generateSalesReply({ history, products, siteUrl: botCatalog.siteUrl() });
+    const [products, settings] = await Promise.all([botCatalog.listProducts().catch(() => []), loadStoreSettings().catch(() => null)]);
+    const result = await generateSalesReply({ history, products, settings, siteUrl: botCatalog.siteUrl() });
     return res.json({ success: true, ...result });
   });
 

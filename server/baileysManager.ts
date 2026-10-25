@@ -3,6 +3,7 @@ import makeWASocket, {
   Browsers,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  normalizeMessageContent,
   WASocket,
   WAMessage,
   proto
@@ -13,7 +14,7 @@ import path from 'path';
 import fs from 'fs';
 import type pg from 'pg';
 import { createWaStore, useStoreAuthState, WaStore } from './waAuthState.js';
-import { generateSalesReply, isSalesBotEnabled, AdContext, ChatTurn } from './salesBot.js';
+import { generateSalesReply, isSalesBotEnabled, areFollowUpsEnabled, buildBotOrder, productVideo, AdContext, ChatTurn } from './salesBot.js';
 
 export const TARGET_PHONE_NUMBER = '212668381916';
 export const DISPLAY_PHONE_NUMBER = '+212 668-381916';
@@ -66,12 +67,18 @@ interface OutboxItem {
 export interface BotOrderStore {
   listOrders(): Promise<any[]>;
   updateOrder(id: string, patch: { status?: string; whatsappConfirmation?: any }): Promise<void>;
+  /** Saves an order taken in the chat by the AI assistant (no confirmation message is sent: the chat already confirmed it) */
+  createOrder?(order: any): Promise<void>;
 }
 
 /** Catalog and public URL for the AI sales assistant, provided by server.ts */
 export interface BotCatalog {
   listProducts(): Promise<any[]>;
   siteUrl(): string;
+  /** Store settings (delivery fees by city, free-shipping threshold…) */
+  settings(): Promise<any>;
+  /** Bytes of an uploaded file (/uploads/...), from disk or the database */
+  loadMedia(url: string): Promise<{ data: Buffer; mimeType: string } | null>;
 }
 
 /** Per-customer AI chat memory, kept in the WhatsApp store (PostgreSQL) so it survives redeploys */
@@ -81,6 +88,12 @@ interface AiChat {
   pausedUntil?: number;
   day: string;
   repliesToday: number;
+  /** Products whose demo video was already sent in this chat */
+  videosSent?: string[];
+  /** Follow-ups sent since the customer's last message (max 2) */
+  followUps?: number;
+  orderNumber?: string;
+  orderAt?: number;
 }
 
 const OUTBOX_KEY = 'shop-outbox';
@@ -94,6 +107,12 @@ const AI_DEBOUNCE_MS = 6000;
 // After the team writes in a chat (from the phone or WhatsApp Web), the AI stays silent in that chat
 const HUMAN_TAKEOVER_MS = 12 * 3600 * 1000;
 const AI_MAX_REPLIES_PER_DAY = 40;
+// Customers who go quiet get at most 2 follow-ups, only inside WhatsApp's 24h window after their last message
+const AI_CHAT_INDEX_KEY = 'ai-chat-index';
+const FOLLOW_UP_1_MS = 60 * 60 * 1000;
+const FOLLOW_UP_2_MS = 20 * 3600 * 1000;
+const FOLLOW_UP_WINDOW_MS = 23 * 3600 * 1000;
+const FOLLOW_UP_EVERY_TICKS = 5;
 
 // Word-level intent detection (\b does not work with Arabic, so tokens are compared)
 const YES_WORDS = ['oui', 'ouii', 'ouiii', 'yes', 'ok', 'okay', 'daccord', "d'accord", 'wakha', 'wakhaa', 'waxa', 'confirme', 'confirmer', 'confirmé', 'je confirme', 'valide', 'je valide', 'iyeh', 'نعم', 'واخا', 'موافق', 'أكيد', 'اكيد', '👍', '✅'];
@@ -113,7 +132,7 @@ export function detectIntent(text: string): 'YES' | 'NO' | 'UNKNOWN' {
 
 /** Click-to-WhatsApp ads (Facebook / Instagram) attach the ad that was clicked to the shopper's first message */
 function adContextOf(msg: WAMessage): AdContext | undefined {
-  const m: any = msg.message || {};
+  const m: any = normalizeMessageContent(msg.message) || {};
   const info = m.extendedTextMessage?.contextInfo || m.imageMessage?.contextInfo || m.videoMessage?.contextInfo;
   const ad = info?.externalAdReply;
   if (!ad) return undefined;
@@ -144,6 +163,8 @@ class BaileysManager {
   private processedIds: string[] = [];
   private sentCache = new Map<string, proto.IMessage>();
   private flushing = false;
+  private watchdogTicks = 0;
+  private followingUp = false;
 
   constructor() {
     this.status = {
@@ -205,6 +226,9 @@ class BaileysManager {
         this.restartSocket(0);
       } else if (this.status.status === 'CONNECTED' && this.outbox.length > 0) {
         this.flushOutbox();
+      }
+      if (++this.watchdogTicks % FOLLOW_UP_EVERY_TICKS === 0) {
+        this.sendFollowUps().catch(err => console.error('[SalesBot] Follow-up error:', err));
       }
     }, WATCHDOG_INTERVAL_MS);
     this.watchdog.unref?.();
@@ -365,10 +389,10 @@ class BaileysManager {
 
   /** Resolves the customer's phone number, including Baileys v7 "@lid" chats */
   private async senderPhone(msg: WAMessage): Promise<string | undefined> {
-    const key = msg.key as WAMessage['key'] & { remoteJidAlt?: string };
+    const key = msg.key as WAMessage['key'] & { remoteJidAlt?: string; senderPn?: string };
     const remote = key.remoteJid || '';
     if (remote.endsWith('@g.us') || remote.endsWith('@broadcast') || remote.endsWith('@newsletter')) return undefined;
-    const direct = pnOf(remote) || pnOf(key.remoteJidAlt);
+    const direct = pnOf(remote) || pnOf(key.remoteJidAlt) || pnOf(key.senderPn);
     if (direct) return direct;
     if (remote.endsWith('@lid') && this.sock) {
       try {
@@ -389,21 +413,37 @@ class BaileysManager {
 
   private async handleIncoming(msg: WAMessage) {
     if (msg.key.fromMe) return this.noteTeamMessage(msg);
-    if (!msg.message || !msg.key.id) return;
+    const from = msg.key.remoteJid || '?';
+    if (!msg.key.id) return;
+    if (!msg.message) {
+      // Usually a message this linked device could not decrypt yet; WhatsApp re-sends it once keys are exchanged
+      console.log(`[Baileys] Skipped message from ${from}: no readable content (stub ${msg.messageStubType ?? 'none'})`);
+      return;
+    }
     if (this.processedIds.includes(msg.key.id)) return;
     const ts = Number(msg.messageTimestamp || 0);
     if (ts && Date.now() / 1000 - ts > INCOMING_MAX_AGE_S) return;
 
+    // Disappearing-message chats, view-once and similar wrappers put the real content one level deeper
+    const content = normalizeMessageContent(msg.message);
     const text =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      msg.message.buttonsResponseMessage?.selectedDisplayText ||
-      msg.message.listResponseMessage?.title ||
+      content?.conversation ||
+      content?.extendedTextMessage?.text ||
+      content?.imageMessage?.caption ||
+      content?.videoMessage?.caption ||
+      content?.buttonsResponseMessage?.selectedDisplayText ||
+      content?.listResponseMessage?.title ||
       '';
-    if (!text) return;
+    if (!text) {
+      console.log(`[Baileys] Skipped message from ${from}: no text (${Object.keys(content || {}).join(', ') || 'empty'})`);
+      return;
+    }
 
     const phone = await this.senderPhone(msg);
-    if (!phone) return;
+    if (!phone) {
+      console.log(`[Baileys] Skipped message from ${from}: could not resolve the phone number`);
+      return;
+    }
     await this.markProcessed(msg.key.id);
 
     console.log(`[Baileys] Message from ${phone}: "${text}"`);
@@ -464,8 +504,10 @@ class BaileysManager {
   private async queueAiReply(phone: string, text: string, ad: AdContext | undefined) {
     const chat = await this.readAiChat(phone);
     chat.turns.push({ role: 'client', text, at: new Date().toISOString() });
+    chat.followUps = 0;
     if (ad) chat.ad = ad;
     await this.writeAiChat(phone, chat);
+    await this.touchChatIndex(phone);
 
     const pending = this.aiTimers.get(phone);
     if (pending) clearTimeout(pending);
@@ -481,35 +523,141 @@ class BaileysManager {
     if (chat.repliesToday >= AI_MAX_REPLIES_PER_DAY) return;
     if (chat.turns[chat.turns.length - 1]?.role !== 'client') return;
 
-    const [products, openOrder] = await Promise.all([
+    const [products, openOrder, settings] = await Promise.all([
       this.catalog ? this.catalog.listProducts().catch(() => []) : Promise.resolve([]),
-      this.findOpenOrder(phone)
+      this.findOpenOrder(phone),
+      this.catalog ? this.catalog.settings().catch(() => null) : Promise.resolve(null)
     ]);
     const result = await generateSalesReply({
       history: chat.turns,
       products,
       siteUrl: this.catalog?.siteUrl() || '',
+      settings,
       ad: chat.ad,
       openOrder
     });
 
     this.botSendingAt.set(phone, Date.now());
     if (!(await this.sendMessage(phone, result.reply))) return;
+    const lastClientText = chat.turns[chat.turns.length - 1]?.text || '';
+    const previousBotText = [...chat.turns].reverse().find(t => t.role === 'bot')?.text || '';
     chat.turns.push({ role: 'bot', text: result.reply, at: new Date().toISOString() });
     chat.repliesToday++;
+    this.appendConversation(phone, 'bot', result.reply);
 
-    if (result.needsHuman || result.order) {
+    if (result.video) await this.sendProductVideo(phone, chat, products, result.video);
+
+    if (result.order) {
+      await this.saveChatOrder(phone, chat, products, settings, result.order, { botText: previousBotText, clientText: lastClientText });
+    } else if (result.needsHuman) {
       // The team takes over: the AI stays silent in this chat until the pause ends
       chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
-      const o = result.order;
-      const note = o
-        ? `COMMANDE A CREER : ${o.product || '?'} x${o.quantity || 1} - ${o.fullName || '?'}, ${o.city || '?'}, ${o.address || '?'}`
-        : `A TRAITER PAR L'EQUIPE : ${result.reason || 'demande du client'}`;
+      const note = `A TRAITER PAR L'EQUIPE : ${result.reason || 'demande du client'}`;
       this.flagLeadConversation(phone, note);
       console.log(`[SalesBot] ${phone} handed over to the team: ${note}`);
     }
     await this.writeAiChat(phone, chat);
-    this.appendConversation(phone, 'bot', result.reply);
+  }
+
+  /** Sends the product's demo video once per chat, right after the text reply */
+  private async sendProductVideo(phone: string, chat: AiChat, products: any[], slug: string) {
+    if (chat.videosSent?.includes(slug) || !this.sock || !this.isConnected() || !this.catalog) return;
+    const product = products.find(p => p.slug === slug);
+    const video = product ? productVideo(product) : null;
+    if (!video) return;
+    const media = await this.catalog.loadMedia(video.url).catch(() => null);
+    if (!media) {
+      console.warn(`[SalesBot] Demo video ${video.url} not found`);
+      return;
+    }
+    try {
+      this.botSendingAt.set(phone, Date.now());
+      const caption = video.caption || 'هاهو كيفاش كيخدم 👆';
+      const sent = await this.sock.sendMessage(`${normalizeMoroccanPhone(phone)}@s.whatsapp.net`, { video: media.data, mimetype: media.mimeType || 'video/mp4', caption });
+      if (sent?.key.id && sent.message) this.sentCache.set(sent.key.id, sent.message);
+      chat.videosSent = [...(chat.videosSent || []), slug];
+      this.appendConversation(phone, 'bot', `🎥 ${caption}`);
+      console.log(`[SalesBot] Demo video of ${slug} sent to ${phone}`);
+    } catch (err: any) {
+      console.warn(`[SalesBot] Video send error to ${phone}:`, err.message || err);
+    }
+  }
+
+  /** The customer confirmed the summary in the chat: the order goes straight into the store, priced from the catalog */
+  private async saveChatOrder(phone: string, chat: AiChat, products: any[], settings: any, collected: any, confirmation: { botText: string; clientText: string }) {
+    const alreadyOrdered = !!chat.orderAt && Date.now() - chat.orderAt < 12 * 3600 * 1000;
+    const built = alreadyOrdered || !this.orderStore?.createOrder
+      ? { error: alreadyOrdered ? `commande #${chat.orderNumber} déjà créée il y a peu` : 'enregistrement indisponible' }
+      : buildBotOrder({ collected, products, settings, phone, confirmation, adTitle: chat.ad?.title });
+
+    if (built.order) {
+      try {
+        await this.orderStore!.createOrder!(built.order);
+        chat.orderNumber = built.order.orderNumber;
+        chat.orderAt = Date.now();
+        this.flagLeadConversation(phone, `COMMANDE CRÉÉE #${built.order.orderNumber} : ${built.order.items[0].productName} x${built.order.items[0].quantity} - ${built.order.totalAmount} DH`);
+        this.setConversationStatus(phone, 'CONFIRMED');
+        console.log(`[SalesBot] Order #${built.order.orderNumber} created from the chat with ${phone}`);
+        return;
+      } catch (err: any) {
+        built.error = err.message || 'erreur à l\'enregistrement';
+      }
+    }
+    // Could not save it automatically: the team creates it by hand
+    chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
+    const note = `COMMANDE A CREER (${built.error}) : ${collected.productSlug || collected.product || '?'} x${collected.quantity || 1} - ${collected.fullName || '?'}, ${collected.city || '?'}, ${collected.address || '?'}`;
+    this.flagLeadConversation(phone, note);
+    console.warn(`[SalesBot] ${phone}: ${note}`);
+  }
+
+  private async touchChatIndex(phone: string) {
+    const store = await this.getStore();
+    const index = (await store.read<Record<string, number>>(AI_CHAT_INDEX_KEY).catch(() => null)) || {};
+    const now = Date.now();
+    index[normalizeMoroccanPhone(phone)] = now;
+    for (const [p, at] of Object.entries(index)) if (now - at > 25 * 3600 * 1000) delete index[p];
+    await store.write(AI_CHAT_INDEX_KEY, index).catch(() => {});
+  }
+
+  /** Follow-up n°1 after 1h of silence, n°2 after 20h, never after WhatsApp's 24h window or once an order exists */
+  private async sendFollowUps() {
+    if (this.followingUp || !areFollowUpsEnabled() || !this.isConnected()) return;
+    this.followingUp = true;
+    try {
+      const store = await this.getStore();
+      const index = (await store.read<Record<string, number>>(AI_CHAT_INDEX_KEY).catch(() => null)) || {};
+      const now = Date.now();
+      for (const [phone, lastClientAt] of Object.entries(index)) {
+        const silence = now - lastClientAt;
+        if (silence < FOLLOW_UP_1_MS || silence > FOLLOW_UP_WINDOW_MS) continue;
+        const chat = await this.readAiChat(phone);
+        const sent = chat.followUps || 0;
+        const last = chat.turns[chat.turns.length - 1];
+        if (!last || last.role !== 'bot' || sent >= 2) continue;
+        if (chat.pausedUntil && chat.pausedUntil > now) continue;
+        if (chat.orderAt && chat.orderAt > lastClientAt - 60_000) continue;
+        if (sent === 1 && silence < FOLLOW_UP_2_MS) continue;
+        if (now - new Date(last.at).getTime() < FOLLOW_UP_1_MS) continue;
+        if (await this.findOpenOrder(phone)) continue;
+
+        const [products, settings] = await Promise.all([
+          this.catalog ? this.catalog.listProducts().catch(() => []) : Promise.resolve([]),
+          this.catalog ? this.catalog.settings().catch(() => null) : Promise.resolve(null)
+        ]);
+        const result = await generateSalesReply({ history: chat.turns, products, siteUrl: this.catalog?.siteUrl() || '', settings, ad: chat.ad, followUp: sent + 1 });
+        if (!result.reply) continue;
+        this.botSendingAt.set(phone, Date.now());
+        if (!(await this.sendMessage(phone, result.reply))) continue;
+        chat.turns.push({ role: 'bot', text: result.reply, at: new Date().toISOString() });
+        chat.followUps = sent + 1;
+        await this.writeAiChat(phone, chat);
+        this.appendConversation(phone, 'bot', result.reply);
+        console.log(`[SalesBot] Follow-up ${sent + 1}/2 sent to ${phone}`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    } finally {
+      this.followingUp = false;
+    }
   }
 
   private async findOpenOrder(phone: string): Promise<any | undefined> {
@@ -857,6 +1005,10 @@ Merci pour votre commande sur ShopMe Maroc 🇲🇦
       console.log(`[Baileys] "${replyText}" from ${senderPhone}: no unconfirmed order found`);
       return false;
     }
+    // A "yes" right after a message from Salma answers her question, not the older order confirmation
+    const aiChat = await this.readAiChat(senderPhone);
+    const lastBotTurn = [...aiChat.turns].reverse().find(t => t.role === 'bot');
+    if (lastBotTurn && new Date(lastBotTurn.at).getTime() > new Date(matchingOrder.createdAt).getTime()) return false;
 
     const now = new Date();
     await this.orderStore.updateOrder(matchingOrder.id, {

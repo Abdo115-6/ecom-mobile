@@ -6,6 +6,7 @@ interface BotConfig {
   enabled: boolean;
   switchSource: 'admin' | 'env';
   hasAiKey: boolean;
+  followUps: boolean;
   instructions: string;
   maxInstructions: number;
 }
@@ -38,6 +39,7 @@ export const SalesBotSettingsCard: React.FC = () => {
   const { showToast } = useApp();
   const [config, setConfig] = useState<BotConfig | null>(null);
   const [enabled, setEnabled] = useState(false);
+  const [followUps, setFollowUps] = useState(true);
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export const SalesBotSettingsCard: React.FC = () => {
         if (!data.success) return;
         setConfig(data);
         setEnabled(data.enabled);
+        setFollowUps(data.followUps !== false);
         setInstructions(data.instructions || '');
       })
       .catch(() => null);
@@ -63,19 +66,20 @@ export const SalesBotSettingsCard: React.FC = () => {
     chatEnd.current?.scrollIntoView({ block: 'nearest' });
   }, [turns]);
 
-  const save = async (nextEnabled = enabled) => {
+  const save = async (nextEnabled = enabled, nextFollowUps = followUps) => {
     setSaving(true);
     setError(null);
     try {
       const res = await fetch('/api/salesbot/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: nextEnabled, instructions })
+        body: JSON.stringify({ enabled: nextEnabled, followUps: nextFollowUps, instructions })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       setConfig(data);
       setEnabled(data.enabled);
+      setFollowUps(data.followUps !== false);
       showToast(data.enabled ? '✓ Bot IA activé et enregistré' : '✓ Bot IA désactivé');
     } catch (err: any) {
       setError(err.message || 'Enregistrement impossible');
@@ -106,12 +110,15 @@ export const SalesBotSettingsCard: React.FC = () => {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
+      const notes: string[] = [];
+      if (data.video) notes.push(`+ envoie la vidéo démo (${data.video})`);
       const note = data.order
-        ? `Commande collectée : ${data.order.product || '?'} x${data.order.quantity || 1}, ${data.order.fullName || '?'}, ${data.order.city || '?'}`
+        ? `Commande créée : ${data.order.productSlug || data.order.product || '?'} x${data.order.quantity || 1}, ${data.order.fullName || '?'}, ${data.order.city || '?'}`
         : data.needsHuman
           ? `Passe la main à l'équipe : ${data.reason || 'demande du client'}`
           : undefined;
-      setTurns([...next, { role: 'bot', text: data.reply, note }]);
+      if (note) notes.push(note);
+      setTurns([...next, { role: 'bot', text: data.reply, note: notes.join(' · ') || undefined }]);
     } catch (err: any) {
       setTurns([...next, { role: 'bot', text: '⚠ ' + (err.message || 'Test impossible') }]);
     } finally {
@@ -152,6 +159,22 @@ export const SalesBotSettingsCard: React.FC = () => {
           <span className="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300">GEMINI_API_KEY manquante dans Railway</span>
         )}
       </div>
+
+      <label className="flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={followUps}
+          disabled={saving || !config}
+          onChange={e => {
+            setFollowUps(e.target.checked);
+            save(enabled, e.target.checked);
+          }}
+          className="mt-0.5 accent-emerald-500"
+        />
+        <span>
+          <span className="font-semibold text-white">Relances automatiques</span> : si le client ne répond plus, Salma le relance après 1h puis après 20h (2 relances maximum, jamais après 24h).
+        </span>
+      </label>
 
       <div>
         <div className="flex items-center justify-between mb-1">
