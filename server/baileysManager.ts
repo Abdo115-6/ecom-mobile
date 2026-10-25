@@ -108,7 +108,9 @@ const AI_DEBOUNCE_MS = 6000;
 const HUMAN_TAKEOVER_MS = 12 * 3600 * 1000;
 const AI_MAX_REPLIES_PER_DAY = 40;
 // Customers who go quiet get at most 2 follow-ups, only inside WhatsApp's 24h window after their last message
-const AI_CHAT_INDEX_KEY = 'ai-chat-index';
+// A list of {phone, at}: Baileys' JSON reviver turns objects with only numeric keys (phone numbers) into Buffers
+const AI_CHAT_INDEX_KEY = 'ai-chat-index-v2';
+type ChatIndex = { phone: string; at: number }[];
 const FOLLOW_UP_1_MS = 60 * 60 * 1000;
 const FOLLOW_UP_2_MS = 20 * 3600 * 1000;
 const FOLLOW_UP_WINDOW_MS = 23 * 3600 * 1000;
@@ -689,13 +691,24 @@ class BaileysManager {
     console.warn(`[SalesBot] ${phone}: ${note}`);
   }
 
-  private async touchChatIndex(phone: string) {
+  private async readChatIndex(): Promise<ChatIndex> {
     const store = await this.getStore();
-    const index = (await store.read<Record<string, number>>(AI_CHAT_INDEX_KEY).catch(() => null)) || {};
-    const now = Date.now();
-    index[normalizeMoroccanPhone(phone)] = now;
-    for (const [p, at] of Object.entries(index)) if (now - at > 25 * 3600 * 1000) delete index[p];
-    await store.write(AI_CHAT_INDEX_KEY, index).catch(() => {});
+    const index = await store.read<ChatIndex>(AI_CHAT_INDEX_KEY).catch(() => null);
+    return Array.isArray(index) ? index.filter(e => e && typeof e.phone === 'string' && typeof e.at === 'number') : [];
+  }
+
+  /** Remembers when the customer last wrote (for follow-ups); a failure here must never stop the reply */
+  private async touchChatIndex(phone: string) {
+    try {
+      const now = Date.now();
+      const target = normalizeMoroccanPhone(phone);
+      const index = (await this.readChatIndex()).filter(e => e.phone !== target && now - e.at < 25 * 3600 * 1000);
+      index.push({ phone: target, at: now });
+      const store = await this.getStore();
+      await store.write(AI_CHAT_INDEX_KEY, index);
+    } catch (err: any) {
+      console.warn('[SalesBot] Chat index error:', err.message || err);
+    }
   }
 
   /** Follow-up n°1 after 1h of silence, n°2 after 20h, never after WhatsApp's 24h window or once an order exists */
@@ -703,10 +716,9 @@ class BaileysManager {
     if (this.followingUp || !areFollowUpsEnabled() || !this.isConnected()) return;
     this.followingUp = true;
     try {
-      const store = await this.getStore();
-      const index = (await store.read<Record<string, number>>(AI_CHAT_INDEX_KEY).catch(() => null)) || {};
+      const index = await this.readChatIndex();
       const now = Date.now();
-      for (const [phone, lastClientAt] of Object.entries(index)) {
+      for (const { phone, at: lastClientAt } of index) {
         const silence = now - lastClientAt;
         if (silence < FOLLOW_UP_1_MS || silence > FOLLOW_UP_WINDOW_MS) continue;
         const chat = await this.readAiChat(phone);
