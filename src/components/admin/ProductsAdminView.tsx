@@ -817,7 +817,9 @@ export const ProductsAdminView: React.FC = () => {
         payloadFormat = 'webm';
       }
 
+      const isVideo = file.type.startsWith('video/') || mediaModalType === 'video';
       let uploadedUrl = finalDataUrl;
+      let uploadError = '';
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
@@ -828,15 +830,19 @@ export const ProductsAdminView: React.FC = () => {
             format: payloadFormat
           })
         });
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
         if (json.success && (json.url || json.imageUrl)) {
           uploadedUrl = json.url || json.imageUrl;
+        } else {
+          uploadError = json.message || (res.status === 413 ? 'fichier trop lourd' : `erreur serveur ${res.status}`);
         }
-      } catch {
-        uploadedUrl = finalDataUrl;
+      } catch (err: any) {
+        uploadError = err.message || 'connexion impossible';
       }
-
-      const isVideo = file.type.startsWith('video/') || mediaModalType === 'video';
+      // An embedded video would bloat the product data and cannot be sent on WhatsApp: it must be on the server
+      if (uploadError && isVideo) {
+        throw new Error(`vidéo non envoyée au serveur (${uploadError}, ${Math.round(file.size / 1024 / 1024)} Mo). Essayez une vidéo MP4 plus légère (moins de 30 Mo).`);
+      }
       const isGif = file.type.includes('gif') || mediaModalType === 'gif';
       const tagType = isVideo ? 'video' : (isGif ? 'gif' : 'image');
 
