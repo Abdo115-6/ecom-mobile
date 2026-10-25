@@ -315,7 +315,9 @@ export function createTracker(opts: TrackerOptions) {
               currency: ev.currency,
               value: ev.value,
               order_id: ev.orderId,
-              content_type: 'product',
+              // Only product events carry a content_id; 'product' without one is flagged by TikTok diagnostics
+              content_type: ev.items?.length ? 'product' : undefined,
+              content_id: ev.items?.[0]?.id,
               contents: ev.items?.map(i => ({ content_id: i.id, content_name: i.name, quantity: i.quantity, price: i.price }))
             }
           }]

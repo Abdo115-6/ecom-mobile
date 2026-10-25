@@ -471,12 +471,16 @@ class MarketingTrackingService {
       } else {
         const ttName = TIKTOK_EVENT_NAMES[payload.eventName];
         if (ttName && typeof win.ttq.track === 'function') {
-          win.ttq.track(ttName, {
-            value: payload.value,
-            currency: payload.currency,
-            content_type: 'product',
-            contents: items?.map(i => ({ content_id: i.id, content_name: i.name, quantity: i.quantity, price: i.price }))
-          }, { event_id: payload.eventId });
+          // content_type 'product' without a content_id is flagged "Content ID is missing" by TikTok,
+          // so events without products (Contact, Search) are sent without it
+          const ttParams: Record<string, unknown> = { currency: payload.currency };
+          if (payload.value !== undefined) ttParams.value = payload.value;
+          if (items?.length) {
+            ttParams.content_type = 'product';
+            ttParams.content_id = items[0].id;
+            ttParams.contents = items.map(i => ({ content_id: i.id, content_name: i.name, quantity: i.quantity, price: i.price }));
+          }
+          win.ttq.track(ttName, ttParams, { event_id: payload.eventId });
           payload.dispatchedTo.browserTikTokPixel = true;
         }
       }
