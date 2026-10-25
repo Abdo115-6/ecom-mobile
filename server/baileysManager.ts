@@ -395,7 +395,10 @@ class BaileysManager {
       sock.ev.on('messages.upsert', async ({ messages }) => {
         if (this.sock !== sock) return;
         for (const msg of messages) {
-          await this.handleIncoming(msg).catch(err => console.error('[Baileys] Incoming message error:', err));
+          await this.handleIncoming(msg).catch(err => {
+            console.error('[Baileys] Incoming message error:', err);
+            this.note((msg.key.remoteJid || '?').split('@')[0], `Erreur à la réception : ${String(err?.message || err).slice(0, 160)}`);
+          });
         }
       });
 
@@ -555,6 +558,7 @@ class BaileysManager {
 
     const pending = this.aiTimers.get(phone);
     if (pending) clearTimeout(pending);
+    this.note(phone, `Réponse prévue dans ${AI_DEBOUNCE_MS / 1000} s`);
     this.aiTimers.set(phone, setTimeout(() => {
       this.aiTimers.delete(phone);
       this.answerWithAi(phone).catch(err => {

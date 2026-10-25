@@ -1139,7 +1139,12 @@ async function startServer() {
   });
 
   app.get('/api/salesbot/activity', requireAdmin, (req, res) =>
-    res.json({ success: true, whatsapp: baileysManager.getStatus().status, activity: baileysManager.getActivity() })
+    res.json({
+      success: true,
+      whatsapp: baileysManager.getStatus().status,
+      version: String(process.env.RAILWAY_GIT_COMMIT_SHA || '').slice(0, 7) || 'local',
+      activity: baileysManager.getActivity()
+    })
   );
 
   app.post('/api/salesbot/resume', requireAdmin, async (req, res) => {
