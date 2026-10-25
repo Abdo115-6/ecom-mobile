@@ -1138,6 +1138,17 @@ async function startServer() {
     return res.json({ success: true, ...salesBotSummary(), maxInstructions: MAX_INSTRUCTIONS });
   });
 
+  app.get('/api/salesbot/activity', requireAdmin, (req, res) =>
+    res.json({ success: true, whatsapp: baileysManager.getStatus().status, activity: baileysManager.getActivity() })
+  );
+
+  app.post('/api/salesbot/resume', requireAdmin, async (req, res) => {
+    const phone = String(req.body?.phone || '').replace(/\D/g, '');
+    if (phone.length < 9) return res.status(400).json({ success: false, message: 'Numéro invalide' });
+    await baileysManager.resumeAiChat(phone);
+    return res.json({ success: true });
+  });
+
   app.post('/api/salesbot/test', requireAdmin, async (req, res) => {
     const messages = Array.isArray(req.body?.messages) ? req.body.messages.slice(-16) : [];
     const history = messages

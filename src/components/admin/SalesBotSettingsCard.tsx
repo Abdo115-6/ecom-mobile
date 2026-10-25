@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, Loader2, Save, Send, RotateCcw, FileText } from 'lucide-react';
+import { Bot, Loader2, Save, Send, RotateCcw, FileText, Activity, PlayCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 interface BotConfig {
@@ -49,6 +49,36 @@ export const SalesBotSettingsCard: React.FC = () => {
   const [draft, setDraft] = useState('');
   const [testing, setTesting] = useState(false);
   const chatEnd = useRef<HTMLDivElement>(null);
+
+  // What Salma did with the last real WhatsApp messages (refreshed every 10 s)
+  const [activity, setActivity] = useState<{ at: string; phone: string; event: string }[]>([]);
+  const [waStatus, setWaStatus] = useState('');
+  const loadActivity = () =>
+    fetch('/api/salesbot/activity')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        setActivity(data.activity || []);
+        setWaStatus(data.whatsapp || '');
+      })
+      .catch(() => null);
+  useEffect(() => {
+    loadActivity();
+    const timer = setInterval(loadActivity, 10_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const resumeChat = async (phone: string) => {
+    const res = await fetch('/api/salesbot/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    }).then(r => r.json()).catch(() => null);
+    if (res?.success) {
+      showToast('✓ Salma répond de nouveau à ce client');
+      loadActivity();
+    }
+  };
 
   useEffect(() => {
     fetch('/api/salesbot/config')
@@ -213,6 +243,39 @@ export const SalesBotSettingsCard: React.FC = () => {
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         <span>Enregistrer les consignes{dirty ? ' *' : ''}</span>
       </button>
+
+      {/* Activity: real WhatsApp messages and what Salma did with each one */}
+      <div className="border-t border-slate-700 pt-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black text-white flex items-center gap-1.5">
+            <Activity className="w-4 h-4 text-emerald-400" /> Activité WhatsApp (vrais messages)
+          </h3>
+          <span className={`text-[10px] font-bold ${waStatus === 'CONNECTED' ? 'text-emerald-400' : 'text-amber-400'}`}>
+            WhatsApp : {waStatus || '…'}
+          </span>
+        </div>
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-3 max-h-56 overflow-y-auto space-y-1.5">
+          {activity.length === 0 && (
+            <p className="text-[11px] text-slate-500">
+              Aucun message reçu depuis le dernier démarrage du serveur. Envoyez un message au numéro de la boutique depuis un autre téléphone.
+            </p>
+          )}
+          {activity.map((a, i) => (
+            <div key={i} className="text-[11px] flex items-start gap-2">
+              <span className="text-slate-500 shrink-0 font-mono">
+                {new Date(a.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Casablanca' })}
+              </span>
+              <span className="text-slate-400 shrink-0 font-mono">{a.phone}</span>
+              <span className="text-slate-200 flex-1" dir="auto">{a.event}</span>
+              {a.event.includes('pause') || a.event.includes('se tait') ? (
+                <button type="button" onClick={() => resumeChat(a.phone)} className="shrink-0 text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1">
+                  <PlayCircle className="w-3.5 h-3.5" /> Réactiver
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Test chat: replies are generated with the saved rules, nothing is sent on WhatsApp */}
       <div className="border-t border-slate-700 pt-4 space-y-2">

@@ -164,6 +164,8 @@ class BaileysManager {
   private sentCache = new Map<string, proto.IMessage>();
   private flushing = false;
   private watchdogTicks = 0;
+  /** Last bot decisions, shown in the admin so the owner can see why a customer got (or did not get) an answer */
+  private activity: { at: string; phone: string; event: string }[] = [];
   private followingUp = false;
 
   constructor() {
@@ -207,6 +209,15 @@ class BaileysManager {
       pendingOutbox: this.outbox.length,
       uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000)
     };
+  }
+
+  private note(phone: string, event: string) {
+    this.activity.unshift({ at: new Date().toISOString(), phone: phone ? `+${normalizeMoroccanPhone(phone)}` : '?', event });
+    if (this.activity.length > 50) this.activity.length = 50;
+  }
+
+  public getActivity() {
+    return this.activity;
   }
 
   public isConnected(): boolean {
@@ -418,6 +429,9 @@ class BaileysManager {
     if (!msg.message) {
       // Usually a message this linked device could not decrypt yet; WhatsApp re-sends it once keys are exchanged
       console.log(`[Baileys] Skipped message from ${from}: no readable content (stub ${msg.messageStubType ?? 'none'})`);
+      if (!from.endsWith('@g.us') && !from.endsWith('@broadcast') && !from.endsWith('@newsletter')) {
+        this.note(from.split('@')[0], 'Message illisible (pas encore déchiffré par WhatsApp)');
+      }
       return;
     }
     if (this.processedIds.includes(msg.key.id)) return;
@@ -436,12 +450,16 @@ class BaileysManager {
       '';
     if (!text) {
       console.log(`[Baileys] Skipped message from ${from}: no text (${Object.keys(content || {}).join(', ') || 'empty'})`);
+      if (!from.endsWith('@g.us') && !from.endsWith('@broadcast') && !from.endsWith('@newsletter') && !from.endsWith('@lid')) {
+        this.note(from.split('@')[0], 'Message sans texte (photo, vocal…) : ignoré');
+      }
       return;
     }
 
     const phone = await this.senderPhone(msg);
     if (!phone) {
       console.log(`[Baileys] Skipped message from ${from}: could not resolve the phone number`);
+      this.note(from, 'Numéro du client introuvable (contact @lid) : message ignoré');
       return;
     }
     await this.markProcessed(msg.key.id);
@@ -449,13 +467,19 @@ class BaileysManager {
     console.log(`[Baileys] Message from ${phone}: "${text}"`);
     this.appendConversation(phone, 'client', text);
 
+    this.note(phone, `Reçu : « ${text.slice(0, 80)} »`);
     const intent = detectIntent(text);
-    if (intent === 'YES' && (await this.handleClientConfirmation(phone, text))) return;
+    if (intent === 'YES' && (await this.handleClientConfirmation(phone, text))) {
+      this.note(phone, 'Réponse « oui » : commande du site confirmée');
+      return;
+    }
     if (intent === 'NO') this.setConversationStatus(phone, 'IN_DISCUSSION');
 
     // Everything else (questions, shoppers coming from an ad…) is answered by the AI sales assistant.
     // Messages that piled up while the bot was offline for hours are left to the team.
     const fresh = !ts || Date.now() / 1000 - ts < 6 * 3600;
+    if (!isSalesBotEnabled()) this.note(phone, "Salma est ARRÊTÉE (interrupteur) ou aucune clé IA : pas de réponse");
+    else if (!fresh) this.note(phone, 'Message de plus de 6h : laissé à l\'équipe');
     if (isSalesBotEnabled() && fresh) {
       if (this.ensureLeadConversation(phone, msg.pushName || undefined, adContextOf(msg))) {
         this.appendConversation(phone, 'client', text);
@@ -478,6 +502,15 @@ class BaileysManager {
     const chat = await this.readAiChat(phone);
     chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
     await this.writeAiChat(phone, chat);
+    this.note(phone, "Message écrit par l'équipe depuis le téléphone : Salma se tait 12h dans ce chat");
+  }
+
+  /** Lets Salma answer again in a chat the team had taken over */
+  public async resumeAiChat(phone: string) {
+    const chat = await this.readAiChat(phone);
+    chat.pausedUntil = undefined;
+    await this.writeAiChat(phone, chat);
+    this.note(phone, 'Salma réactivée dans ce chat par l\'admin');
   }
 
   private aiChatKey(phone: string) {
@@ -519,8 +552,15 @@ class BaileysManager {
 
   private async answerWithAi(phone: string) {
     const chat = await this.readAiChat(phone);
-    if (chat.pausedUntil && chat.pausedUntil > Date.now()) return;
-    if (chat.repliesToday >= AI_MAX_REPLIES_PER_DAY) return;
+    if (chat.pausedUntil && chat.pausedUntil > Date.now()) {
+      const until = new Date(chat.pausedUntil).toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+      this.note(phone, `Salma en pause dans ce chat jusqu'au ${until} (l'équipe a pris la main)`);
+      return;
+    }
+    if (chat.repliesToday >= AI_MAX_REPLIES_PER_DAY) {
+      this.note(phone, `Limite de ${AI_MAX_REPLIES_PER_DAY} réponses par jour atteinte pour ce client`);
+      return;
+    }
     if (chat.turns[chat.turns.length - 1]?.role !== 'client') return;
 
     const [products, openOrder, settings] = await Promise.all([
@@ -537,8 +577,13 @@ class BaileysManager {
       openOrder
     });
 
+    if (result.reason?.startsWith('IA indisponible')) this.note(phone, result.reason);
     this.botSendingAt.set(phone, Date.now());
-    if (!(await this.sendMessage(phone, result.reply))) return;
+    if (!(await this.sendMessage(phone, result.reply))) {
+      this.note(phone, 'Échec de l\'envoi WhatsApp (message mis en attente)');
+      return;
+    }
+    this.note(phone, `Répondu : « ${result.reply.slice(0, 80)} »`);
     const lastClientText = chat.turns[chat.turns.length - 1]?.text || '';
     const previousBotText = [...chat.turns].reverse().find(t => t.role === 'bot')?.text || '';
     chat.turns.push({ role: 'bot', text: result.reply, at: new Date().toISOString() });
@@ -577,6 +622,7 @@ class BaileysManager {
       if (sent?.key.id && sent.message) this.sentCache.set(sent.key.id, sent.message);
       chat.videosSent = [...(chat.videosSent || []), slug];
       this.appendConversation(phone, 'bot', `🎥 ${caption}`);
+      this.note(phone, 'Vidéo démo envoyée');
       console.log(`[SalesBot] Demo video of ${slug} sent to ${phone}`);
     } catch (err: any) {
       console.warn(`[SalesBot] Video send error to ${phone}:`, err.message || err);
@@ -597,6 +643,7 @@ class BaileysManager {
         chat.orderAt = Date.now();
         this.flagLeadConversation(phone, `COMMANDE CRÉÉE #${built.order.orderNumber} : ${built.order.items[0].productName} x${built.order.items[0].quantity} - ${built.order.totalAmount} DH`);
         this.setConversationStatus(phone, 'CONFIRMED');
+        this.note(phone, `Commande #${built.order.orderNumber} créée (${built.order.totalAmount} DH)`);
         console.log(`[SalesBot] Order #${built.order.orderNumber} created from the chat with ${phone}`);
         return;
       } catch (err: any) {
