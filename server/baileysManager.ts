@@ -164,6 +164,11 @@ class BaileysManager {
   private catalog: BotCatalog | null = null;
   private aiTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private botSendingAt = new Map<string, number>();
+  /** When each customer last wrote: the WhatsApp Business app's greeting/away message answers within seconds */
+  private clientWroteAt = new Map<string, number>();
+  /** Texts the phone sent to several different customers: automatic messages, not the team taking over */
+  private teamTexts = new Map<string, Set<string>>();
+  private voiceReplyAt = new Map<string, number>();
   private status: BaileysManagerStatus;
   private isInitializing = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -466,6 +471,7 @@ class BaileysManager {
       '';
     if (!text) {
       console.log(`[Baileys] Skipped message from ${from}: no text (${Object.keys(content || {}).join(', ') || 'empty'})`);
+      if (content?.audioMessage) return this.answerVoiceNote(msg);
       if (!from.endsWith('@g.us') && !from.endsWith('@broadcast') && !from.endsWith('@newsletter') && !from.endsWith('@lid')) {
         this.note(from.split('@')[0], 'Message sans texte (photo, vocal…) : ignoré');
       }
@@ -479,6 +485,7 @@ class BaileysManager {
       return;
     }
     await this.markProcessed(msg.key.id);
+    this.clientWroteAt.set(phone, Date.now());
 
     console.log(`[Baileys] Message from ${phone}: "${text}"`);
     this.appendConversation(phone, 'client', text);
@@ -535,11 +542,51 @@ class BaileysManager {
     if (sentByBot) return;
     const ts = Number(msg.messageTimestamp || 0) * 1000;
     if (ts && Date.now() - ts > HUMAN_TAKEOVER_MS) return;
+
+    // The WhatsApp Business app's greeting / away message: sent by the phone right after the customer writes,
+    // or the same text sent to several customers. Nobody is taking over, so Salma keeps answering.
+    if (written) {
+      const key = written.trim().slice(0, 200);
+      const chats = this.teamTexts.get(key) || new Set<string>();
+      chats.add(phone);
+      this.teamTexts.set(key, chats);
+      if (this.teamTexts.size > 300) this.teamTexts.delete(this.teamTexts.keys().next().value as string);
+      const instant = Date.now() - (this.clientWroteAt.get(phone) || 0) < 8_000;
+      if (instant || chats.size >= 2) {
+        this.note(phone, `Message automatique du téléphone « ${written.slice(0, 60)} » : Salma continue de répondre`);
+        return;
+      }
+    }
+
     const chat = await this.readAiChat(phone);
     chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
     await this.writeAiChat(phone, chat);
     const what = written ? `« ${written.slice(0, 60)} »` : `(${media})`;
     this.note(phone, `Message écrit par l'équipe depuis le téléphone ${what} : Salma se tait 12h dans ce chat`);
+  }
+
+  /** Salma cannot listen to voice notes: she asks the customer to write, at most once every 6 h per chat */
+  private async answerVoiceNote(msg: WAMessage) {
+    const phone = await this.senderPhone(msg);
+    if (!phone || !msg.key.id || this.processedIds.includes(msg.key.id)) return;
+    await this.markProcessed(msg.key.id);
+    const ts = Number(msg.messageTimestamp || 0);
+    if (ts && Date.now() / 1000 - ts > 6 * 3600) return;
+    this.clientWroteAt.set(phone, Date.now());
+    this.note(phone, 'Message vocal reçu');
+    if (!isSalesBotEnabled()) return;
+    const chat = await this.readAiChat(phone);
+    if (chat.pausedUntil && chat.pausedUntil > Date.now()) return;
+    if (Date.now() - (this.voiceReplyAt.get(phone) || 0) < 6 * 3600 * 1000) return;
+    this.voiceReplyAt.set(phone, Date.now());
+    const reply = 'مرحبا بيك 👋 سمح ليا ما نقدرش نسمع الأوديو دابا، عافاك كتب ليا السؤال ديالك بالكتابة وغادي نجاوبك فالحين 😊';
+    this.botSendingAt.set(phone, Date.now());
+    if (await this.sendMessage(phone, reply)) {
+      chat.turns.push({ role: 'bot', text: reply, at: new Date().toISOString() });
+      await this.writeAiChat(phone, chat);
+      this.appendConversation(phone, 'bot', reply);
+      this.note(phone, 'Vocal : Salma a demandé au client d\'écrire');
+    }
   }
 
   /** Lets Salma answer again in a chat the team had taken over */
