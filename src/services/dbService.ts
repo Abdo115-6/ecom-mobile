@@ -702,7 +702,7 @@ const INITIAL_SETTINGS: StoreSettings = {
   whatsappShippingTemplate: "Bonjour {{customer_name}}, votre colis pour la commande #{{order_number}} est en cours d'acheminement par notre livreur. Numéro de suivi : {{tracking_number}}.",
   metaPixelId: "1937322180765245",
   googleAnalyticsId: "",
-  tiktokPixelId: "DB98263C77UDN3PL17DG",
+  tiktokPixelId: "DBF0BBBC77U4J2JQE7A0",
   snapchatPixelId: ""
 };
 
