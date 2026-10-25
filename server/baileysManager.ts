@@ -509,6 +509,26 @@ class BaileysManager {
    * Messages the bot sends itself also come back here, so they are recognised by their send time.
    */
   private async noteTeamMessage(msg: WAMessage) {
+    // WhatsApp also echoes hidden "fromMe" messages (receipts, key/protocol updates, reactions, edits, system stubs).
+    // Only something a person actually wrote or sent hands the chat over, otherwise Salma went silent for no reason.
+    const content: any = normalizeMessageContent(msg.message);
+    const written =
+      content?.conversation ||
+      content?.extendedTextMessage?.text ||
+      content?.imageMessage?.caption ||
+      content?.videoMessage?.caption ||
+      content?.documentMessage?.caption ||
+      '';
+    const media = content?.imageMessage ? 'photo'
+      : content?.videoMessage ? 'vidéo'
+      : content?.audioMessage ? 'vocal'
+      : content?.documentMessage ? 'document'
+      : content?.stickerMessage ? 'sticker'
+      : content?.locationMessage ? 'localisation'
+      : content?.contactMessage ? 'contact'
+      : '';
+    if (!written && !media) return;
+
     const phone = await this.senderPhone(msg);
     if (!phone) return;
     const sentByBot = Date.now() - (this.botSendingAt.get(phone) || 0) < 15_000 || (!!msg.key.id && this.sentCache.has(msg.key.id));
@@ -518,7 +538,8 @@ class BaileysManager {
     const chat = await this.readAiChat(phone);
     chat.pausedUntil = Date.now() + HUMAN_TAKEOVER_MS;
     await this.writeAiChat(phone, chat);
-    this.note(phone, "Message écrit par l'équipe depuis le téléphone : Salma se tait 12h dans ce chat");
+    const what = written ? `« ${written.slice(0, 60)} »` : `(${media})`;
+    this.note(phone, `Message écrit par l'équipe depuis le téléphone ${what} : Salma se tait 12h dans ce chat`);
   }
 
   /** Lets Salma answer again in a chat the team had taken over */
