@@ -1146,8 +1146,8 @@ async function startServer() {
     if (!history.length || history[history.length - 1].role !== 'client') {
       return res.status(400).json({ success: false, message: 'Écrivez un message client' });
     }
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(400).json({ success: false, message: 'GEMINI_API_KEY manquante dans Railway' });
+    if (!salesBotSummary().hasAiKey) {
+      return res.status(400).json({ success: false, message: 'Clé IA manquante dans Railway (ANTHROPIC_API_KEY ou GEMINI_API_KEY)' });
     }
     const [products, settings] = await Promise.all([botCatalog.listProducts().catch(() => []), loadStoreSettings().catch(() => null)]);
     const result = await generateSalesReply({ history, products, settings, siteUrl: botCatalog.siteUrl() });

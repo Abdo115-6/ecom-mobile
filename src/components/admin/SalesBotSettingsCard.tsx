@@ -6,6 +6,7 @@ interface BotConfig {
   enabled: boolean;
   switchSource: 'admin' | 'env';
   hasAiKey: boolean;
+  aiProvider?: 'claude' | 'gemini';
   followUps: boolean;
   instructions: string;
   maxInstructions: number;
@@ -156,7 +157,10 @@ export const SalesBotSettingsCard: React.FC = () => {
           {enabled ? 'ACTIF : répond aux clients' : 'ARRÊTÉ : ne répond pas'}
         </span>
         {config && !config.hasAiKey && (
-          <span className="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300">GEMINI_API_KEY manquante dans Railway</span>
+          <span className="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300">Clé IA manquante dans Railway (ANTHROPIC_API_KEY ou GEMINI_API_KEY)</span>
+        )}
+        {config?.hasAiKey && (
+          <span className="px-2.5 py-1 rounded-full bg-slate-700 text-slate-300">IA : {config.aiProvider === 'claude' ? 'Claude' : 'Gemini'}</span>
         )}
       </div>
 
