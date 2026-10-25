@@ -7,6 +7,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
+import { buildDataMiningReport } from './server/dataMining.js';
 import { setSalesBotConfig, salesBotSummary, generateSalesReply, MAX_INSTRUCTIONS } from './server/salesBot.js';
 import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
@@ -197,6 +198,8 @@ async function initPostgresTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Product image / pack / price of the abandoned form
+    await client.query(`ALTER TABLE client_leads ADD COLUMN IF NOT EXISTS extra JSONB DEFAULT '{}'::jsonb`);
 
     client.release();
   } catch (err: any) {
@@ -1403,94 +1406,175 @@ async function startServer() {
     return res.json({ success: true });
   });
 
-  // 8. Data Mining Leads (Real-time capture of abandoned inputs)
-  app.get('/api/leads', requireAdmin, async (req, res) => {
+  // 8. Data Mining Leads: order forms where the visitor typed a name/phone without sending the order
+  const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : '');
+  const LEAD_STATUSES = ['ABANDONED_INPUT', 'PURCHASED', 'PRODUCT_VIEWED', 'CART_ABANDONED', 'BROWSING'];
+
+  /** Only the fields the storefront may send; contact follow-up is set by the admin endpoint */
+  function sanitizeLead(raw: any) {
+    const ci = raw?.capturedInputs || {};
+    return {
+      id: clip(raw?.id, 100),
+      sessionId: clip(raw?.sessionId, 100) || clip(raw?.id, 100),
+      ipCity: clip(raw?.ipCity, 100),
+      deviceType: clip(raw?.deviceType, 20),
+      referrerSource: clip(raw?.referrerSource, 100),
+      status: LEAD_STATUSES.includes(raw?.status) ? raw.status : 'ABANDONED_INPUT',
+      productId: clip(raw?.productId, 100) || null,
+      productName: clip(raw?.productName, 255) || null,
+      productImage: clip(raw?.productImage, 500) || undefined,
+      productPrice: Number(raw?.productPrice) || undefined,
+      selectedPack: Math.min(Math.max(Number(raw?.selectedPack) || 1, 1), 20),
+      potentialRevenue: Math.min(Math.max(Number(raw?.potentialRevenue) || 0, 0), 1_000_000),
+      capturedInputs: {
+        fullName: clip(ci.fullName, 120),
+        phone: clip(ci.phone, 30),
+        city: clip(ci.city, 100),
+        address: clip(ci.address, 300),
+        selectedPack: Number(ci.selectedPack) || undefined,
+        selectedVariantTitle: clip(ci.selectedVariantTitle, 120) || undefined,
+        lastInputAt: new Date().toISOString(),
+        completedFieldsCount: Math.min(Math.max(Number(ci.completedFieldsCount) || 0, 0), 4)
+      },
+      timeline: Array.isArray(raw?.timeline)
+        ? raw.timeline.slice(0, 30).map((t: any) => ({ action: clip(t?.action, 80), details: clip(t?.details, 300), timestamp: clip(t?.timestamp, 40) }))
+        : []
+    };
+  }
+
+  const leadFromRow = (r: any) => ({
+    id: r.id,
+    sessionId: r.session_id,
+    ipCity: r.ip_city,
+    deviceType: r.device_type,
+    referrerSource: r.referrer_source,
+    status: r.status,
+    productId: r.product_id,
+    productName: r.product_name,
+    potentialRevenue: Number(r.potential_revenue || 0),
+    ...(r.extra || {}),
+    capturedInputs: r.captured_inputs,
+    timeline: r.timeline,
+    isContacted: r.is_contacted,
+    contactNotes: r.contact_notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  });
+
+  async function loadLeads(limit = 1000): Promise<{ leads: any[]; source: string }> {
     if (isPgConnected) {
       try {
-        const client = await pgPool.connect();
-        const result = await client.query('SELECT * FROM client_leads ORDER BY updated_at DESC LIMIT 100');
-        client.release();
-        if (result.rows.length > 0) {
-          const mapped = result.rows.map(r => ({
-            id: r.id,
-            sessionId: r.session_id,
-            ipCity: r.ip_city,
-            deviceType: r.device_type,
-            referrerSource: r.referrer_source,
-            status: r.status,
-            productId: r.product_id,
-            productName: r.product_name,
-            potentialRevenue: Number(r.potential_revenue || 0),
-            capturedInputs: r.captured_inputs,
-            timeline: r.timeline,
-            isContacted: r.is_contacted,
-            contactNotes: r.contact_notes,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at
-          }));
-          return res.json({ success: true, leads: mapped, source: 'postgres' });
-        }
+        const result = await pgPool.query('SELECT * FROM client_leads ORDER BY updated_at DESC LIMIT $1', [limit]);
+        if (result.rows.length > 0) return { leads: result.rows.map(leadFromRow), source: 'postgres' };
       } catch (err) {
         console.warn('Postgres leads error:', err);
       }
     }
+    return { leads: readJsonFile<any[]>(LEADS_FILE, []).slice(0, limit), source: 'file' };
+  }
 
-    const fileLeads = readJsonFile(LEADS_FILE, []);
-    return res.json({ success: true, leads: fileLeads, source: 'file' });
+  app.get('/api/leads', requireAdmin, async (req, res) => {
+    const { leads, source } = await loadLeads(Math.min(Number(req.query.limit) || 300, 1000));
+    return res.json({ success: true, leads, source });
   });
 
+  // Sent by the storefront while the visitor fills the order form (debounced)
   app.post('/api/leads', async (req, res) => {
-    const lead = req.body;
-    if (!lead || !lead.id) return res.status(400).json({ success: false });
+    const lead = sanitizeLead(req.body);
+    if (!lead.id) return res.status(400).json({ success: false });
 
+    const now = new Date().toISOString();
     const currentLeads = readJsonFile<any[]>(LEADS_FILE, []);
     const idx = currentLeads.findIndex(l => l.id === lead.id);
     if (idx >= 0) {
-      currentLeads[idx] = { ...lead, updatedAt: new Date().toISOString() };
+      const prev = currentLeads[idx];
+      currentLeads[idx] = { ...lead, isContacted: prev.isContacted, contactNotes: prev.contactNotes, createdAt: prev.createdAt, updatedAt: now };
     } else {
-      currentLeads.unshift({ ...lead, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      currentLeads.unshift({ ...lead, isContacted: false, contactNotes: '', createdAt: now, updatedAt: now });
     }
-    writeJsonFile(LEADS_FILE, currentLeads);
+    writeJsonFile(LEADS_FILE, currentLeads.slice(0, 2000));
 
     if (isPgConnected) {
       try {
-        const client = await pgPool.connect();
-        await client.query(`
+        await pgPool.query(`
           INSERT INTO client_leads (
             id, session_id, ip_city, device_type, referrer_source, status,
-            product_id, product_name, potential_revenue, captured_inputs,
-            timeline, is_contacted, contact_notes, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+            product_id, product_name, potential_revenue, captured_inputs, timeline, extra, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
           ON CONFLICT (id) DO UPDATE SET
+            ip_city = EXCLUDED.ip_city,
             status = EXCLUDED.status,
+            product_id = EXCLUDED.product_id,
+            product_name = EXCLUDED.product_name,
             potential_revenue = EXCLUDED.potential_revenue,
             captured_inputs = EXCLUDED.captured_inputs,
             timeline = EXCLUDED.timeline,
-            is_contacted = EXCLUDED.is_contacted,
-            contact_notes = EXCLUDED.contact_notes,
+            extra = EXCLUDED.extra,
             updated_at = NOW()
         `, [
-          lead.id,
-          lead.sessionId,
-          lead.ipCity || 'Casablanca',
-          lead.deviceType || 'Mobile',
-          lead.referrerSource || 'direct',
-          lead.status || 'ABANDONED_INPUT',
-          lead.productId || null,
-          lead.productName || null,
-          lead.potentialRevenue || 0,
-          JSON.stringify(lead.capturedInputs || {}),
-          JSON.stringify(lead.timeline || []),
-          lead.isContacted || false,
-          lead.contactNotes || ''
+          lead.id, lead.sessionId, lead.ipCity, lead.deviceType, lead.referrerSource, lead.status,
+          lead.productId, lead.productName, lead.potentialRevenue,
+          JSON.stringify(lead.capturedInputs), JSON.stringify(lead.timeline),
+          JSON.stringify({ productImage: lead.productImage, productPrice: lead.productPrice, selectedPack: lead.selectedPack })
         ]);
-        client.release();
       } catch (err) {
         console.warn('Postgres lead insert error:', err);
       }
     }
 
-    return res.json({ success: true, lead });
+    return res.json({ success: true });
+  });
+
+  // Admin follow-up: contacted / converted
+  app.patch('/api/leads/:id', requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const patch: Record<string, any> = {};
+    if (typeof req.body?.isContacted === 'boolean') patch.isContacted = req.body.isContacted;
+    if (typeof req.body?.contactNotes === 'string') patch.contactNotes = req.body.contactNotes.slice(0, 500);
+    if (LEAD_STATUSES.includes(req.body?.status)) patch.status = req.body.status;
+
+    const currentLeads = readJsonFile<any[]>(LEADS_FILE, []);
+    const idx = currentLeads.findIndex(l => l.id === id);
+    if (idx >= 0) {
+      currentLeads[idx] = { ...currentLeads[idx], ...patch, updatedAt: new Date().toISOString() };
+      writeJsonFile(LEADS_FILE, currentLeads);
+    }
+    if (isPgConnected) {
+      try {
+        await pgPool.query(
+          `UPDATE client_leads SET
+             is_contacted = COALESCE($2, is_contacted),
+             contact_notes = COALESCE($3, contact_notes),
+             status = COALESCE($4, status),
+             updated_at = NOW()
+           WHERE id = $1`,
+          [id, patch.isContacted ?? null, patch.contactNotes ?? null, patch.status ?? null]
+        );
+      } catch (err) {
+        console.warn('Postgres lead update error:', err);
+      }
+    }
+    return res.json({ success: true });
+  });
+
+  // Data mining report: visitor events + orders + abandoned forms -> numbers and recommendations
+  app.get('/api/datamining', requireAdmin, async (req, res) => {
+    try {
+      const rangeDays = [7, 14, 30].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+      const [{ orders }, { leads }, { products }] = await Promise.all([loadAllOrders(), loadLeads(1000), loadProducts()]);
+      const report = buildDataMiningReport({
+        events: tracker.eventsSince(Date.now() - rangeDays * 24 * 3600 * 1000),
+        orders,
+        leads,
+        products,
+        rangeDays,
+        conversionApis: tracker.stats('24h').configured
+      });
+      return res.json({ success: true, report });
+    } catch (err: any) {
+      console.error('[DataMining] report error:', err);
+      return res.status(500).json({ success: false, message: err.message || 'Erreur data mining' });
+    }
   });
 
   // ==========================================

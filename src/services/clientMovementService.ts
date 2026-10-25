@@ -1,5 +1,6 @@
 import { Product } from '../types/ecommerce';
 import { dbService } from './dbService';
+import { trackingService } from './trackingService';
 
 export type ClientMovementStatus = 
   | 'ABANDONED_INPUT'   // Prospect typed phone/name but DID NOT BUY (Lost Hot Lead!)
@@ -75,6 +76,7 @@ class ClientMovementService {
   private currentSessionId: string;
   private listeners: Set<MovementListener> = new Set();
   private clickListeners: Set<ClickListener> = new Set();
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.currentSessionId = this.initCurrentSession();
@@ -214,68 +216,6 @@ class ClientMovementService {
     this.saveToStorage();
   }
 
-  private seedRealisticClicks() {
-    const now = Date.now();
-    const min = 60 * 1000;
-    this.clicks = [
-      {
-        id: 'clk-seed-1',
-        elementName: 'Bouton Commander en 1 Clic (COD)',
-        elementType: 'CTA',
-        pageUrl: '/?product=parfum-oud-royal-noir-intense-homme&buy=1',
-        productSlug: 'parfum-oud-royal-noir-intense-homme',
-        productName: 'Parfum Oud Royal Noir 100ml Homme',
-        timestamp: new Date(now - 3 * min).toISOString(),
-        deviceType: 'mobile',
-        city: 'Casablanca'
-      },
-      {
-        id: 'clk-seed-2',
-        elementName: 'Sélection Pack 2 (-20% Best Seller)',
-        elementType: 'PACK',
-        pageUrl: '/?product=parfum-oud-royal-noir-intense-homme',
-        productSlug: 'parfum-oud-royal-noir-intense-homme',
-        productName: 'Parfum Oud Royal Noir 100ml Homme',
-        timestamp: new Date(now - 7 * min).toISOString(),
-        deviceType: 'mobile',
-        city: 'Casablanca'
-      },
-      {
-        id: 'clk-seed-3',
-        elementName: 'Commande WhatsApp Directe',
-        elementType: 'WHATSAPP',
-        pageUrl: '/?product=brosse-coiffante-ionique-5-en-1-multifonction',
-        productSlug: 'brosse-coiffante-ionique-5-en-1-multifonction',
-        productName: 'Brosse Coiffante 5-en-1',
-        timestamp: new Date(now - 14 * min).toISOString(),
-        deviceType: 'mobile',
-        city: 'Rabat'
-      },
-      {
-        id: 'clk-seed-4',
-        elementName: 'Copier Lien Direct d\'Achat',
-        elementType: 'SHARE',
-        pageUrl: '/?product=tondeuse-sans-fil-pro-gold-barbe-cheveux',
-        productSlug: 'tondeuse-sans-fil-pro-gold-barbe-cheveux',
-        productName: 'Tondeuse Barbier Pro Gold',
-        timestamp: new Date(now - 22 * min).toISOString(),
-        deviceType: 'desktop',
-        city: 'Marrakech'
-      },
-      {
-        id: 'clk-seed-5',
-        elementName: 'Sélection Pack 3 (1 Gratuit)',
-        elementType: 'PACK',
-        pageUrl: '/?product=sac-cabas-cuir-italien-finition-doree',
-        productSlug: 'sac-cabas-cuir-italien-finition-doree',
-        productName: 'Sac Cabas Cuir Italien',
-        timestamp: new Date(now - 35 * min).toISOString(),
-        deviceType: 'mobile',
-        city: 'Tanger'
-      }
-    ];
-  }
-
   /**
    * Get or initialize the active user session record
    */
@@ -283,14 +223,14 @@ class ClientMovementService {
     let session = this.sessions.find(s => s.sessionId === this.currentSessionId);
     if (!session) {
       const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-      const ref = typeof document !== 'undefined' ? (document.referrer || 'TikTok Ads (Campagne Maroc)') : 'Direct Ads';
       
       session = {
         id: 'mov_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         sessionId: this.currentSessionId,
         ipCity: estimatedCity,
         deviceType: isMobile ? 'mobile' : 'desktop',
-        referrerSource: ref.includes('tiktok') ? 'TikTok Ads' : ref.includes('facebook') || ref.includes('instagram') ? 'Meta Ads' : 'Accès Direct',
+        // Same source detection as the visitor analytics (UTM, click ids, referrer)
+        referrerSource: trackingService.getTrafficSource().source,
         firstSeenAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
         status: 'BROWSING',
@@ -388,6 +328,7 @@ class ClientMovementService {
     if (session.capturedInputs.city.trim().length > 1) count++;
     if (session.capturedInputs.address.trim().length > 3) count++;
     session.capturedInputs.completedFieldsCount = count;
+    this.scheduleServerSync();
 
     // Determine status: If phone or name entered but not purchased, flag as ABANDONED_INPUT
     if (session.status !== 'PURCHASED') {
@@ -424,12 +365,54 @@ class ClientMovementService {
     });
 
     this.saveToStorage();
+    this.syncToServer();
+  }
+
+  /** The shop owner's own browsing (admin, tests) is not sent */
+  private isOwnerBrowser(): boolean {
+    try {
+      return window.location.pathname.includes('adminonly') || sessionStorage.getItem('aura_admin_auth') === 'true' || !!navigator.webdriver;
+    } catch {
+      return false;
+    }
+  }
+
+  private scheduleServerSync() {
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => this.syncToServer(), 1500);
+  }
+
+  /**
+   * The order form being filled is sent to the server, so the admin sees every visitor's
+   * abandoned form (localStorage only ever showed the admin's own browser)
+   */
+  private syncToServer() {
+    if (this.syncTimer) { clearTimeout(this.syncTimer); this.syncTimer = null; }
+    const session = this.sessions.find(s => s.sessionId === this.currentSessionId);
+    if (!session || this.isOwnerBrowser()) return;
+    const { fullName, phone } = session.capturedInputs;
+    if (phone.replace(/\D/g, '').length < 6 && fullName.trim().length < 3) return;
+    const body = JSON.stringify({ ...session, timeline: session.timeline.slice(0, 15) });
+    try {
+      if (session.status === 'PURCHASED' && navigator.sendBeacon) {
+        navigator.sendBeacon('/api/leads', new Blob([body], { type: 'application/json' }));
+      } else {
+        fetch('/api/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
   }
 
   /**
    * Mark lead as contacted by WhatsApp or Call
    */
   public markLeadContacted(sessionId: string, notes?: string) {
+    fetch(`/api/leads/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isContacted: true, contactNotes: notes || 'Relancé par WhatsApp commercial' })
+    }).catch(() => {});
     const s = this.sessions.find(x => x.sessionId === sessionId || x.id === sessionId);
     if (s) {
       s.isContacted = true;
@@ -446,12 +429,14 @@ class ClientMovementService {
   /**
    * 1-Click Convert Abandoned Lead into a Real Confirmed Order in DB!
    */
-  public convertLeadToConfirmedOrder(leadId: string): boolean {
-    const lead = this.sessions.find(s => s.id === leadId || s.sessionId === leadId);
-    if (!lead || !lead.productId) return false;
+  public convertLeadToConfirmedOrder(leadOrId: string | ClientSessionMovement): string | null {
+    const lead = typeof leadOrId === 'string'
+      ? this.sessions.find(s => s.id === leadOrId || s.sessionId === leadOrId)
+      : leadOrId;
+    if (!lead || !lead.productId) return null;
 
     const product = dbService.getProductById(lead.productId);
-    if (!product) return false;
+    if (!product) return null;
 
     const pack = lead.selectedPack || 1;
     const finalAmount = lead.potentialRevenue || product.price;
@@ -510,7 +495,12 @@ class ClientMovementService {
     });
 
     this.saveToStorage();
-    return true;
+    fetch(`/api/leads/${encodeURIComponent(lead.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'PURCHASED', isContacted: true, contactNotes: lead.contactNotes })
+    }).catch(() => {});
+    return created.orderNumber;
   }
 
   /**
@@ -522,7 +512,7 @@ class ClientMovementService {
     const price = lead.potentialRevenue || lead.productPrice || 'votre sélection';
     const pack = lead.selectedPack && lead.selectedPack > 1 ? ` (Pack ${lead.selectedPack} pièces)` : '';
 
-    const text = `${name}, c'est l'équipe ShopMe Maroc ! 🇲🇦\n\nNous avons remarqué que vous étiez sur le point de commander : *${prodName}${pack}* à *${price} DH*.\n\nSouhaitez-vous que nous vous expédions votre colis dès aujourd'hui avec *Livraison Gratuite* et *Paiement en espèces à la livraison* (après vérification du colis) ?\n\nRépondez simplement *OUI* pour confirmer votre livraison ! 📦✨`;
+    const text = `${name}, c'est l'équipe ShopMe Maroc ! 🇲🇦\n\nNous avons remarqué que vous étiez sur le point de commander : *${prodName}${pack}* à *${price} DH*.\n\nSouhaitez-vous que nous vous expédions votre colis dès aujourd'hui, avec *paiement en espèces à la livraison* (après vérification du colis) ?\n\nRépondez simplement *OUI* pour confirmer votre livraison ! 📦✨`;
 
     // Clean phone number (remove +212 or 0)
     let phone = lead.capturedInputs.phone.replace(/[^0-9]/g, '');
@@ -533,179 +523,6 @@ class ClientMovementService {
     }
 
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-  }
-
-  /**
-   * Seed realistic Moroccan leads for instant data mining visualization
-   */
-  private seedRealisticMoroccanLeads() {
-    const now = Date.now();
-    const min = 60 * 1000;
-
-    const sampleLeads: ClientSessionMovement[] = [
-      {
-        id: 'lead-1',
-        sessionId: 'sess_sample_1',
-        ipCity: 'Casablanca',
-        deviceType: 'mobile',
-        referrerSource: 'TikTok Ads (Campagne Oud Royal)',
-        firstSeenAt: new Date(now - 14 * min).toISOString(),
-        lastActiveAt: new Date(now - 8 * min).toISOString(),
-        status: 'ABANDONED_INPUT',
-        productId: 'prod-oud-royal',
-        productName: 'Parfum Oud Royal Noir 100ml Homme',
-        productPrice: 449,
-        productImage: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=400&q=80',
-        categoryName: 'Parfumerie & Oud Royal',
-        selectedPack: 2,
-        potentialRevenue: 749, // Pack 2 (-20%)
-        capturedInputs: {
-          fullName: 'Mohamed Tazi',
-          phone: '0661458920',
-          city: 'Casablanca',
-          address: 'Quartier Racine, Rue Ahmed Charci',
-          selectedPack: 2,
-          selectedVariantTitle: 'Flacon 100ml Intense',
-          lastInputAt: new Date(now - 8 * min).toISOString(),
-          completedFieldsCount: 4
-        },
-        timeline: [
-          { action: 'Clic Pub TikTok', details: 'Campagne Parfum Oud Royal Homme', timestamp: new Date(now - 14 * min).toISOString() },
-          { action: 'Consultation Fiche', details: 'A passé 3m 45s sur les photos et avis', timestamp: new Date(now - 12 * min).toISOString() },
-          { action: 'Choix Pack 2', details: 'A sélectionné le Pack 2 (-20% 749 DH)', timestamp: new Date(now - 10 * min).toISOString() },
-          { action: 'Saisie Coordonnées COD', details: 'A tapé Nom, Tél (0661458920) et Adresse mais a quitté sans cliquer', timestamp: new Date(now - 8 * min).toISOString() }
-        ],
-        isContacted: false
-      },
-      {
-        id: 'lead-2',
-        sessionId: 'sess_sample_2',
-        ipCity: 'Rabat',
-        deviceType: 'mobile',
-        referrerSource: 'Meta Ads (Instagram Stories)',
-        firstSeenAt: new Date(now - 28 * min).toISOString(),
-        lastActiveAt: new Date(now - 19 * min).toISOString(),
-        status: 'ABANDONED_INPUT',
-        productId: 'prod-hair-styler',
-        productName: 'Brosse Coiffante Ionique 5-en-1 Multifonction',
-        productPrice: 389,
-        productImage: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=400&q=80',
-        categoryName: 'Coiffure & Soins Ioniques',
-        selectedPack: 1,
-        potentialRevenue: 389,
-        capturedInputs: {
-          fullName: 'Salma El Amrani',
-          phone: '0672114488',
-          city: 'Rabat',
-          address: 'Agdal, Avenue Fal Ould Oumeir',
-          selectedPack: 1,
-          selectedVariantTitle: 'Rose Gold Prestige',
-          lastInputAt: new Date(now - 19 * min).toISOString(),
-          completedFieldsCount: 3
-        },
-        timeline: [
-          { action: 'Clic Instagram Ad', details: 'Video Reel Démonstration 5-en-1', timestamp: new Date(now - 28 * min).toISOString() },
-          { action: 'Consultation Produit', details: 'A lu les 115 avis vérifiés', timestamp: new Date(now - 24 * min).toISOString() },
-          { action: 'Saisie Coordonnées COD', details: 'A tapé Salma El Amrani, 0672114488', timestamp: new Date(now - 19 * min).toISOString() }
-        ],
-        isContacted: false
-      },
-      {
-        id: 'lead-3',
-        sessionId: 'sess_sample_3',
-        ipCity: 'Marrakech',
-        deviceType: 'mobile',
-        referrerSource: 'Snapchat Ads',
-        firstSeenAt: new Date(now - 45 * min).toISOString(),
-        lastActiveAt: new Date(now - 38 * min).toISOString(),
-        status: 'ABANDONED_INPUT',
-        productId: 'prod-pro-trimmer',
-        productName: 'Tondeuse Sans Fil Pro Gold Métal Barbe & Cheveux',
-        productPrice: 279,
-        productImage: 'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&w=400&q=80',
-        categoryName: 'Tondeuses & Soins Barbier',
-        selectedPack: 1,
-        potentialRevenue: 279,
-        capturedInputs: {
-          fullName: 'Yassine B.',
-          phone: '0700567890',
-          city: 'Marrakech',
-          address: 'Gueliz',
-          selectedPack: 1,
-          lastInputAt: new Date(now - 38 * min).toISOString(),
-          completedFieldsCount: 3
-        },
-        timeline: [
-          { action: 'Clic Snapchat Ad', details: 'Snap Story Barbier Pro', timestamp: new Date(now - 45 * min).toISOString() },
-          { action: 'Saisie Coordonnées COD', details: 'Numéro 0700567890 renseigné', timestamp: new Date(now - 38 * min).toISOString() }
-        ],
-        isContacted: false
-      },
-      {
-        id: 'lead-4',
-        sessionId: 'sess_sample_4',
-        ipCity: 'Tanger',
-        deviceType: 'desktop',
-        referrerSource: 'Google Search Ads',
-        firstSeenAt: new Date(now - 62 * min).toISOString(),
-        lastActiveAt: new Date(now - 55 * min).toISOString(),
-        status: 'ABANDONED_INPUT',
-        productId: 'prod-4',
-        productName: 'Montre Chronographe Automatique Apex 41mm',
-        productPrice: 1290,
-        productImage: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=400&q=80',
-        categoryName: 'Montres & Horlogerie Homme',
-        selectedPack: 1,
-        potentialRevenue: 1290,
-        capturedInputs: {
-          fullName: 'Anass Bennani',
-          phone: '0663889900',
-          city: 'Tanger',
-          address: 'Malabata',
-          selectedPack: 1,
-          lastInputAt: new Date(now - 55 * min).toISOString(),
-          completedFieldsCount: 3
-        },
-        timeline: [
-          { action: 'Recherche Google', details: 'Mots clés: "montre automatique saphir maroc"', timestamp: new Date(now - 62 * min).toISOString() },
-          { action: 'Saisie Coordonnées COD', details: 'Nom et téléphone saisis sans confirmation', timestamp: new Date(now - 55 * min).toISOString() }
-        ],
-        isContacted: true,
-        contactNotes: 'Client contacté par WhatsApp : hésite sur la couleur du cadran.'
-      },
-      {
-        id: 'lead-5',
-        sessionId: 'sess_sample_5',
-        ipCity: 'Fès',
-        deviceType: 'mobile',
-        referrerSource: 'TikTok Ads',
-        firstSeenAt: new Date(now - 5 * min).toISOString(),
-        lastActiveAt: new Date(now - 1 * min).toISOString(),
-        status: 'PRODUCT_VIEWED',
-        productId: 'prod-rose-musc',
-        productName: 'Coffret Royal Musc Blanc & Rose Damascena 100ml Femme',
-        productPrice: 399,
-        productImage: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?auto=format&fit=crop&w=400&q=80',
-        categoryName: 'Parfumerie & Oud Royal',
-        selectedPack: 2,
-        potentialRevenue: 649,
-        capturedInputs: {
-          fullName: '',
-          phone: '',
-          city: 'Fès',
-          address: '',
-          lastInputAt: new Date(now - 1 * min).toISOString(),
-          completedFieldsCount: 0
-        },
-        timeline: [
-          { action: 'Clic Pub TikTok', details: 'Campagne Musc & Rose Damas', timestamp: new Date(now - 5 * min).toISOString() },
-          { action: 'Consultation Fiche', details: 'En train de regarder les photos (en direct)', timestamp: new Date(now - 1 * min).toISOString() }
-        ]
-      }
-    ];
-
-    this.sessions = sampleLeads;
-    this.saveToStorage();
   }
 }
 

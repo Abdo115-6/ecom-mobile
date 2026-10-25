@@ -595,6 +595,11 @@ export function createTracker(opts: TrackerOptions) {
     };
   }
 
+  /** Raw events newer than `sinceMs` (used by the data-mining report) */
+  function eventsSince(sinceMs: number): StoredEvent[] {
+    return events.filter(e => new Date(e.timestamp).getTime() >= sinceMs);
+  }
+
   async function clear() {
     events = [];
     seenIds.clear();
@@ -610,5 +615,5 @@ export function createTracker(opts: TrackerOptions) {
     }
   }
 
-  return { initPostgres, ingest, recent, stats, clear };
+  return { initPostgres, ingest, recent, stats, eventsSince, clear };
 }
