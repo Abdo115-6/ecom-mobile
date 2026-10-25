@@ -185,8 +185,9 @@ function systemPrompt(opts: { products: any[]; siteUrl: string; settings?: any; 
 Tu parles comme une vendeuse marocaine sympa, pas comme un robot. TU ES l'équipe : réponds toi-même.
 
 LANGUE
-- Par défaut : darija marocaine en lettres arabes.
-- Darija en lettres latines (ex : "slm bch7al") → réponds pareil. Français → français. Arabe classique → darija simple. Anglais seulement si le client écrit en anglais.
+- Écris TOUJOURS en darija marocaine avec l'alphabet arabe, même si le client écrit en lettres latines (ex : "slm bch7al" → réponse en lettres arabes).
+- Seule exception : un client qui écrit en vraies phrases françaises → réponds en français.
+- N'utilise jamais l'alphabet cyrillique ni d'autres alphabets. Les seuls mots en lettres latines autorisés : noms de marques, "Type-C", "iPhone", "DH".
 
 STYLE
 - 2 à 4 lignes maximum, 1 ou 2 émojis maximum.
@@ -278,7 +279,17 @@ export async function generateSalesReply(opts: {
     if (followUpNote) messages.push({ role: 'user', content: followUpNote });
     if (!messages.length) return failed('aucun message client');
     try {
-      return toSalesReply(await claudeSalesReply({ stableSystem: prompt.stable, chatSystem: prompt.chat, messages }), opts.followUp, failed);
+      let parsed = await claudeSalesReply({ stableSystem: prompt.stable, chatSystem: prompt.chat, messages });
+      if (hasForeignScript(parsed?.reply)) {
+        // A stray Cyrillic word slipped in: ask once more rather than send it to the customer
+        console.warn('[SalesBot] Reply with foreign letters, retrying:', parsed.reply);
+        parsed = await claudeSalesReply({
+          stableSystem: prompt.stable,
+          chatSystem: `${prompt.chat}\nRAPPEL : ta réponse précédente contenait des lettres cyrilliques. Écris uniquement en lettres arabes.`.trim(),
+          messages
+        });
+      }
+      return toSalesReply(parsed, opts.followUp, failed);
     } catch (err: any) {
       return failed(err.message || String(err));
     }
@@ -319,6 +330,9 @@ export async function generateSalesReply(opts: {
   if (!parsed) return failed(lastError);
   return toSalesReply(parsed, opts.followUp, failed);
 }
+
+// Cyrillic, Greek or Armenian letters never belong in a reply to a Moroccan shopper
+const hasForeignScript = (text: unknown) => /[Ͱ-ϿЀ-ԯ԰-֏]/.test(String(text || ''));
 
 function toSalesReply(parsed: any, followUp: number | undefined, failed: (why: string) => SalesReply): SalesReply {
   const reply = String(parsed?.reply || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1200);
