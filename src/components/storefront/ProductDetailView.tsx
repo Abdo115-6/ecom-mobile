@@ -231,7 +231,15 @@ export const ProductDetailView: React.FC = () => {
     if (field === 'fullName') setCustomerName(value);
     if (field === 'phone') setCustomerPhone(value);
     if (field === 'city') setSelectedCity(value);
-    if (field === 'address') setShippingAddress(value);
+    let derivedCity = selectedCity;
+    if (field === 'address') {
+      setShippingAddress(value);
+      // The city comes from the free text: a known city gets its delivery rate, anything else the standard fee
+      const text = value.toLowerCase();
+      const known = MOROCCAN_CITIES.find(c => text.includes(c.name.toLowerCase()) || (c.arabicName && value.includes(c.arabicName)));
+      derivedCity = known ? known.name : (value.trim().split(/[,\-]/)[0].trim() || 'Casablanca');
+      setSelectedCity(derivedCity);
+    }
 
     // Fire InitiateCheckout once when customer starts typing in the order form
     if (!hasFiredCheckoutPixelRef.current && product) {
@@ -246,7 +254,7 @@ export const ProductDetailView: React.FC = () => {
     clientMovementService.captureFormInput({
       fullName: field === 'fullName' ? value : customerName,
       phone: field === 'phone' ? value : customerPhone,
-      city: field === 'city' ? value : selectedCity,
+      city: field === 'city' ? value : derivedCity,
       address: field === 'address' ? value : shippingAddress,
       pack: packsList[selectedPackIndex]?.quantity || 1,
       variantTitle: activeVariant?.title,
@@ -433,6 +441,11 @@ export const ProductDetailView: React.FC = () => {
     const cleanPhone = normalizeMoroccanPhone(customerPhone);
     if (!cleanPhone) {
       setOrderError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+
+    if (isPhysical && !shippingAddress.trim()) {
+      setOrderError("Veuillez indiquer votre ville et adresse.");
       return;
     }
 
@@ -762,24 +775,23 @@ export const ProductDetailView: React.FC = () => {
           {/* Physical Only: City and Street Address */}
           {!isDigital && !isService && (
             <>
-              {/* City Selection */}
+              {/* City and address in one free-text field */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Ville de Livraison</span>
-                  <span className="text-[11px] text-slate-400 font-normal">المدينة</span>
+                  <span>Ville et Adresse</span>
+                  <span className="text-[11px] text-slate-400 font-normal">المدينة والعنوان</span>
                 </label>
                 <div className="relative">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-8 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
-                  >
-                    {MOROCCAN_CITIES.map(c => (
-                      <option key={c.name} value={c.name}>
-                        {c.name} - {c.arabicName} ({c.deliveryNote})
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    required
+                    autoComplete="street-address"
+                    enterKeyHint="done"
+                    value={shippingAddress}
+                    onChange={(e) => handleInputChange('address', e.target.value)}
+                    placeholder="Ville et adresse"
+                    className="w-full bg-white border border-slate-300 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+                  />
                   <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 </div>
               </div>
