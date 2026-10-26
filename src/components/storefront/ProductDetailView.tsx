@@ -7,7 +7,7 @@ import { whatsappService } from '../../services/whatsappService';
 import { trackingService } from '../../services/trackingService';
 import { MOROCCAN_CITIES, RECENT_MOROCCAN_BUYERS } from '../../services/moroccoData';
 import { clientMovementService } from '../../services/clientMovementService';
-import { RichProductDescription } from '../common/RichProductDescription';
+import { RichProductDescription, getFirstDemoVideo } from '../common/RichProductDescription';
 import { 
   Star, 
   ShoppingBag, 
@@ -39,7 +39,8 @@ import {
   Key,
   Laptop,
   Mail,
-  FileText
+  FileText,
+  Play
 } from 'lucide-react';
 import { productKindOf } from '../../utils/productKind';
 
@@ -69,6 +70,9 @@ export const ProductDetailView: React.FC = () => {
     product?.variants[0]?.id
   );
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  // The demo video (if the description has one) opens the gallery; tapping a photo switches to it
+  const demoVideoUrl = React.useMemo(() => getFirstDemoVideo(product?.description || ''), [product?.description]);
+  const [showVideo, setShowVideo] = useState<boolean>(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const [customQuantity, setCustomQuantity] = useState<number>(1);
 
@@ -893,12 +897,27 @@ export const ProductDetailView: React.FC = () => {
         
         {/* Left Column: Gallery & Thumbnails (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="relative aspect-square rounded-3xl overflow-hidden bg-white border border-slate-200 shadow-sm">
-            <img fetchPriority="high" decoding="async"
-              src={product.images[selectedImageIndex]?.imageUrl || product.images[0]?.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
+          <div className={`relative rounded-3xl overflow-hidden border border-slate-200 shadow-sm ${demoVideoUrl && showVideo ? 'aspect-[3/4] bg-black' : 'aspect-square bg-white'}`}>
+            {demoVideoUrl && showVideo ? (
+              <video
+                key={demoVideoUrl}
+                src={demoVideoUrl}
+                poster={product.images[0]?.imageUrl}
+                className="w-full h-full object-contain"
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+                preload="metadata"
+              />
+            ) : (
+              <img fetchPriority="high" decoding="async"
+                src={product.images[selectedImageIndex]?.imageUrl || product.images[0]?.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            )}
             
             {/* Promo Discount Tag */}
             {product.compareAtPrice && product.compareAtPrice > product.price && (
@@ -917,14 +936,32 @@ export const ProductDetailView: React.FC = () => {
           </div>
 
           {/* Thumbnails */}
-          {product.images.length > 1 && (
+          {product.images.length + (demoVideoUrl ? 1 : 0) > 1 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {demoVideoUrl && (
+                <button
+                  onClick={() => setShowVideo(true)}
+                  aria-label="Voir la vidéo"
+                  className={`relative w-18 h-18 rounded-2xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer bg-black ${
+                    showVideo ? 'border-slate-900 shadow-sm' : 'border-slate-200 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  {product.images[0]?.imageUrl && (
+                    <img loading="lazy" decoding="async" src={product.images[0].imageUrl} alt="" className="w-full h-full object-cover opacity-60" />
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="w-7 h-7 rounded-full bg-white/90 flex items-center justify-center">
+                      <Play className="w-3.5 h-3.5 fill-slate-900 text-slate-900 ml-0.5" />
+                    </span>
+                  </span>
+                </button>
+              )}
               {product.images.map((img, idx) => (
                 <button
                   key={img.id}
-                  onClick={() => setSelectedImageIndex(idx)}
+                  onClick={() => { setSelectedImageIndex(idx); setShowVideo(false); }}
                   className={`w-18 h-18 rounded-2xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
-                    selectedImageIndex === idx ? 'border-slate-900 shadow-sm' : 'border-slate-200 opacity-70 hover:opacity-100'
+                    !(demoVideoUrl && showVideo) && selectedImageIndex === idx ? 'border-slate-900 shadow-sm' : 'border-slate-200 opacity-70 hover:opacity-100'
                   }`}
                 >
                   <img loading="lazy" decoding="async" src={img.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -1113,7 +1150,7 @@ export const ProductDetailView: React.FC = () => {
                           setSelectedVariantId(v.id);
                           if (v.imageUrl) {
                             const imgIdx = product.images.findIndex(img => img.imageUrl === v.imageUrl);
-                            if (imgIdx >= 0) setSelectedImageIndex(imgIdx);
+                            if (imgIdx >= 0) { setSelectedImageIndex(imgIdx); setShowVideo(false); }
                           }
                           clientMovementService.trackClick(`Sélection Couleur: ${label}`, 'COLOR', {
                             productSlug: product.slug,

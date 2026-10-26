@@ -361,6 +361,11 @@ function getYouTubeId(url: string): string | null {
   return match && match[2].length === 11 ? match[2] : null;
 }
 
+// First self-hosted demo video in a description (YouTube excluded), for the product gallery
+export function getFirstDemoVideo(description: string): string | null {
+  return parseDescriptionBlocks(description).find(b => b.type === 'video' && b.url)?.url || null;
+}
+
 // Robust block parser supporting Markdown, custom tags, and plain URLs
 function parseDescriptionBlocks(text: string): MediaBlock[] {
   if (!text || !text.trim()) return [];
