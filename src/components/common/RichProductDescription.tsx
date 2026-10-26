@@ -313,12 +313,12 @@ const VideoPlayerCard: React.FC<{
   };
 
   return (
-    <div className="my-5 overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-800 bg-slate-950 shadow-lg text-white">
-      <div className="relative aspect-video w-full bg-black flex items-center justify-center group">
+    <div className="my-5 mx-auto w-full max-w-sm overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-800 bg-slate-950 shadow-lg text-white">
+      <div className="relative aspect-[9/16] w-full bg-black flex items-center justify-center group">
         <video
           ref={videoRef}
           src={url}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-cover"
           playsInline
           controls
           preload="metadata"
