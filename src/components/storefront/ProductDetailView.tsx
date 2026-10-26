@@ -877,16 +877,16 @@ export const ProductDetailView: React.FC = () => {
       
       {/* Floating Recent Moroccan Buyer Toast Notification */}
       {showBuyerToast && RECENT_MOROCCAN_BUYERS[buyerIndex] && (
-        <div className="fixed bottom-20 left-4 z-40 bg-slate-950/95 text-white border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-bottom-3 duration-300 max-w-[calc(100%-6.5rem)] sm:max-w-sm pointer-events-none">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-4 h-4" />
+        <div className="fixed bottom-20 left-3 z-40 bg-slate-950/90 text-white border border-slate-700/80 px-2.5 py-1.5 rounded-xl shadow-lg text-[10px] flex items-center gap-2 backdrop-blur-md animate-in slide-in-from-bottom-3 duration-300 max-w-[calc(100%-5rem)] sm:max-w-xs pointer-events-none">
+          <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-3 h-3" />
           </div>
-          <div className="truncate">
-            <div className="font-bold text-white flex items-center gap-1.5">
+          <div className="truncate leading-tight">
+            <div className="font-bold text-white flex items-center gap-1">
               <span>{RECENT_MOROCCAN_BUYERS[buyerIndex].name}</span>
-              <span className="text-[10px] text-amber-400 font-semibold">({RECENT_MOROCCAN_BUYERS[buyerIndex].city})</span>
+              <span className="text-[9px] text-amber-400 font-semibold">({RECENT_MOROCCAN_BUYERS[buyerIndex].city})</span>
             </div>
-            <div className="text-[11px] text-slate-300 truncate">
+            <div className="text-[9px] text-slate-300 truncate">
               Vient d'acheter · <span className="text-slate-400">{RECENT_MOROCCAN_BUYERS[buyerIndex].timeAgo}</span>
             </div>
           </div>
@@ -1045,26 +1045,10 @@ export const ProductDetailView: React.FC = () => {
         {/* Right Column: Title, Urgency, Packs & Direct COD Order Form (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
           
-          {/* Category & Subcategory Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-            <span className="hover:text-slate-900 cursor-pointer" onClick={() => setCurrentView('catalog')}>Boutique</span>
-            <span>›</span>
-            <span className="font-semibold text-slate-700">{product.categoryName || 'Catalogue'}</span>
-            {product.subcategoryName && (
-              <>
-                <span>›</span>
-                <span className="font-bold text-blue-600">{product.subcategoryName}</span>
-              </>
-            )}
-          </div>
-
           {/* Title & Brand */}
           <div className="space-y-2">
+            {(isDigital || isService) && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-bold rounded-md uppercase tracking-wider">
-                {product.brand}
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">Réf: {activeSku}</span>
               {isDigital && (
                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-md flex items-center gap-1 border border-emerald-300">
                   ⚡ {product.digitalSpecs?.digitalType === 'GAME_KEY' ? 'CLÉ CD JEU' : product.digitalSpecs?.digitalType === 'ACCOUNT' ? 'COMPTE PRIVÉ' : product.digitalSpecs?.digitalType === 'SOFTWARE' ? 'LOGICIEL' : product.digitalSpecs?.digitalType === 'SUBSCRIPTION' ? 'ABONNEMENT' : 'DIGITAL'}
@@ -1075,12 +1059,8 @@ export const ProductDetailView: React.FC = () => {
                   🛠️ PRESTATION SERVICE
                 </span>
               )}
-              {product.subcategoryName && (
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-md">
-                  {product.subcategoryName}
-                </span>
-              )}
             </div>
+            )}
 
             <h1 className="text-2xl sm:text-3xl font-black text-slate-950 leading-tight">
               {product.name}
@@ -1304,52 +1284,6 @@ export const ProductDetailView: React.FC = () => {
         </div>
       </div>
 
-      {/* Frequently Bought Together Bundle */}
-      {companionProduct && (
-        <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4 shadow-sm">
-          <div className="space-y-1">
-            <h2 className="text-base sm:text-lg font-black text-slate-900">Pack Complémentaire Recommandé</h2>
-            <p className="text-xs text-slate-500">Ajoutez cet article assorti et profitez de la livraison offerte.</p>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0">
-                <img loading="lazy" decoding="async" src={product.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-              <span className="text-xl font-bold text-slate-400">+</span>
-              <div 
-                onClick={() => navigateToProduct(companionProduct.slug)}
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:border-slate-400 transition-colors"
-              >
-                <img loading="lazy" decoding="async" src={companionProduct.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 w-full border-t md:border-t-0 md:border-l border-slate-200 md:pl-6 pt-4 md:pt-0">
-              <div>
-                <div className="text-xs text-slate-500 font-medium">Prix pour les 2 articles :</div>
-                <div className="text-lg sm:text-xl font-black text-slate-900">
-                  {formatMoney(unitPrice + companionProduct.price)}
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  addToCart(product, activeVariant?.id, 1);
-                  addToCart(companionProduct, companionProduct.variants[0]?.id, 1);
-                  showToast("Pack ajouté au panier avec succès !");
-                }}
-                className="w-full sm:w-auto px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center justify-center gap-2"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Ajouter le Pack Complet</span>
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Description & Full Details avec Médias Riches (Images, GIFs, Vidéos) pour Mobile */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4 shadow-sm">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -1564,6 +1498,52 @@ export const ProductDetailView: React.FC = () => {
       <section className="max-w-2xl mx-auto w-full">
         {renderCodForm('bottom')}
       </section>
+
+      {/* Frequently Bought Together Bundle */}
+      {companionProduct && (
+        <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4 shadow-sm">
+          <div className="space-y-1">
+            <h2 className="text-base sm:text-lg font-black text-slate-900">Pack Complémentaire Recommandé</h2>
+            <p className="text-xs text-slate-500">Ajoutez cet article assorti et profitez de la livraison offerte.</p>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0">
+                <img loading="lazy" decoding="async" src={product.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-xl font-bold text-slate-400">+</span>
+              <div 
+                onClick={() => navigateToProduct(companionProduct.slug)}
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:border-slate-400 transition-colors"
+              >
+                <img loading="lazy" decoding="async" src={companionProduct.images[0]?.imageUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            </div>
+
+            <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 w-full border-t md:border-t-0 md:border-l border-slate-200 md:pl-6 pt-4 md:pt-0">
+              <div>
+                <div className="text-xs text-slate-500 font-medium">Prix pour les 2 articles :</div>
+                <div className="text-lg sm:text-xl font-black text-slate-900">
+                  {formatMoney(unitPrice + companionProduct.price)}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  addToCart(product, activeVariant?.id, 1);
+                  addToCart(companionProduct, companionProduct.variants[0]?.id, 1);
+                  showToast("Pack ajouté au panier avec succès !");
+                }}
+                className="w-full sm:w-auto px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center justify-center gap-2"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Ajouter le Pack Complet</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Submit Review Modal */}
       {reviewModalOpen && (
