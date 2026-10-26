@@ -168,9 +168,8 @@ export const ProductDetailView: React.FC = () => {
     ];
   }, [product, activeVariant]);
 
-  const [selectedPackIndex, setSelectedPackIndex] = useState<number>(() => {
-    return packsList.length > 1 ? 1 : 0;
-  });
+  // Pack 1 is preselected; the bigger packs are an upsell the customer picks
+  const [selectedPackIndex, setSelectedPackIndex] = useState<number>(0);
 
   // Auto-scroll to COD form if directBuyMode is active
   useEffect(() => {
@@ -584,7 +583,7 @@ export const ProductDetailView: React.FC = () => {
               ? 'Livraison sans frais (0 DH). Vous recevrez vos clés / accès directement par WhatsApp & Email sous 2 minutes.' 
               : isService 
               ? 'Pas de frais de dossier (0 DH). Un expert ShopMe vous contactera directement par WhatsApp pour convenir des détails.' 
-              : 'Remplissez simplement ce formulaire court. Vous paierez en espèces à la livraison après inspection du colis.'}
+              : 'Nom, téléphone, ville : c\'est tout. Vous payez en espèces à la réception.'}
           </p>
         </div>
 
@@ -599,18 +598,13 @@ export const ProductDetailView: React.FC = () => {
           
           {/* Form Embedded Pack Choice (For Physical Products with multiple packs) */}
           {!isDigital && !isService && packsList.length > 1 && (
-            <div className="space-y-2 p-3 sm:p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
-                  <Gift className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Formule / Pack sélectionné :</span>
-                </span>
-                <span className="text-[10px] font-black text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full">
-                  Cliquez pour changer d'offre
-                </span>
-              </div>
+            <div className="space-y-2">
+              <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Choisissez votre offre :</span>
+              </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {packsList.map((pack, idx) => {
                   const isSelected = selectedPackIndex === idx;
                   return (
@@ -627,24 +621,17 @@ export const ProductDetailView: React.FC = () => {
                           : 'border-slate-200 bg-white/70 hover:bg-white'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-900 leading-tight">{pack.title}</span>
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="text-[11px] sm:text-xs font-black text-slate-900 leading-tight">{pack.title}</span>
                         <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
                           isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
                         }`}>
                           {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
                         </div>
                       </div>
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className="text-xs sm:text-sm font-black text-emerald-800">{formatMoney(pack.price)}</span>
-                        {pack.quantity > 1 && (
-                          <span className="text-[9px] text-slate-500 font-semibold">
-                            ({formatMoney(pack.unitPrice)}/pc)
-                          </span>
-                        )}
-                      </div>
+                      <div className="mt-1 text-xs sm:text-sm font-black text-emerald-800 whitespace-nowrap">{formatMoney(pack.price)}</div>
                       {pack.badge && (
-                        <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tight mt-0.5 truncate">
+                        <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tight mt-0.5 leading-tight line-clamp-2">
                           {pack.badge}
                         </div>
                       )}
@@ -702,7 +689,7 @@ export const ProductDetailView: React.FC = () => {
                 ? '⚡ Vous recevrez immédiatement les codes et instructions sur ce numéro WhatsApp.' 
                 : isService 
                 ? 'Notre équipe d\'experts vous contactera directement pour coordonner la prestation.' 
-                : 'Notre équipe vous contactera par téléphone ou WhatsApp pour confirmer l\'adresse exacte.'}
+                : 'On vous appelle pour confirmer l\'adresse.'}
             </div>
           </div>
 
@@ -793,61 +780,19 @@ export const ProductDetailView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Street Address */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                  <span>Adresse ou Quartier (Optionnel)</span>
-                  <span className="text-[11px] text-slate-400 font-normal">العنوان</span>
-                </label>
-                <input
-                  type="text"
-                  autoComplete="street-address"
-                  value={shippingAddress}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  placeholder="Ex: Quartier Maârif, Rue 14..."
-                  className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-4 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
-                />
-              </div>
             </>
           )}
 
-          {/* Order Recap Banner with Dynamic Delivery Fee */}
-          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 text-xs">
-            <div className="flex justify-between text-slate-600">
-              <span>Article :</span>
-              <span className="font-bold text-slate-900">
-                {product.name}
-              </span>
-            </div>
-            {effectivePack && effectivePack.quantity > 1 && (
-              <div className="flex justify-between text-slate-600">
-                <span>Offre promotionnelle :</span>
-                <span className="font-bold text-emerald-700">
-                  {effectivePack.title} ({effectivePack.quantity} pièces)
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between text-slate-600">
-              <span>Quantité commandée :</span>
-              <span className="font-bold text-slate-900">
-                {customQuantity} {effectivePack && effectivePack.quantity > 1 ? `pack${customQuantity > 1 ? 's' : ''} (${effectivePack.quantity * customQuantity} pièces au total)` : `pièce${customQuantity > 1 ? 's' : ''}`}
-              </span>
-            </div>
-            {effectiveDiscount > 0 && !isDigital && !isService && (
-              <div className="flex justify-between text-emerald-700 font-bold">
-                <span>Remise Pack appliquée :</span>
-                <span>-{formatMoney(effectiveDiscount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-slate-700">
-              <span>{isDigital ? 'Livraison Instantanée WhatsApp & Email :' : isService ? 'Frais de prise en charge :' : `Frais de livraison (${selectedCity}) :`}</span>
-              <span className={`font-bold px-2 py-0.5 rounded-md ${deliveryFee === 0 ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-white border border-slate-200'}`}>
-                {deliveryFee === 0 ? 'GRATUITE (0 DH)' : formatMoney(deliveryFee)}
-              </span>
-            </div>
-            <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200/80 text-sm font-black text-slate-900">
-              <span>{isDigital ? 'Total Net à régler :' : isService ? 'Total Prestation :' : 'Total Cash on Delivery à régler :'}</span>
+          {/* Total with delivery included, right above the button */}
+          <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-xs">
+            <div className="flex justify-between items-baseline text-sm font-black text-slate-900">
+              <span>{isDigital ? 'Total à régler :' : isService ? 'Total Prestation :' : 'Total à payer :'}</span>
               <span className="text-xl text-emerald-700 font-mono">{formatMoney(finalOrderTotal)}</span>
+            </div>
+            <div className="text-[11px] text-slate-600 mt-0.5">
+              {isDigital || isService
+                ? 'Aucun frais supplémentaire.'
+                : `${deliveryFee === 0 ? 'Livraison gratuite' : `Livraison ${formatMoney(deliveryFee)} comprise`} · 💵 Paiement à la livraison`}
             </div>
           </div>
 
