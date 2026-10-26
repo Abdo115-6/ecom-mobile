@@ -55,8 +55,10 @@ const META_NAMES: Record<string, string> = {
   add_to_wishlist: 'AddToWishlist', begin_checkout: 'InitiateCheckout', add_payment_info: 'AddPaymentInfo',
   purchase: 'Purchase', sign_up: 'CompleteRegistration', whatsapp_click: 'Contact'
 };
+// page_view is sent too: most visitors never answer the cookie banner, so the browser pixel stays
+// on hold and TikTok only sees the visit (and the ad click id) through the Events API
 const TIKTOK_NAMES: Record<string, string> = {
-  view_item: 'ViewContent', search: 'Search', add_to_cart: 'AddToCart', add_to_wishlist: 'AddToWishlist',
+  page_view: 'Pageview', view_item: 'ViewContent', search: 'Search', add_to_cart: 'AddToCart', add_to_wishlist: 'AddToWishlist',
   begin_checkout: 'InitiateCheckout', add_payment_info: 'AddPaymentInfo', purchase: 'CompletePayment',
   sign_up: 'CompleteRegistration', whatsapp_click: 'Contact'
 };
