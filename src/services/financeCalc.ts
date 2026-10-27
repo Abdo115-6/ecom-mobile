@@ -46,6 +46,21 @@ export interface OrderCost {
   note?: string;
 }
 
+/** Sales made outside the website (WhatsApp, Instagram, before the site…), already delivered and paid */
+export interface OfflineSale {
+  id: string;
+  date: string;
+  productId: string;
+  productName: string;
+  quantity: number;       // pieces
+  orders: number;         // number of customers / parcels
+  unitPrice: number;      // product price per piece
+  deliveryCharged: number; // total delivery paid by these customers
+  courierCost: number;    // total paid to the courier for these parcels
+  channel?: string;
+  note?: string;
+}
+
 export interface FinanceSettings {
   id: 'settings';
   openingCash: number;
@@ -57,7 +72,38 @@ export interface FinanceData {
   ad: AdSpend[];
   expense: Expense[];
   order: OrderCost[];
+  offline?: OfflineSale[];
   settings: FinanceSettings[];
+}
+
+export const OFFLINE_PREFIX = 'offline:';
+
+/** An off-site sale behaves like one delivered order holding all its pieces */
+function offlineToOrder(s: OfflineSale): Order {
+  const merchandise = s.quantity * s.unitPrice;
+  return {
+    id: OFFLINE_PREFIX + s.id,
+    orderNumber: 'HORS-SITE',
+    customerId: 'offline',
+    customerName: s.note || 'Ventes hors site',
+    customerEmail: '',
+    customerPhone: '',
+    status: 'DELIVERED',
+    currency: 'MAD',
+    subtotal: merchandise,
+    discountAmount: 0,
+    shippingFee: s.deliveryCharged,
+    taxAmount: 0,
+    totalAmount: merchandise + s.deliveryCharged,
+    shippingAddress: { fullName: '', phone: '', street: '', city: 'Hors site', country: 'MA' },
+    paymentMethod: 'CASH_ON_DELIVERY',
+    paymentStatus: 'PAID',
+    shipment: { carrier: 'Hors site', status: 'Livrée' },
+    items: [{ id: s.id, productId: s.productId, productName: s.productName, sku: '', unitPrice: s.unitPrice, quantity: s.quantity, subtotal: merchandise, imageUrl: '' }],
+    utmSource: s.channel || 'direct',
+    createdAt: `${s.date}T12:00:00`,
+    updatedAt: `${s.date}T12:00:00`
+  };
 }
 
 export const AD_PLATFORM_LABELS: Record<AdPlatform, string> = {
@@ -102,8 +148,13 @@ export function orderOutcome(order: Order, cost?: OrderCost): OrderOutcome {
   if (order.status === 'DELIVERED') return 'delivered';
   if (order.status === 'SHIPPED') return 'dispatched';
   if (order.status === 'CANCELLED' || order.status === 'REFUNDED') {
-    // A parcel handed to the courier and then cancelled = refused or returned (the courier still charges)
-    return order.shipment?.trackingNumber ? 'returned' : 'cancelled';
+    // Cancelled after the courier took the parcel = refused or returned (the courier still charges).
+    // A parcel that never left "Nouveau colis" was cancelled before pickup: no cost.
+    const ship = order.shipment as any;
+    const labels = [ship?.status, ...((ship?.history || []) as Array<{ status: string }>).map(h => h.status)]
+      .filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const leftShop = /retour|refus|ramass|expedi|transit|distribution|livr|recu|cours/.test(labels);
+    return ship?.trackingNumber && leftShop ? 'returned' : 'cancelled';
   }
   return 'pending';
 }
@@ -113,6 +164,8 @@ export interface OrderProfit {
   outcome: OrderOutcome;
   channel: AdPlatform | 'direct';
   pieces: number;
+  count: number;            // customers in this line (an off-site sale groups several)
+  offline: boolean;
   merchandise: number;      // product price paid (after discounts)
   deliveryCharged: number;  // delivery fee paid by the customer
   collected: number;        // cash actually received (delivered only)
@@ -226,6 +279,8 @@ export function buildFinanceReport(input: {
   const { orders, products, categories, finance, from, to, defaultDeliveryCost } = input;
   const settings = finance.settings[0] || { id: 'settings', openingCash: 0, defaultReturnCost: 0 };
   const costs = new Map(finance.order.map(c => [c.id, c]));
+  const offline = finance.offline || [];
+  offline.forEach(s => costs.set(OFFLINE_PREFIX + s.id, { id: OFFLINE_PREFIX + s.id, courierCost: s.courierCost, outcome: 'delivered' }));
   const productById = new Map(products.map(p => [p.id, p]));
   const inRange = (t: number) => t >= from && t <= to;
   const warnings: string[] = [];
@@ -285,13 +340,15 @@ export function buildFinanceReport(input: {
       : 0;
     const collected = outcome === 'delivered' ? (cost?.collected ?? order.totalAmount ?? 0) : 0;
 
+    const off = order.id.startsWith(OFFLINE_PREFIX) ? offline.find(s => OFFLINE_PREFIX + s.id === order.id) : undefined;
     return {
-      order, outcome, channel: orderChannel(order), pieces, merchandise, deliveryCharged, collected,
+      order, outcome, channel: orderChannel(order), pieces, count: off ? off.orders : 1, offline: !!off,
+      merchandise, deliveryCharged, collected,
       productCost, courierCost: outcome === 'delivered' || outcome === 'returned' ? courierCost : 0,
       adCost: 0, profit: 0, estimatedCourier: estimatedCourier && (outcome === 'delivered' || outcome === 'returned')
     };
   };
-  const allOrders = orders.map(computeOrder);
+  const allOrders = [...orders, ...offline.map(offlineToOrder)].map(computeOrder);
   const periodOrders = allOrders.filter(o => inRange(new Date(o.order.createdAt).getTime()));
 
   // ---- Advertising: recorded spend in the period, spread over the delivered orders it paid for
@@ -348,7 +405,7 @@ export function buildFinanceReport(input: {
       if (!row) return;
       const share = (item.subtotal || item.unitPrice * item.quantity) / linesTotal;
       const pieces = item.quantity * piecesPerUnit(item);
-      if (o.outcome === 'delivered') { row.ordersDelivered += 1; row.piecesSold += pieces; }
+      if (o.outcome === 'delivered') { row.ordersDelivered += o.count; row.piecesSold += pieces; }
       else if (o.outcome === 'returned') row.ordersReturned += 1;
       else if (o.outcome === 'pending' || o.outcome === 'dispatched') row.ordersInProgress += 1;
       row.collected += o.collected * share;
@@ -395,13 +452,14 @@ export function buildFinanceReport(input: {
     const spend = periodAds.filter(a => a.platform === platform).reduce((s, a) => s + a.amount, 0);
     const own = periodOrders.filter(o => o.channel === platform);
     const del = own.filter(o => o.outcome === 'delivered');
+    const nDel = del.reduce((s, o) => s + o.count, 0);
     const collected = del.reduce((s, o) => s + o.collected, 0);
     const profitBeforeAds = own.reduce((s, o) => s + o.collected - o.productCost - o.courierCost, 0);
     return {
-      platform, spend, orders: own.length, delivered: del.length,
+      platform, spend, orders: own.reduce((s, o) => s + o.count, 0), delivered: nDel,
       returned: own.filter(o => o.outcome === 'returned').length,
       collected, profitBeforeAds, net: profitBeforeAds - spend,
-      costPerDelivered: del.length ? spend / del.length : null,
+      costPerDelivered: nDel ? spend / nDel : null,
       roas: spend > 0 ? collected / spend : null
     };
   }).filter(a => a.spend > 0 || a.orders > 0);
@@ -409,7 +467,7 @@ export function buildFinanceReport(input: {
   // ---- Totals for the period
   const periodExpenses = finance.expense.filter(e => inRange(ts(e.date))).reduce((s, e) => s + e.amount, 0);
   const periodPurchases = finance.purchase.filter(p => inRange(ts(p.date))).reduce((s, p) => s + p.total, 0);
-  const count = (k: OrderOutcome) => periodOrders.filter(o => o.outcome === k).length;
+  const count = (k: OrderOutcome) => periodOrders.filter(o => o.outcome === k).reduce((s, o) => s + o.count, 0);
   const sum = (f: (o: OrderProfit) => number, list = periodOrders) => list.reduce((s, o) => s + f(o), 0);
   const collected = sum(o => o.collected);
   const productCost = sum(o => o.productCost);
@@ -437,7 +495,7 @@ export function buildFinanceReport(input: {
   };
   periodOrders.forEach(o => {
     const w = wk(weekStart(new Date(o.order.createdAt).getTime()));
-    if (o.outcome === 'delivered') w.delivered += 1;
+    if (o.outcome === 'delivered') w.delivered += o.count;
     if (o.outcome === 'returned') w.returned += 1;
     w.collected += o.collected;
     w.netProfit += o.collected - o.productCost - o.courierCost - (adEstimated ? o.adCost : 0);
@@ -452,7 +510,7 @@ export function buildFinanceReport(input: {
     categories: [...catMap.values()].filter(c => c.products > 0).sort((a, b) => b.profit - a.profit),
     ads,
     totals: {
-      ordersAll: periodOrders.length,
+      ordersAll: periodOrders.reduce((s, o) => s + o.count, 0),
       pending: count('pending'),
       dispatched: count('dispatched'),
       delivered: nDelivered,

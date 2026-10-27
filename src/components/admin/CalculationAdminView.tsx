@@ -11,7 +11,8 @@ import {
   type FinanceData,
   type OrderCost,
   type OrderOutcome,
-  type ProductProfit
+  type ProductProfit,
+  type OfflineSale
 } from '../../services/financeCalc';
 import {
   Calculator,
@@ -49,7 +50,7 @@ const TABS: Array<[Tab, string]> = [
 ];
 const EXPENSE_CATEGORIES = ['Emballage', 'Internet / téléphone', 'Abonnements & outils', 'Salaires', 'Transport', 'Loyer', 'Autre'];
 
-const emptyFinance = (): FinanceData => ({ purchase: [], ad: [], expense: [], order: [], settings: [] });
+const emptyFinance = (): FinanceData => ({ purchase: [], ad: [], expense: [], order: [], offline: [], settings: [] });
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 const num = (v: string) => Math.max(0, Number(String(v).replace(',', '.')) || 0);
@@ -99,6 +100,8 @@ export const CalculationAdminView: React.FC = () => {
   const [purchaseForm, setPurchaseForm] = useState({ date: today(), productId: '', quantity: '', unitCost: '', supplier: '', updateCost: true });
   const [adForm, setAdForm] = useState({ date: today(), platform: 'facebook' as AdPlatform, campaign: '', productId: '', amount: '' });
   const [expenseForm, setExpenseForm] = useState({ date: today(), category: EXPENSE_CATEGORIES[0], label: '', amount: '' });
+  const [offlineForm, setOfflineForm] = useState({ date: today(), productId: '', quantity: '', orders: '', unitPrice: '', deliveryCharged: '', courierCost: '', note: '' });
+  const [ozonCheck, setOzonCheck] = useState<{ loading: boolean; rows: Array<{ orderNumber: string; tn: string; status: string; detail: string }> } | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<{ openingCash: string; defaultReturnCost: string } | null>(null);
 
   // Price simulator
@@ -115,7 +118,7 @@ export const CalculationAdminView: React.FC = () => {
       const res = await fetch('/api/finance');
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(res.status === 401 ? 'Session admin expirée : reconnectez-vous' : data.message || `HTTP ${res.status}`);
-      setFinance({ purchase: data.purchase || [], ad: data.ad || [], expense: data.expense || [], order: data.order || [], settings: data.settings || [] });
+      setFinance({ purchase: data.purchase || [], ad: data.ad || [], expense: data.expense || [], order: data.order || [], offline: data.offline || [], settings: data.settings || [] });
       setLoadError('');
     } catch (err: any) {
       setLoadError(err.message || 'Chargement impossible');
@@ -135,7 +138,7 @@ export const CalculationAdminView: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
-      setFinance(prev => ({ ...prev, [kind]: [data.entry, ...(prev[kind] as any[]).filter(e => e.id !== data.entry.id)] }));
+      setFinance(prev => ({ ...prev, [kind]: [data.entry, ...((prev[kind] || []) as any[]).filter(e => e.id !== data.entry.id)] }));
       return true;
     } catch (err: any) {
       showToast(`Enregistrement impossible : ${err.message || 'erreur'}`);
@@ -147,7 +150,7 @@ export const CalculationAdminView: React.FC = () => {
     try {
       const res = await fetch(`/api/finance/${kind}/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setFinance(prev => ({ ...prev, [kind]: (prev[kind] as any[]).filter(e => e.id !== id) }));
+      setFinance(prev => ({ ...prev, [kind]: ((prev[kind] || []) as any[]).filter(e => e.id !== id) }));
     } catch (err: any) {
       showToast(`Suppression impossible : ${err.message || 'erreur'}`);
     }
@@ -264,6 +267,46 @@ export const CalculationAdminView: React.FC = () => {
         return next;
       });
       showToast('✓ Livraison mise à jour');
+    }
+  };
+
+  // ---------- Off-site sales ----------
+  const addOffline = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const product = dbService.getProductById(offlineForm.productId);
+    const quantity = Math.round(num(offlineForm.quantity));
+    if (!product || quantity <= 0) return showToast('Choisissez le produit et la quantité vendue');
+    const ok = await saveEntry('offline', {
+      id: newId('off'), date: offlineForm.date, productId: product.id, productName: product.name, quantity,
+      orders: Math.round(num(offlineForm.orders)) || quantity, unitPrice: num(offlineForm.unitPrice),
+      deliveryCharged: num(offlineForm.deliveryCharged), courierCost: num(offlineForm.courierCost), note: offlineForm.note
+    });
+    if (ok) {
+      showToast(`✓ Vente hors site enregistrée : ${quantity} × ${product.name}`);
+      setOfflineForm(f => ({ ...f, quantity: '', orders: '', unitPrice: '', deliveryCharged: '', courierCost: '', note: '' }));
+    }
+  };
+
+  // ---------- Ozon check ----------
+  const checkOzon = async () => {
+    const parcels = dbService.orders.filter(o => o.shipment?.carrier === 'Ozon Express' && o.shipment?.trackingNumber);
+    if (parcels.length === 0) return showToast('Aucun colis Ozon');
+    setOzonCheck({ loading: true, rows: [] });
+    try {
+      const sync = await fetch('/api/ozon/sync', { method: 'POST' }).then(r => r.json()).catch(() => null);
+      const rows = [];
+      for (const o of parcels) {
+        const tn = o.shipment.trackingNumber!;
+        const data = await fetch(`/api/ozon/parcel/${encodeURIComponent(tn)}`).then(r => r.json()).catch(() => null);
+        const flat = JSON.stringify(data?.tracking || data?.info || data || {});
+        const statuses = [...flat.matchAll(/"(?:STATUT|STATUS|STATUT-LABEL)"\s*:\s*"([^"]+)"/g)].map(m => m[1]);
+        rows.push({ orderNumber: o.orderNumber, tn, status: statuses[statuses.length - 1] || o.shipment.status || '?', detail: flat.slice(0, 600) });
+      }
+      setOzonCheck({ loading: false, rows });
+      if (sync?.updated) showToast(`✓ ${sync.updated} commande(s) mises à jour depuis Ozon`);
+    } catch (err: any) {
+      setOzonCheck(null);
+      showToast(`Ozon : ${err.message || 'erreur'}`);
     }
   };
 
@@ -842,6 +885,120 @@ export const CalculationAdminView: React.FC = () => {
 
       {/* ================= DELIVERIES ================= */}
       {tab === 'deliveries' && (
+        <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <form onSubmit={addOffline} className={`lg:col-span-7 ${card} space-y-3`}>
+            <div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Ventes hors site</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Ventes livrées et payées qui ne sont pas des commandes du site (anciennes ventes, WhatsApp, Instagram…). Vous pouvez grouper plusieurs ventes au même prix.</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <label className="col-span-2">
+                <span className={labelClass}>Produit</span>
+                <select required className={fieldClass} value={offlineForm.productId} onChange={e => setOfflineForm(f => ({ ...f, productId: e.target.value }))}>
+                  <option value="">Choisir…</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className={labelClass}>Date</span>
+                <input type="date" className={fieldClass} value={offlineForm.date} onChange={e => setOfflineForm(f => ({ ...f, date: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelClass}>Pièces vendues</span>
+                <input required inputMode="numeric" className={`${fieldClass} font-mono`} value={offlineForm.quantity} onChange={e => setOfflineForm(f => ({ ...f, quantity: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelClass}>Prix par pièce</span>
+                <input required inputMode="decimal" className={`${fieldClass} font-mono`} value={offlineForm.unitPrice} onChange={e => setOfflineForm(f => ({ ...f, unitPrice: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelClass}>Nb de clients</span>
+                <input inputMode="numeric" placeholder="= pièces" className={`${fieldClass} font-mono`} value={offlineForm.orders} onChange={e => setOfflineForm(f => ({ ...f, orders: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelClass}>Livraison payée (total)</span>
+                <input inputMode="decimal" placeholder="0" className={`${fieldClass} font-mono`} value={offlineForm.deliveryCharged} onChange={e => setOfflineForm(f => ({ ...f, deliveryCharged: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelClass}>Livreur payé (total)</span>
+                <input inputMode="decimal" placeholder="0" className={`${fieldClass} font-mono`} value={offlineForm.courierCost} onChange={e => setOfflineForm(f => ({ ...f, courierCost: e.target.value }))} />
+              </label>
+              <label className="col-span-2 sm:col-span-3">
+                <span className={labelClass}>Note</span>
+                <input className={fieldClass} value={offlineForm.note} onChange={e => setOfflineForm(f => ({ ...f, note: e.target.value }))} />
+              </label>
+              <div className="flex items-end">
+                <button type="submit" className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold cursor-pointer inline-flex items-center justify-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Ajouter</span>
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              Encaissé : <span className="font-mono text-white font-bold">{formatMoney(num(offlineForm.quantity) * num(offlineForm.unitPrice) + num(offlineForm.deliveryCharged))}</span>
+            </div>
+            {(finance.offline || []).length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs min-w-[520px]">
+                  <thead>
+                    <tr className="text-slate-500 text-left border-b border-slate-700">
+                      <th className="font-semibold py-2">Date</th>
+                      <th className="font-semibold py-2">Produit</th>
+                      <th className={th}>Pièces</th>
+                      <th className={th}>Prix</th>
+                      <th className={th}>Livraison</th>
+                      <th className={th}>Livreur</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...(finance.offline || [])].sort((a: OfflineSale, b: OfflineSale) => b.date.localeCompare(a.date)).map((s: OfflineSale) => (
+                      <tr key={s.id} className="border-b border-slate-800">
+                        <td className="py-2 text-slate-300">{s.date}</td>
+                        <td className="py-2 text-slate-200 truncate max-w-[180px]">{s.productName}{s.note ? <span className="text-slate-500"> · {s.note}</span> : null}</td>
+                        <td className="py-2 text-right font-mono text-slate-200">{s.quantity}<span className="text-[10px] text-slate-500"> / {s.orders} cl.</span></td>
+                        <td className="py-2 text-right font-mono text-slate-300">{formatMoney(s.unitPrice)}</td>
+                        <td className="py-2 text-right font-mono text-slate-300">{formatMoney(s.deliveryCharged)}</td>
+                        <td className="py-2 text-right font-mono text-cyan-300">{formatMoney(s.courierCost)}</td>
+                        <td className="py-2 text-right">
+                          <button type="button" onClick={() => deleteEntry('offline', s.id)} className="p-1 text-slate-500 hover:text-rose-400 cursor-pointer" aria-label="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </form>
+
+          <div className={`lg:col-span-5 ${card} space-y-3`}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Vérifier chez Ozon</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Met à jour les commandes depuis Ozon (livré, refusé, en distribution) et affiche le dernier statut de chaque colis.</p>
+              </div>
+              <button type="button" onClick={checkOzon} disabled={ozonCheck?.loading} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 shrink-0">
+                <RefreshCw className={`w-3.5 h-3.5 ${ozonCheck?.loading ? 'animate-spin' : ''}`} />
+                <span>Vérifier</span>
+              </button>
+            </div>
+            {ozonCheck && !ozonCheck.loading && (
+              <div className="space-y-1.5">
+                {ozonCheck.rows.map(r => (
+                  <details key={r.tn} className="p-2 bg-slate-900/60 rounded-xl text-[11px]">
+                    <summary className="cursor-pointer flex justify-between gap-2">
+                      <span className="text-slate-200 font-semibold">#{r.orderNumber}</span>
+                      <span className="text-blue-300">{r.status}</span>
+                    </summary>
+                    <div className="mt-1 text-slate-500 font-mono break-all">{r.tn} · {r.detail}</div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className={`${card} space-y-4`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -875,6 +1032,24 @@ export const CalculationAdminView: React.FC = () => {
                   const id = o.order.id;
                   const d = orderDraftFor(id);
                   const dirty = !!orderDrafts[id];
+                  if (o.offline) {
+                    return (
+                      <tr key={id} className="border-b border-slate-800 bg-slate-900/30">
+                        <td className="py-2 pl-4 sm:pl-0">
+                          <div className="text-white font-semibold">Hors site · {o.count} client(s)</div>
+                          <div className="text-[10px] text-slate-500 truncate max-w-[220px]">{new Date(o.order.createdAt).toLocaleDateString('fr-FR')} · {o.order.items.map(i => `${i.productName} ×${i.quantity}`).join(', ')}</div>
+                        </td>
+                        <td className="py-2"><span className={`px-2 py-1 rounded-lg text-[11px] font-bold ${OUTCOME_STYLE.delivered}`}>Livrée</span></td>
+                        <td className="py-2 text-right font-mono text-slate-300">{formatMoney(o.order.totalAmount)}</td>
+                        <td className="py-2 text-right font-mono text-slate-300">{formatMoney(o.collected)}</td>
+                        <td className="py-2 text-right font-mono text-slate-300">{formatMoney(o.courierCost)}</td>
+                        <td />
+                        <td className="py-2 text-right font-mono text-amber-300">{formatMoney(o.productCost)}</td>
+                        <td className="py-2 text-right font-mono text-slate-400">{o.adCost ? formatMoney(o.adCost) : '—'}</td>
+                        <td className={`py-2 text-right pr-4 sm:pr-0 font-mono font-black ${profitClass(o.profit)}`}>{formatMoney(o.profit)}</td>
+                      </tr>
+                    );
+                  }
                   return (
                     <tr key={id} className="border-b border-slate-800 hover:bg-slate-900/40">
                       <td className="py-2 pl-4 sm:pl-0">
@@ -946,6 +1121,7 @@ export const CalculationAdminView: React.FC = () => {
             Encaissé réel vide = total de la commande. Livreur réel vide = tarif Ozon du colis, sinon le « Livreur » de la fiche produit (livrée) ou les frais de retour par défaut (retour, voir Paramètres dans le Résumé).
             Cochez « Retour en stock » seulement si le produit revenu est vendable : sa valeur n'est alors pas comptée comme perte.
           </p>
+        </div>
         </div>
       )}
 

@@ -195,6 +195,14 @@ export async function createOzonParcel(order: any, opts: { cityId?: number; note
   };
 }
 
+/** Raw Ozon answers for one parcel (parcel-info + tracking), to see every field Ozon returns */
+export async function fetchOzonParcelRaw(trackingNumber: string): Promise<{ info: any; tracking: any }> {
+  if (!isOzonConfigured()) throw new Error('Ozon Express non configuré');
+  const info = await postForm('parcel-info', { 'tracking-number': trackingNumber }).catch(err => ({ error: err.message }));
+  const tracking = await postForm('tracking', { 'tracking-number': trackingNumber }).catch(err => ({ error: err.message }));
+  return { info, tracking };
+}
+
 /** Latest status label of each parcel, from the tracking endpoint (bulk JSON form) */
 export async function fetchOzonStatuses(trackingNumbers: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();

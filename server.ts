@@ -9,7 +9,7 @@ import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './ser
 import { createTracker } from './server/tracking.js';
 import { buildDataMiningReport } from './server/dataMining.js';
 import { setSalesBotConfig, salesBotSummary, generateSalesReply, MAX_INSTRUCTIONS } from './server/salesBot.js';
-import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, orderStatusFromOzon } from './server/ozonExpress.js';
+import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, fetchOzonParcelRaw, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
 
 dotenv.config();
@@ -1075,6 +1075,15 @@ async function startServer() {
     return changed;
   }
 
+  // Everything Ozon returns for one parcel (status history, prices, payment) - read-only
+  app.get('/api/ozon/parcel/:tn', requireAdmin, async (req, res) => {
+    try {
+      return res.json({ success: true, ...(await fetchOzonParcelRaw(String(req.params.tn).slice(0, 60))) });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/api/ozon/sync', requireAdmin, async (req, res) => {
     try {
       return res.json({ success: true, updated: await syncOzonStatuses() });
@@ -1591,7 +1600,7 @@ async function startServer() {
   // Finance (Calcul de Marge): stock purchases, ad spend, other expenses and per-order delivery costs.
   // Kept server-side (Postgres + a private file outside /public) so every admin browser sees the same numbers.
   const FINANCE_FILE = path.resolve(process.cwd(), 'data', 'finance.json');
-  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'settings'] as const;
+  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'offline', 'settings'] as const;
   type FinanceKind = typeof FINANCE_KINDS[number];
   const AD_PLATFORMS = ['facebook', 'tiktok', 'snapchat', 'google', 'other'];
   const ORDER_OUTCOMES = ['delivered', 'returned', 'cancelled'];
@@ -1623,6 +1632,16 @@ async function startServer() {
         campaign: clip(raw.campaign, 150), productId: clip(raw.productId, 100) || undefined, amount, note: clip(raw.note, 300)
       };
     }
+    if (kind === 'offline') {
+      const quantity = Math.min(Math.max(Math.round(Number(raw.quantity) || 0), 0), 1_000_000);
+      if (!quantity || !raw.productId) return null;
+      return {
+        id, date: day(raw.date), productId: clip(raw.productId, 100), productName: clip(raw.productName, 255),
+        quantity, orders: Math.min(Math.max(Math.round(Number(raw.orders) || quantity), 1), quantity),
+        unitPrice: money(raw.unitPrice), deliveryCharged: money(raw.deliveryCharged), courierCost: money(raw.courierCost),
+        channel: clip(raw.channel, 30) || 'direct', note: clip(raw.note, 300)
+      };
+    }
     if (kind === 'expense') {
       const amount = money(raw.amount);
       if (!amount) return null;
@@ -1641,7 +1660,7 @@ async function startServer() {
     return { id: 'settings', openingCash: Number(raw.openingCash) || 0, defaultReturnCost: money(raw.defaultReturnCost) };
   }
 
-  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], settings: [] });
+  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], offline: [], settings: [] });
 
   async function loadFinance(): Promise<Record<FinanceKind, any[]>> {
     if (isPgConnected) {
