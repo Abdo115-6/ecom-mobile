@@ -203,42 +203,42 @@ export async function fetchOzonParcelRaw(trackingNumber: string): Promise<{ info
   return { info, tracking };
 }
 
-/** Latest status label of each parcel, from the tracking endpoint (bulk JSON form) */
+/**
+ * Latest status label of each parcel. One form-data request per parcel: the bulk JSON form answers in a
+ * shape that is not documented (the status was never found), the single form is
+ * {TRACKING: {RESULT: "SUCCESS", HISTORY: {"1": {STATUT, TIME, TIME_STR}, ...}}}.
+ */
 export async function fetchOzonStatuses(trackingNumbers: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!isOzonConfigured() || trackingNumbers.length === 0) return out;
-  for (let i = 0; i < trackingNumbers.length; i += 50) {
-    const chunk = trackingNumbers.slice(i, i + 50);
-    const res = await fetch(endpoint('tracking'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 'tracking-number': chunk }),
-      signal: AbortSignal.timeout(20000)
-    });
-    const data: any = await res.json().catch(() => null);
-    if (!data) continue;
-    // Single and bulk answers differ; walk the response and keep the newest status found per tracking number
-    for (const tn of chunk) {
-      const entry = data?.[tn] || data?.TRACKING?.[tn] || (chunk.length === 1 ? data?.TRACKING || data : undefined);
-      const status = latestStatus(entry);
-      if (status) out.set(tn, status);
+  const queue = [...new Set(trackingNumbers)];
+  const worker = async () => {
+    for (let tn = queue.shift(); tn; tn = queue.shift()) {
+      try {
+        const data = await postForm('tracking', { 'tracking-number': tn });
+        const status = latestStatus(data?.TRACKING);
+        if (status) out.set(tn, status);
+      } catch (err: any) {
+        console.warn(`[Ozon] tracking ${tn}:`, err.message);
+      }
     }
-  }
+  };
+  await Promise.all([worker(), worker(), worker()]);
   return out;
 }
 
 function latestStatus(entry: any): string | undefined {
-  if (!entry || typeof entry !== 'object') return undefined;
+  if (!entry || typeof entry !== 'object' || String(entry.RESULT || 'SUCCESS').toUpperCase() !== 'SUCCESS') return undefined;
   const last = entry['LAST_TRACKING'] || entry['LAST-TRACKING'];
-  if (last) return String(last.STATUT || last.STATUS || last['STATUT-LABEL'] || '').trim() || undefined;
-  const history = entry.HISTORY || entry.history || entry.TRACKING;
+  if (last?.STATUT) return String(last.STATUT).trim() || undefined;
+  const history = entry.HISTORY;
   if (history && typeof history === 'object') {
-    const rows: any[] = Object.values(history);
+    const rows: any[] = Object.values(history).filter((r: any) => r && r.STATUT);
+    rows.sort((x, y) => Number(x.TIME || 0) - Number(y.TIME || 0));
     const row = rows[rows.length - 1];
-    if (row) return String(row.STATUT || row.STATUS || row.status || '').trim() || undefined;
+    if (row) return String(row.STATUT).trim() || undefined;
   }
-  const s = entry.STATUT || entry.STATUS || entry.status;
-  return s ? String(s).trim() : undefined;
+  return undefined;
 }
 
 /** Maps an Ozon status label to the store order status (undefined = no change) */
