@@ -201,6 +201,17 @@ async function initPostgresTables() {
     // Product image / pack / price of the abandoned form
     await client.query(`ALTER TABLE client_leads ADD COLUMN IF NOT EXISTS extra JSONB DEFAULT '{}'::jsonb`);
 
+    // 6. Finance entries for the margin page: stock purchases, ad spend, expenses, per-order delivery costs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS finance_entries (
+        kind VARCHAR(20) NOT NULL,
+        id VARCHAR(100) NOT NULL,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (kind, id)
+      );
+    `);
+
     client.release();
   } catch (err: any) {
     isPgConnected = false;
@@ -1575,6 +1586,121 @@ async function startServer() {
       console.error('[DataMining] report error:', err);
       return res.status(500).json({ success: false, message: err.message || 'Erreur data mining' });
     }
+  });
+
+  // Finance (Calcul de Marge): stock purchases, ad spend, other expenses and per-order delivery costs.
+  // Kept server-side (Postgres + a private file outside /public) so every admin browser sees the same numbers.
+  const FINANCE_FILE = path.resolve(process.cwd(), 'data', 'finance.json');
+  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'settings'] as const;
+  type FinanceKind = typeof FINANCE_KINDS[number];
+  const AD_PLATFORMS = ['facebook', 'tiktok', 'snapchat', 'google', 'other'];
+  const ORDER_OUTCOMES = ['delivered', 'returned', 'cancelled'];
+
+  const money = (v: unknown) => Math.round(Math.min(Math.max(Number(v) || 0, 0), 10_000_000) * 100) / 100;
+  const optMoney = (v: unknown) => (v === null || v === undefined || v === '' ? undefined : money(v));
+  const day = (v: unknown) => (/^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+  /** Only known fields, clipped; returns null when the entry is unusable */
+  function sanitizeFinance(kind: FinanceKind, raw: any): any | null {
+    const id = clip(raw?.id, 100);
+    if (!id) return null;
+    if (kind === 'purchase') {
+      const quantity = Math.min(Math.max(Math.round(Number(raw.quantity) || 0), 0), 1_000_000);
+      if (!quantity || !raw.productId) return null;
+      const unitCost = money(raw.unitCost);
+      return {
+        id, date: day(raw.date), productId: clip(raw.productId, 100), productName: clip(raw.productName, 255),
+        quantity, unitCost, total: optMoney(raw.total) ?? money(quantity * unitCost),
+        supplier: clip(raw.supplier, 120), note: clip(raw.note, 300)
+      };
+    }
+    if (kind === 'ad') {
+      const amount = money(raw.amount);
+      if (!amount) return null;
+      return {
+        id, date: day(raw.date), endDate: raw.endDate ? day(raw.endDate) : undefined,
+        platform: AD_PLATFORMS.includes(raw.platform) ? raw.platform : 'other',
+        campaign: clip(raw.campaign, 150), productId: clip(raw.productId, 100) || undefined, amount, note: clip(raw.note, 300)
+      };
+    }
+    if (kind === 'expense') {
+      const amount = money(raw.amount);
+      if (!amount) return null;
+      return { id, date: day(raw.date), category: clip(raw.category, 60) || 'Autre', label: clip(raw.label, 200), amount };
+    }
+    if (kind === 'order') {
+      return {
+        id,
+        collected: optMoney(raw.collected),
+        courierCost: optMoney(raw.courierCost),
+        outcome: ORDER_OUTCOMES.includes(raw.outcome) ? raw.outcome : undefined,
+        restocked: raw.restocked === true,
+        note: clip(raw.note, 300)
+      };
+    }
+    return { id: 'settings', openingCash: Number(raw.openingCash) || 0, defaultReturnCost: money(raw.defaultReturnCost) };
+  }
+
+  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], settings: [] });
+
+  async function loadFinance(): Promise<Record<FinanceKind, any[]>> {
+    if (isPgConnected) {
+      try {
+        const result = await pgPool.query('SELECT kind, data FROM finance_entries ORDER BY updated_at DESC');
+        if (result.rows.length > 0) {
+          const out = emptyFinance();
+          result.rows.forEach((r: any) => { if (out[r.kind as FinanceKind]) out[r.kind as FinanceKind].push(r.data); });
+          return out;
+        }
+      } catch (err) {
+        console.warn('Postgres finance query error:', err);
+      }
+    }
+    return { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
+  }
+
+  app.get('/api/finance', requireAdmin, async (req, res) => {
+    return res.json({ success: true, ...(await loadFinance()) });
+  });
+
+  app.post('/api/finance/:kind', requireAdmin, async (req, res) => {
+    const kind = req.params.kind as FinanceKind;
+    if (!FINANCE_KINDS.includes(kind)) return res.status(404).json({ success: false });
+    const entry = sanitizeFinance(kind, kind === 'settings' ? { ...req.body, id: 'settings' } : req.body);
+    if (!entry) return res.status(400).json({ success: false, message: 'Entrée invalide' });
+
+    const file = { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
+    file[kind] = [entry, ...file[kind].filter(e => e.id !== entry.id)].slice(0, 20000);
+    writeJsonFile(FINANCE_FILE, file);
+
+    if (isPgConnected) {
+      try {
+        await pgPool.query(
+          `INSERT INTO finance_entries (kind, id, data, updated_at) VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (kind, id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+          [kind, entry.id, JSON.stringify(entry)]
+        );
+      } catch (err) {
+        console.warn('Postgres finance upsert error:', err);
+      }
+    }
+    return res.json({ success: true, entry });
+  });
+
+  app.delete('/api/finance/:kind/:id', requireAdmin, async (req, res) => {
+    const kind = req.params.kind as FinanceKind;
+    if (!FINANCE_KINDS.includes(kind)) return res.status(404).json({ success: false });
+    const file = { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
+    file[kind] = file[kind].filter(e => e.id !== req.params.id);
+    writeJsonFile(FINANCE_FILE, file);
+    if (isPgConnected) {
+      try {
+        await pgPool.query('DELETE FROM finance_entries WHERE kind = $1 AND id = $2', [kind, req.params.id]);
+      } catch (err) {
+        console.warn('Postgres finance delete error:', err);
+      }
+    }
+    return res.json({ success: true });
   });
 
   // ==========================================

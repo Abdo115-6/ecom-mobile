@@ -18,6 +18,7 @@ export interface OzonShipment {
   cityId: number;
   cityName: string;
   deliveredPrice?: number;
+  refusedPrice?: number;
   sentAt: string;
   lastCheckedAt?: string;
   history?: Array<{ status: string; at: string }>;
@@ -188,6 +189,7 @@ export async function createOzonParcel(order: any, opts: { cityId?: number; note
     cityId: city.id,
     cityName: String(parcel?.CITY_NAME || city.name),
     deliveredPrice: Number(parcel?.['DELIVERED-PRICE'] || city.deliveredPrice) || undefined,
+    refusedPrice: Number(parcel?.['REFUSED-PRICE'] || city.refusedPrice) || undefined,
     sentAt: now,
     history: [{ status: 'Nouveau colis', at: now }]
   };
