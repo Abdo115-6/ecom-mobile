@@ -1186,14 +1186,18 @@ export const ProductDetailView: React.FC = () => {
 
             {/* Rating & Reassurance */}
             <div className="flex items-center gap-3 pt-1 text-xs text-slate-500">
-              <div className="flex items-center gap-1 text-amber-400">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400" />
-                ))}
-                <span className="text-xs font-black text-slate-900 ml-1">{product.rating}</span>
-                <span className="text-slate-400">({product.reviewsCount} avis)</span>
-              </div>
-              <span className="text-slate-300">•</span>
+              {productReviews.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1 text-amber-400">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`w-4 h-4 ${i < Math.round(reviewAverage) ? 'fill-amber-400' : 'text-slate-200'}`} />
+                    ))}
+                    <span className="text-xs font-black text-slate-900 ml-1">{reviewAverage.toFixed(1)}</span>
+                    <span className="text-slate-400">({productReviews.length} avis)</span>
+                  </div>
+                  <span className="text-slate-300">•</span>
+                </>
+              )}
               <span className="text-slate-600 font-medium">Paiement Cash à la livraison</span>
             </div>
           </div>

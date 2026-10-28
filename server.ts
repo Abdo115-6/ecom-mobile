@@ -844,9 +844,19 @@ async function startServer() {
     return { products: [], source: 'empty' };
   };
 
+  /** Rating and review count of each product, from approved customer reviews only */
+  async function withRealRatings(products: any[]): Promise<any[]> {
+    const approved = ((await loadFinance()).review || []).filter((r: any) => r.status === 'APPROVED');
+    return products.map((p: any) => {
+      const own = approved.filter((r: any) => r.productId === p.id);
+      const rating = own.length ? Math.round((own.reduce((s: number, r: any) => s + r.rating, 0) / own.length) * 10) / 10 : 0;
+      return { ...p, rating, reviewsCount: own.length };
+    });
+  }
+
   app.get('/api/products', async (req, res) => {
     const { products, source } = await loadProducts();
-    return res.json({ success: true, products, source });
+    return res.json({ success: true, products: await withRealRatings(products), source });
   });
 
   app.post('/api/products', requireAdmin, async (req, res) => {
@@ -2069,7 +2079,7 @@ async function startServer() {
   let seoProductsCache: { at: number; products: any[] } = { at: 0, products: [] };
   const seoProducts = async () => {
     if (Date.now() - seoProductsCache.at > 5 * 60 * 1000) {
-      seoProductsCache = { at: Date.now(), products: (await loadProducts()).products };
+      seoProductsCache = { at: Date.now(), products: await withRealRatings((await loadProducts()).products) };
     }
     return seoProductsCache.products;
   };

@@ -551,10 +551,13 @@ export const HomeView: React.FC = () => {
                   >
                     {product.name}
                   </h3>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
-                  </div>
+                  {product.reviewsCount > 0 && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
+                      <span className="text-[10px] text-slate-400">({product.reviewsCount})</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -706,10 +709,13 @@ export const HomeView: React.FC = () => {
                   >
                     {product.name}
                   </h3>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
-                  </div>
+                  {product.reviewsCount > 0 && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
+                      <span className="text-[10px] text-slate-400">({product.reviewsCount})</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -782,10 +788,13 @@ export const HomeView: React.FC = () => {
                   >
                     {product.name}
                   </h3>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
-                  </div>
+                  {product.reviewsCount > 0 && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="font-bold text-[11px] text-slate-800">{product.rating}</span>
+                      <span className="text-[10px] text-slate-400">({product.reviewsCount})</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">

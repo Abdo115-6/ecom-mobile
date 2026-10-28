@@ -316,11 +316,13 @@ export const CatalogView: React.FC = () => {
                         {product.name}
                       </h3>
 
-                      <div className="flex items-center gap-1 mt-1.5 text-xs text-slate-500">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold text-slate-800 text-xs">{product.rating}</span>
-                        <span className="text-[10px] text-slate-400">({product.reviewsCount})</span>
-                      </div>
+                      {product.reviewsCount > 0 && (
+                        <div className="flex items-center gap-1 mt-1.5 text-xs text-slate-500">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span className="font-semibold text-slate-800 text-xs">{product.rating}</span>
+                          <span className="text-[10px] text-slate-400">({product.reviewsCount})</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
