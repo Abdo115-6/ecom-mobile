@@ -1,7 +1,9 @@
 // Nightly ad spend import for the margin page: Facebook (Meta Marketing API) and TikTok (Business API).
 // Tokens stay in the host's environment variables, never in the admin panel or the database:
-//   META_ACCESS_TOKEN + META_AD_ACCOUNT_IDS (comma separated, without "act_")
-//   TIKTOK_ACCESS_TOKEN + TIKTOK_ADVERTISER_IDS (comma separated)
+//   META_ADS_TOKEN (ads_read) + META_AD_ACCOUNT_IDS (comma separated, without "act_")
+//   TIKTOK_ADS_TOKEN (Reporting) + TIKTOK_ADVERTISER_IDS (comma separated)
+// META_ACCESS_TOKEN / TIKTOK_ACCESS_TOKEN are the Conversions API tokens; they are only a fallback
+// (a pixel token usually cannot read ad reports, the error then shows in the Publicité tab).
 //   USD_TO_MAD (default 10) converts accounts billed in dollars
 
 export interface AdSpendDay {
@@ -23,6 +25,8 @@ export interface AdSyncStatus {
 }
 
 const list = (v?: string) => String(v || '').split(',').map(s => s.trim().replace(/^act_/, '')).filter(Boolean);
+const metaToken = () => process.env.META_ADS_TOKEN || process.env.META_ACCESS_TOKEN || '';
+const tiktokToken = () => process.env.TIKTOK_ADS_TOKEN || process.env.TIKTOK_ACCESS_TOKEN || '';
 const usdToMad = () => Number(process.env.USD_TO_MAD) || 10;
 const toMad = (amount: number, currency: string) => (String(currency).toUpperCase() === 'USD' ? amount * usdToMad() : amount);
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -32,15 +36,15 @@ const status: AdSyncStatus = { meta: false, tiktok: false, usdToMad: 10 };
 export function adSyncStatus(): AdSyncStatus {
   return {
     ...status,
-    meta: !!(process.env.META_ACCESS_TOKEN && list(process.env.META_AD_ACCOUNT_IDS).length),
-    tiktok: !!(process.env.TIKTOK_ACCESS_TOKEN && list(process.env.TIKTOK_ADVERTISER_IDS).length),
+    meta: !!(metaToken() && list(process.env.META_AD_ACCOUNT_IDS).length),
+    tiktok: !!(tiktokToken() && list(process.env.TIKTOK_ADVERTISER_IDS).length),
     usdToMad: usdToMad()
   };
 }
 
 async function metaSpend(since: string, until: string): Promise<Map<string, number>> {
   const out = new Map<string, number>();
-  const token = process.env.META_ACCESS_TOKEN;
+  const token = metaToken();
   if (!token) return out;
   for (const account of list(process.env.META_AD_ACCOUNT_IDS)) {
     const url = new URL(`https://graph.facebook.com/v21.0/act_${account}/insights`);
@@ -61,7 +65,7 @@ async function metaSpend(since: string, until: string): Promise<Map<string, numb
 
 async function tiktokSpend(since: string, until: string): Promise<Map<string, number>> {
   const out = new Map<string, number>();
-  const token = process.env.TIKTOK_ACCESS_TOKEN;
+  const token = tiktokToken();
   if (!token) return out;
   const currency = process.env.TIKTOK_CURRENCY || 'MAD';
   for (const advertiser of list(process.env.TIKTOK_ADVERTISER_IDS)) {
