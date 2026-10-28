@@ -278,16 +278,22 @@ export async function generateSalesReply(opts: {
     }));
     if (followUpNote) messages.push({ role: 'user', content: followUpNote });
     if (!messages.length) return failed('aucun message client');
+    const ask = async (chatSystem: string) => {
+      try {
+        return await claudeSalesReply({ stableSystem: prompt.stable, chatSystem, messages });
+      } catch (err: any) {
+        // An invalid key will not fix itself; anything else (overload, rate limit, network) gets one more try
+        if (/invalide/i.test(String(err?.message))) throw err;
+        await new Promise(r => setTimeout(r, 3000));
+        return claudeSalesReply({ stableSystem: prompt.stable, chatSystem, messages });
+      }
+    };
     try {
-      let parsed = await claudeSalesReply({ stableSystem: prompt.stable, chatSystem: prompt.chat, messages });
+      let parsed = await ask(prompt.chat);
       if (hasForeignScript(parsed?.reply)) {
         // A stray Cyrillic word slipped in: ask once more rather than send it to the customer
         console.warn('[SalesBot] Reply with foreign letters, retrying:', parsed.reply);
-        parsed = await claudeSalesReply({
-          stableSystem: prompt.stable,
-          chatSystem: `${prompt.chat}\nRAPPEL : ta réponse précédente contenait des lettres cyrilliques. Écris uniquement en lettres arabes.`.trim(),
-          messages
-        });
+        parsed = await ask(`${prompt.chat}\nRAPPEL : ta réponse précédente contenait des lettres cyrilliques. Écris uniquement en lettres arabes.`.trim());
       }
       return toSalesReply(parsed, opts.followUp, failed);
     } catch (err: any) {

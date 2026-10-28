@@ -684,7 +684,17 @@ class BaileysManager {
     );
     this.note(phone, `Réponse IA prête en ${Math.round((Date.now() - started) / 1000)} s, envoi sur WhatsApp…`);
 
-    if (result.reason?.startsWith('IA indisponible')) this.note(phone, result.reason);
+    if (result.reason?.startsWith('IA indisponible')) {
+      this.note(phone, result.reason);
+      // The waiting message is sent once: a customer who keeps writing while the AI is down
+      // must not receive the same text again and again. The chat stays flagged for the team.
+      const alreadyWaiting = [...chat.turns].reverse().find(t => t.role === 'bot')?.text === result.reply;
+      if (alreadyWaiting) {
+        this.note(phone, "Message d'attente déjà envoyé : Salma ne le répète pas (à traiter par l'équipe)");
+        this.flagLeadConversation(phone, `A TRAITER PAR L'EQUIPE : ${result.reason}`);
+        return;
+      }
+    }
     this.botSendingAt.set(phone, Date.now());
     if (!(await withTimeout(this.sendMessage(phone, result.reply), 60_000, 'Envoi WhatsApp'))) {
       this.note(phone, 'Échec de l\'envoi WhatsApp (message mis en attente)');
