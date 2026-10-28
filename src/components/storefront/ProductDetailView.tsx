@@ -597,31 +597,6 @@ export const ProductDetailView: React.FC = () => {
         directBuyMode ? 'border-blue-500 ring-4 ring-blue-500/20' : isDigital ? 'border-emerald-500/60' : isService ? 'border-purple-500/60' : 'border-emerald-500/50'
       }`}>
         
-        <div className="border-b border-slate-200 pb-3">
-          <div className="flex items-center justify-between">
-            <div className={`flex items-center gap-2 font-black text-sm uppercase tracking-wide ${
-              isDigital ? 'text-emerald-700' : isService ? 'text-purple-700' : 'text-emerald-700'
-            }`}>
-              {isDigital ? <Zap className="w-4 h-4 text-emerald-600" /> : isService ? <Sparkles className="w-4 h-4 text-purple-600" /> : <Sparkles className="w-4 h-4 text-emerald-600" />}
-              <span>
-                {isDigital ? 'Passer Commande · Livraison Digitale Instantanée' : isService ? 'Réserver la Prestation · Prise en Charge Rapide' : 'Commander en 1 Clic · Paiement à la Livraison'}
-              </span>
-            </div>
-            {directBuyMode && (
-              <span className="px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-md animate-pulse">
-                ⚡ Lien d'achat direct actif
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {isDigital 
-              ? 'Livraison sans frais (0 DH). Vous recevrez vos clés / accès directement par WhatsApp & Email sous 2 minutes.' 
-              : isService 
-              ? 'Pas de frais de dossier (0 DH). Un expert ShopMe vous contactera directement par WhatsApp pour convenir des détails.' 
-              : 'Nom, téléphone, ville : c\'est tout. Vous payez en espèces à la réception.'}
-          </p>
-        </div>
-
         {orderError && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
@@ -1072,59 +1047,59 @@ export const ProductDetailView: React.FC = () => {
           )}
 
           {/* Reassurance Badges */}
-          <div className="grid grid-cols-3 gap-2.5 pt-2 text-center">
+          <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
             {isDigital ? (
               <>
-                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
-                  <Zap className="w-5 h-5 text-emerald-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">En 2 Minutes</div>
-                  <div className="text-[9px] text-slate-500">Livraison WhatsApp & Email</div>
+                <div className="px-1.5 py-2 bg-white border border-emerald-200/80 rounded-xl space-y-0.5">
+                  <Zap className="w-4 h-4 text-emerald-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">En 2 Minutes</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Livraison WhatsApp & Email</div>
                 </div>
-                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
-                  <ShieldCheck className="w-5 h-5 text-emerald-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Anti-Coupure</div>
-                  <div className="text-[9px] text-slate-500">Garantie & SAV 24/7</div>
+                <div className="px-1.5 py-2 bg-white border border-emerald-200/80 rounded-xl space-y-0.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Anti-Coupure</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Garantie & SAV 24/7</div>
                 </div>
-                <div className="p-3 bg-white border border-emerald-200/80 rounded-2xl shadow-xs space-y-1">
-                  <Sparkles className="w-5 h-5 text-blue-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Sans VPN</div>
-                  <div className="text-[9px] text-slate-500">100% Officiel Maroc</div>
+                <div className="px-1.5 py-2 bg-white border border-emerald-200/80 rounded-xl space-y-0.5">
+                  <Sparkles className="w-4 h-4 text-blue-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Sans VPN</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">100% Officiel Maroc</div>
                 </div>
               </>
             ) : isService ? (
               <>
-                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
-                  <Clock className="w-5 h-5 text-purple-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">24h - 48h</div>
-                  <div className="text-[9px] text-slate-500">Délai d'exécution</div>
+                <div className="px-1.5 py-2 bg-white border border-purple-200/80 rounded-xl space-y-0.5">
+                  <Clock className="w-4 h-4 text-purple-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">24h - 48h</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Délai d'exécution</div>
                 </div>
-                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
-                  <ShieldCheck className="w-5 h-5 text-purple-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Satisfait / Repris</div>
-                  <div className="text-[9px] text-slate-500">Révisions incluses</div>
+                <div className="px-1.5 py-2 bg-white border border-purple-200/80 rounded-xl space-y-0.5">
+                  <ShieldCheck className="w-4 h-4 text-purple-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Satisfait / Repris</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Révisions incluses</div>
                 </div>
-                <div className="p-3 bg-white border border-purple-200/80 rounded-2xl shadow-xs space-y-1">
-                  <UserCheck className="w-5 h-5 text-purple-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Expert Dédié</div>
-                  <div className="text-[9px] text-slate-500">Accompagnement Pro</div>
+                <div className="px-1.5 py-2 bg-white border border-purple-200/80 rounded-xl space-y-0.5">
+                  <UserCheck className="w-4 h-4 text-purple-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Expert Dédié</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Accompagnement Pro</div>
                 </div>
               </>
             ) : (
               <>
-                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-                  <Truck className="w-5 h-5 text-blue-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Livraison 24h-48h</div>
-                  <div className="text-[9px] text-slate-500">Partout au Maroc</div>
+                <div className="px-1.5 py-2 bg-white border border-slate-200 rounded-xl space-y-0.5">
+                  <Truck className="w-4 h-4 text-blue-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Livraison 24h-48h</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Partout au Maroc</div>
                 </div>
-                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-                  <ShieldCheck className="w-5 h-5 text-emerald-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Paiement Cash</div>
-                  <div className="text-[9px] text-slate-500">À la réception</div>
+                <div className="px-1.5 py-2 bg-white border border-slate-200 rounded-xl space-y-0.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Paiement Cash</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">À la réception</div>
                 </div>
-                <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-1">
-                  <RotateCcw className="w-5 h-5 text-purple-600 mx-auto" />
-                  <div className="text-[11px] font-extrabold text-slate-900">Testez le Colis</div>
-                  <div className="text-[9px] text-slate-500">Avant de payer</div>
+                <div className="px-1.5 py-2 bg-white border border-slate-200 rounded-xl space-y-0.5">
+                  <RotateCcw className="w-4 h-4 text-purple-600 mx-auto" />
+                  <div className="text-[10px] font-extrabold text-slate-900 leading-tight">Testez le Colis</div>
+                  <div className="text-[8px] text-slate-500 leading-tight">Avant de payer</div>
                 </div>
               </>
             )}

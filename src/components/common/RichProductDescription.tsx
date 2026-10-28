@@ -6,7 +6,6 @@ import {
   VolumeX, 
   Maximize2, 
   X, 
-  Image as ImageIcon, 
   Film, 
   Sparkles, 
   ZoomIn, 
@@ -39,41 +38,8 @@ export const RichProductDescription: React.FC<RichProductDescriptionProps> = ({
   // Parse description text into ordered blocks (paragraphs, images, gifs, videos)
   const blocks = parseDescriptionBlocks(description);
 
-  // Count media types for badges
-  const imageCount = blocks.filter(b => b.type === 'image').length;
-  const gifCount = blocks.filter(b => b.type === 'gif').length;
-  const videoCount = blocks.filter(b => b.type === 'video' || b.type === 'youtube').length;
-  const hasRichMedia = imageCount > 0 || gifCount > 0 || videoCount > 0;
-
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Mobile media quick indicators if media is present */}
-      {hasRichMedia && (
-        <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-slate-100">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Contenu multimédia :
-          </span>
-          {imageCount > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[11px] font-semibold">
-              <ImageIcon className="w-3 h-3" />
-              <span>{imageCount} {imageCount > 1 ? 'Images HD' : 'Image HD'}</span>
-            </span>
-          )}
-          {gifCount > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200/60 rounded-full text-[11px] font-semibold">
-              <Sparkles className="w-3 h-3" />
-              <span>{gifCount} {gifCount > 1 ? 'GIFs animés' : 'GIF animé'}</span>
-            </span>
-          )}
-          {videoCount > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200/60 rounded-full text-[11px] font-semibold">
-              <Film className="w-3 h-3" />
-              <span>{videoCount} {videoCount > 1 ? 'Vidéos démo' : 'Vidéo démo'}</span>
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Render sequence of text and media */}
       <div className="space-y-6">
         {blocks.map((block, index) => {
