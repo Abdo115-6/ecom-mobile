@@ -40,7 +40,9 @@ import {
   Laptop,
   Mail,
   FileText,
-  Play
+  Play,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { productKindOf } from '../../utils/productKind';
 
@@ -73,6 +75,23 @@ export const ProductDetailView: React.FC = () => {
   // The demo video (if the description has one) opens the gallery; tapping a photo switches to it
   const demoVideoUrl = React.useMemo(() => getFirstDemoVideo(product?.description || ''), [product?.description]);
   const [showVideo, setShowVideo] = useState<boolean>(true);
+  const touchStartRef = React.useRef<{ x: number; y: number; onControls: boolean } | null>(null);
+  const thumbsRef = React.useRef<HTMLDivElement>(null);
+
+  // Customer reviews, stored on the server so every visitor (and the admin) sees them
+  const [productReviews, setProductReviews] = useState<Array<{ id: string; customerName: string; city?: string; rating: number; comment: string; verified?: boolean; adminReply?: string; createdAt: string }>>([]);
+  const [newReviewCity, setNewReviewCity] = useState('');
+  const [newReviewPhone, setNewReviewPhone] = useState('');
+  const [reviewSending, setReviewSending] = useState(false);
+  useEffect(() => {
+    if (!product?.id) return;
+    let alive = true;
+    fetch(`/api/reviews?productId=${encodeURIComponent(product.id)}`)
+      .then(r => r.json())
+      .then(d => { if (alive && d.success) setProductReviews(d.reviews || []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [product?.id]);
   const [copiedLink, setCopiedLink] = useState(false);
   const [customQuantity, setCustomQuantity] = useState<number>(1);
 
@@ -375,7 +394,6 @@ export const ProductDetailView: React.FC = () => {
 
   // Companion & Reviews
   const companionProduct = dataMiningService.getFrequentlyBoughtTogether(product.id);
-  const productReviews = dbService.reviews.filter(r => r.productId === product.id && r.status === 'APPROVED');
 
   // Handle Add to Cart & Open Cart Drawer
   const handleAddToCart = () => {
@@ -872,6 +890,42 @@ export const ProductDetailView: React.FC = () => {
       </div>
   );
 
+  // Gallery slides: the demo video first (when there is one), then the photos
+  const slideCount = product.images.length + (demoVideoUrl ? 1 : 0);
+  const activeSlide = demoVideoUrl && showVideo ? 0 : selectedImageIndex + (demoVideoUrl ? 1 : 0);
+  const goToSlide = (index: number) => {
+    if (slideCount < 2) return;
+    const n = (index + slideCount) % slideCount;
+    if (demoVideoUrl && n === 0) setShowVideo(true);
+    else {
+      setShowVideo(false);
+      setSelectedImageIndex(n - (demoVideoUrl ? 1 : 0));
+    }
+    // Keep the matching thumbnail in view without scrolling the page
+    const strip = thumbsRef.current;
+    const thumb = strip?.children[n] as HTMLElement | undefined;
+    if (strip && thumb) strip.scrollTo({ left: thumb.offsetLeft - strip.clientWidth / 2 + thumb.clientWidth / 2, behavior: 'smooth' });
+  };
+  const onGalleryTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    const box = e.currentTarget.getBoundingClientRect();
+    // The bottom strip of the video holds its play / seek controls: a drag there is not a swipe
+    touchStartRef.current = { x: t.clientX, y: t.clientY, onControls: !!(demoVideoUrl && showVideo) && t.clientY > box.bottom - 70 };
+  };
+  const onGalleryTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || start.onControls) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) goToSlide(activeSlide + (dx < 0 ? 1 : -1));
+  };
+
+  const reviewAverage = productReviews.length
+    ? productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length
+    : 0;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 space-y-6 sm:space-y-10 pb-24 relative">
       
@@ -909,7 +963,11 @@ export const ProductDetailView: React.FC = () => {
         
         {/* Left Column: Gallery & Thumbnails (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div className={`relative rounded-3xl overflow-hidden border border-slate-200 shadow-sm ${demoVideoUrl && showVideo ? 'aspect-[3/4] bg-black' : 'aspect-square bg-white'}`}>
+          <div
+            onTouchStart={onGalleryTouchStart}
+            onTouchEnd={onGalleryTouchEnd}
+            className={`relative rounded-3xl overflow-hidden border border-slate-200 shadow-sm touch-pan-y select-none ${demoVideoUrl && showVideo ? 'aspect-[3/4] bg-black' : 'aspect-square bg-white'}`}
+          >
             {demoVideoUrl && showVideo ? (
               <video
                 key={demoVideoUrl}
@@ -925,10 +983,41 @@ export const ProductDetailView: React.FC = () => {
               />
             ) : (
               <img fetchPriority="high" decoding="async"
+                key={selectedImageIndex}
                 src={product.images[selectedImageIndex]?.imageUrl || product.images[0]?.imageUrl}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                draggable={false}
+                className="w-full h-full object-cover animate-in fade-in duration-200"
               />
+            )}
+
+            {/* Previous / next: swipe on phones, arrows everywhere */}
+            {slideCount > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => goToSlide(activeSlide - 1)}
+                  aria-label="Image précédente"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm text-slate-800 shadow flex items-center justify-center cursor-pointer hover:bg-white"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToSlide(activeSlide + 1)}
+                  aria-label="Image suivante"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm text-slate-800 shadow flex items-center justify-center cursor-pointer hover:bg-white"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                {!(demoVideoUrl && showVideo) && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                    {Array.from({ length: slideCount }).map((_, i) => (
+                      <span key={i} className={`h-1.5 rounded-full transition-all ${i === activeSlide ? 'w-4 bg-slate-900' : 'w-1.5 bg-slate-900/30'}`} />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
             
             {/* Promo Discount Tag */}
@@ -949,7 +1038,7 @@ export const ProductDetailView: React.FC = () => {
 
           {/* Thumbnails */}
           {product.images.length + (demoVideoUrl ? 1 : 0) > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div ref={thumbsRef} className="flex items-center gap-2 overflow-x-auto pb-1">
               {demoVideoUrl && (
                 <button
                   onClick={() => setShowVideo(true)}
@@ -1426,66 +1515,72 @@ export const ProductDetailView: React.FC = () => {
         )}
       </section>
 
-      {/* Verified Moroccan Customer Reviews */}
+      {/* Customer reviews (stored on the server, moderated in the admin) - French + Darija */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
-            <h2 className="text-base sm:text-lg font-black text-slate-900">Avis de nos Clients au Maroc</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center text-amber-400">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400" />
-                ))}
+            <h2 className="text-base sm:text-lg font-black text-slate-900">
+              Avis clients <span className="text-slate-400 font-bold">·</span> <span dir="rtl">آراء الزبناء</span>
+            </h2>
+            {productReviews.length > 0 ? (
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center text-amber-400">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} className={`w-4 h-4 ${i < Math.round(reviewAverage) ? 'fill-amber-400' : 'text-slate-200'}`} />
+                  ))}
+                </div>
+                <span className="text-xs font-black text-slate-900">{reviewAverage.toFixed(1)} / 5</span>
+                <span className="text-xs text-slate-400">({productReviews.length} avis · <span dir="rtl">{productReviews.length} رأي</span>)</span>
               </div>
-              <span className="text-xs font-black text-slate-900">{product.rating} sur 5</span>
-              <span className="text-xs text-slate-400">({product.reviewsCount} avis certifiés)</span>
-            </div>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1">Vous avez acheté ce produit ? <span dir="rtl">شريتي هاد المنتوج؟ عطينا رأيك</span></p>
+            )}
           </div>
 
           <button
             onClick={() => setReviewModalOpen(true)}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
           >
-            Donner mon avis
+            Donner mon avis · <span dir="rtl">عطي رأيك</span>
           </button>
         </div>
 
-        {/* Reviews List */}
         <div className="space-y-4">
           {productReviews.length === 0 ? (
-            <div className="text-center py-6 text-xs text-slate-500">
-              Aucun avis pour le moment. Soyez le premier client à donner votre avis !
+            <div className="text-center py-6 text-xs text-slate-500 space-y-1">
+              <div>Aucun avis pour le moment. Soyez le premier à donner votre avis !</div>
+              <div dir="rtl">ما كاين حتى رأي دابا. كون الأول اللي يعطي رأيو!</div>
             </div>
           ) : (
             productReviews.map(rev => (
               <div key={rev.id} className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center">
-                      {rev.customerName.charAt(0)}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                      {rev.customerName.charAt(0).toUpperCase()}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-xs font-bold text-slate-900">{rev.customerName}</span>
-                      <span className="text-[10px] text-emerald-600 block">✓ Achat vérifié · Livraison reçue</span>
+                      {rev.city && <span className="text-[10px] text-slate-500"> · {rev.city}</span>}
+                      {rev.verified && (
+                        <span className="text-[10px] text-emerald-600 block">✓ Achat vérifié · <span dir="rtl">شرا من عندنا</span></span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex text-amber-400">
+                  <div className="flex text-amber-400 shrink-0">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-amber-400' : 'text-slate-200'}`}
-                      />
+                      <Star key={i} className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-amber-400' : 'text-slate-200'}`} />
                     ))}
                   </div>
                 </div>
 
-                <div className="text-xs font-bold text-slate-800">{rev.title}</div>
-                <p className="text-xs text-slate-600 leading-relaxed">{rev.comment}</p>
+                <p dir="auto" className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">{rev.comment}</p>
+                <div className="text-[10px] text-slate-400">{new Date(rev.createdAt).toLocaleDateString('fr-FR')}</div>
 
                 {rev.adminReply && (
                   <div className="mt-2 p-3 bg-white border border-slate-200 rounded-xl text-xs space-y-1">
-                    <span className="font-bold text-slate-900 text-[11px]">Réponse du Support Aura :</span>
-                    <p className="text-slate-600 text-[11px]">{rev.adminReply}</p>
+                    <span className="font-bold text-slate-900 text-[11px]">Réponse de ShopMe · <span dir="rtl">جواب ShopMe</span></span>
+                    <p dir="auto" className="text-slate-600 text-[11px]">{rev.adminReply}</p>
                   </div>
                 )}
               </div>
@@ -1548,103 +1643,125 @@ export const ProductDetailView: React.FC = () => {
       {/* Submit Review Modal */}
       {reviewModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">Donner votre avis</h3>
-              <button
-                onClick={() => setReviewModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600"
-              >
+              <h3 className="text-base font-bold text-slate-900">Votre avis · <span dir="rtl">رأيك</span></h3>
+              <button onClick={() => setReviewModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600" aria-label="Fermer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (!newReviewName.trim() || !newReviewComment.trim()) return;
-
-                dbService.submitReview({
-                  productId: product.id,
-                  productName: product.name,
-                  customerId: "cust-guest-" + Date.now(),
-                  customerName: newReviewName,
-                  rating: newReviewRating,
-                  title: newReviewTitle || "Avis client",
-                  comment: newReviewComment,
-                  isFeatured: false,
-                });
-
-                setReviewModalOpen(false);
-                setNewReviewTitle('');
-                setNewReviewComment('');
-                setNewReviewName('');
-                showToast("Votre avis a été soumis avec succès et sera validé rapidement !");
+                if (!newReviewName.trim() || !newReviewComment.trim() || reviewSending) return;
+                setReviewSending(true);
+                try {
+                  const res = await fetch('/api/reviews', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      productId: product.id,
+                      customerName: newReviewName,
+                      city: newReviewCity,
+                      phone: newReviewPhone,
+                      rating: newReviewRating,
+                      comment: newReviewComment
+                    })
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok || !data.success) throw new Error(data.message || 'Erreur');
+                  setReviewModalOpen(false);
+                  setNewReviewTitle('');
+                  setNewReviewComment('');
+                  setNewReviewName('');
+                  setNewReviewCity('');
+                  setNewReviewPhone('');
+                  showToast('Merci ! Votre avis sera publié après vérification · شكرا! غادي ينشر رأيك من بعد المراجعة');
+                } catch (err: any) {
+                  showToast(`Avis non envoyé : ${err.message || 'réessayez'}`);
+                } finally {
+                  setReviewSending(false);
+                }
               }}
               className="space-y-4"
             >
               <div>
-                <label className="text-xs font-bold text-slate-700">Votre Note</label>
+                <label className="text-xs font-bold text-slate-700">Votre note · <span dir="rtl">التقييم</span></label>
                 <div className="flex items-center gap-1 mt-1 text-amber-400">
                   {[1, 2, 3, 4, 5].map(star => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setNewReviewRating(star)}
-                      className="p-1 cursor-pointer"
-                    >
+                    <button key={star} type="button" onClick={() => setNewReviewRating(star)} className="p-1 cursor-pointer" aria-label={`${star} étoiles`}>
                       <Star className={`w-6 h-6 ${star <= newReviewRating ? 'fill-amber-400' : 'text-slate-200'}`} />
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700">Votre Nom Complet</label>
-                <input
-                  type="text"
-                  required
-                  value={newReviewName}
-                  onChange={(e) => setNewReviewName(e.target.value)}
-                  placeholder="Ex: Sara Alaoui"
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700">Prénom · <span dir="rtl">الاسم</span></label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={60}
+                    value={newReviewName}
+                    onChange={(e) => setNewReviewName(e.target.value)}
+                    className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700">Ville · <span dir="rtl">المدينة</span></label>
+                  <input
+                    type="text"
+                    maxLength={60}
+                    value={newReviewCity}
+                    onChange={(e) => setNewReviewCity(e.target.value)}
+                    className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700">Titre de l'avis</label>
-                <input
-                  type="text"
-                  value={newReviewTitle}
-                  onChange={(e) => setNewReviewTitle(e.target.value)}
-                  placeholder="Ex: Très satisfaite du produit et de la livraison !"
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700">Votre Commentaire</label>
+                <label className="text-xs font-bold text-slate-700">Votre avis · <span dir="rtl">شنو بان ليك فالمنتوج؟</span></label>
                 <textarea
                   required
-                  rows={3}
+                  rows={4}
+                  maxLength={1000}
+                  dir="auto"
                   value={newReviewComment}
                   onChange={(e) => setNewReviewComment(e.target.value)}
-                  placeholder="Partagez votre expérience avec ce produit..."
+                  placeholder="En français ou en darija · بالدارجة ولا بالفرنسية"
                   className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Téléphone de la commande (optionnel) · <span dir="rtl">رقم الهاتف ديال الطلب</span></label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  maxLength={20}
+                  value={newReviewPhone}
+                  onChange={(e) => setNewReviewPhone(e.target.value)}
+                  placeholder="06 XX XX XX XX"
+                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-slate-900"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Sert seulement à afficher « Achat vérifié ». Jamais publié. · <span dir="rtl">غير باش نأكدو بلي شريتي، ما كيتنشرش.</span>
+                </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+                disabled={reviewSending}
+                className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-60"
               >
-                Publier mon avis
+                {reviewSending ? 'Envoi…' : <>Envoyer mon avis · <span dir="rtl">صيفط رأيي</span></>}
               </button>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 };

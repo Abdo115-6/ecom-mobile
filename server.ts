@@ -1663,7 +1663,7 @@ async function startServer() {
   // Finance (Calcul de Marge): stock purchases, ad spend, other expenses and per-order delivery costs.
   // Kept server-side (Postgres + a private file outside /public) so every admin browser sees the same numbers.
   const FINANCE_FILE = path.resolve(process.cwd(), 'data', 'finance.json');
-  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'offline', 'unit', 'settings'] as const;
+  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'offline', 'unit', 'review', 'settings'] as const;
   type FinanceKind = typeof FINANCE_KINDS[number];
   const AD_PLATFORMS = ['facebook', 'tiktok', 'snapchat', 'google', 'other'];
   const ORDER_OUTCOMES = ['delivered', 'returned', 'cancelled'];
@@ -1710,6 +1710,20 @@ async function startServer() {
       if (!amount) return null;
       return { id, date: day(raw.date), category: clip(raw.category, 60) || 'Autre', label: clip(raw.label, 200), amount };
     }
+    if (kind === 'review') {
+      // Customer review: published only once approved in the admin; the phone is never shown
+      const rating = Math.min(Math.max(Math.round(Number(raw.rating) || 5), 1), 5);
+      const comment = clip(raw.comment, 1000).trim();
+      if (!raw.productId || !comment || !clip(raw.customerName, 60).trim()) return null;
+      return {
+        id, productId: clip(raw.productId, 100), productName: clip(raw.productName, 255),
+        customerName: clip(raw.customerName, 60).trim(), city: clip(raw.city, 60).trim(), phone: clip(raw.phone, 20),
+        rating, comment, verified: raw.verified === true,
+        status: ['PENDING', 'APPROVED', 'REJECTED'].includes(raw.status) ? raw.status : 'PENDING',
+        adminReply: clip(raw.adminReply, 500), source: raw.source === 'whatsapp' ? 'whatsapp' : 'site',
+        createdAt: clip(raw.createdAt, 40) || new Date().toISOString()
+      };
+    }
     if (kind === 'unit') {
       // One physical piece with its own QR code, followed from stock to the customer
       if (!raw.productId) return null;
@@ -1739,7 +1753,7 @@ async function startServer() {
     return { id: 'settings', openingCash: Number(raw.openingCash) || 0, defaultReturnCost: money(raw.defaultReturnCost) };
   }
 
-  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], offline: [], unit: [], settings: [] });
+  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], offline: [], unit: [], review: [], settings: [] });
 
   async function loadFinance(): Promise<Record<FinanceKind, any[]>> {
     if (isPgConnected) {
@@ -1756,6 +1770,61 @@ async function startServer() {
     }
     return { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
   }
+
+  // ---- Customer reviews (public read + submit; moderation through /api/finance/review) ----
+  const last9 = (phone: unknown) => String(phone || '').replace(/\D/g, '').slice(-9);
+  /** A review is "verified" when its phone matches a delivered order containing the product */
+  async function reviewIsVerified(productId: string, phone: string): Promise<boolean> {
+    const wanted = last9(phone);
+    if (wanted.length < 9) return false;
+    const { orders } = await loadAllOrders();
+    return orders.some(o => o.status === 'DELIVERED' && last9(o.customerPhone) === wanted && (o.items || []).some((i: any) => i.productId === productId));
+  }
+  const reviewHits = new Map<string, number[]>();
+
+  app.get('/api/reviews', async (req, res) => {
+    const productId = String(req.query.productId || '');
+    const reviews = ((await loadFinance()).review || [])
+      .filter(r => r.status === 'APPROVED' && (!productId || r.productId === productId))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, 100)
+      .map(({ phone, ...publicPart }) => publicPart);
+    return res.json({ success: true, reviews });
+  });
+
+  app.post('/api/reviews', async (req, res) => {
+    // At most 5 reviews a day from one connection
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const now = Date.now();
+    const hits = (reviewHits.get(ip) || []).filter(t => now - t < 86400000);
+    if (hits.length >= 5) return res.status(429).json({ success: false, message: 'Trop d\'avis envoyés aujourd\'hui' });
+    const product = (await loadProducts()).products.find((p: any) => p.id === req.body?.productId);
+    if (!product) return res.status(400).json({ success: false, message: 'Produit introuvable' });
+    const review = sanitizeFinance('review', {
+      ...req.body,
+      id: `rev-${now.toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      productName: product.name,
+      status: 'PENDING',
+      adminReply: '',
+      source: 'site',
+      createdAt: new Date().toISOString(),
+      verified: await reviewIsVerified(product.id, req.body?.phone)
+    });
+    if (!review) return res.status(400).json({ success: false, message: 'Nom et avis obligatoires' });
+    hits.push(now);
+    reviewHits.set(ip, hits);
+    await upsertFinance('review', [review]);
+    return res.json({ success: true });
+  });
+
+  // Admin: recheck "Achat vérifié" for a review (after its order was delivered)
+  app.post('/api/reviews/:id/verify', requireAdmin, async (req, res) => {
+    const review = ((await loadFinance()).review || []).find(r => r.id === req.params.id);
+    if (!review) return res.status(404).json({ success: false });
+    const updated = { ...review, verified: await reviewIsVerified(review.productId, review.phone) };
+    await upsertFinance('review', [updated]);
+    return res.json({ success: true, entry: updated });
+  });
 
   app.get('/api/finance', requireAdmin, async (req, res) => {
     return res.json({ success: true, ...(await loadFinance()) });
