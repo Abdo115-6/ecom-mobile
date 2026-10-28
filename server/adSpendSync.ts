@@ -25,8 +25,34 @@ export interface AdSyncStatus {
 }
 
 const list = (v?: string) => String(v || '').split(',').map(s => s.trim().replace(/^act_/, '')).filter(Boolean);
+// TikTok reporting access saved after the one-click authorization (see /api/tiktok/callback)
+let tiktokAuth: { accessToken: string; advertiserIds: string[] } | null = null;
+export const setTiktokAdsAuth = (a: any) => {
+  tiktokAuth = a?.accessToken ? { accessToken: String(a.accessToken), advertiserIds: (a.advertiserIds || []).map(String) } : null;
+};
+
+/** Exchanges the auth_code TikTok sends after the advertiser authorizes the app for a long-term token */
+export async function exchangeTiktokAuthCode(authCode: string): Promise<{ accessToken: string; advertiserIds: string[] }> {
+  const appId = process.env.TIKTOK_APP_ID;
+  const secret = process.env.TIKTOK_APP_SECRET;
+  if (!appId || !secret) throw new Error('TIKTOK_APP_ID et TIKTOK_APP_SECRET manquent sur le serveur');
+  const res = await fetch('https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: appId, secret, auth_code: authCode }),
+    signal: AbortSignal.timeout(20000)
+  });
+  const data: any = await res.json().catch(() => null);
+  if (!data || data.code !== 0 || !data.data?.access_token) throw new Error(data?.message || `HTTP ${res.status}`);
+  return { accessToken: data.data.access_token, advertiserIds: (data.data.advertiser_ids || []).map(String) };
+}
+
 const metaToken = () => process.env.META_ADS_TOKEN || process.env.META_ACCESS_TOKEN || '';
-const tiktokToken = () => process.env.TIKTOK_ADS_TOKEN || process.env.TIKTOK_ACCESS_TOKEN || '';
+const tiktokToken = () => process.env.TIKTOK_ADS_TOKEN || tiktokAuth?.accessToken || process.env.TIKTOK_ACCESS_TOKEN || '';
+const tiktokAdvertisers = () => {
+  const fromEnv = list(process.env.TIKTOK_ADVERTISER_IDS);
+  return fromEnv.length ? fromEnv : tiktokAuth?.advertiserIds || [];
+};
 const usdToMad = () => Number(process.env.USD_TO_MAD) || 10;
 const toMad = (amount: number, currency: string) => (String(currency).toUpperCase() === 'USD' ? amount * usdToMad() : amount);
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -37,7 +63,7 @@ export function adSyncStatus(): AdSyncStatus {
   return {
     ...status,
     meta: !!(metaToken() && list(process.env.META_AD_ACCOUNT_IDS).length),
-    tiktok: !!(tiktokToken() && list(process.env.TIKTOK_ADVERTISER_IDS).length),
+    tiktok: !!(tiktokToken() && tiktokAdvertisers().length),
     usdToMad: usdToMad()
   };
 }
@@ -68,7 +94,7 @@ async function tiktokSpend(since: string, until: string): Promise<Map<string, nu
   const token = tiktokToken();
   if (!token) return out;
   const currency = process.env.TIKTOK_CURRENCY || 'MAD';
-  for (const advertiser of list(process.env.TIKTOK_ADVERTISER_IDS)) {
+  for (const advertiser of tiktokAdvertisers()) {
     const url = new URL('https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/');
     url.searchParams.set('advertiser_id', advertiser);
     url.searchParams.set('report_type', 'BASIC');

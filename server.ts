@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
 import { buildDataMiningReport } from './server/dataMining.js';
-import { adSyncStatus, syncAdSpend, scheduleAdSpendSync } from './server/adSpendSync.js';
+import { adSyncStatus, syncAdSpend, scheduleAdSpendSync, setTiktokAdsAuth, exchangeTiktokAuthCode } from './server/adSpendSync.js';
 import { setSalesBotConfig, salesBotSummary, generateSalesReply, MAX_INSTRUCTIONS } from './server/salesBot.js';
 import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, fetchOzonParcelRaw, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
@@ -389,6 +389,7 @@ async function startServer() {
     }
   }
   setOzonCredentials(await loadIntegration('ozon'));
+  setTiktokAdsAuth(await loadIntegration('tiktokAds'));
   setSalesBotConfig(await loadIntegration('salesbot'));
 
   // Store settings for the AI assistant (delivery fees, domain), read from Postgres first and cached for a minute
@@ -1784,6 +1785,23 @@ async function startServer() {
   // Facebook / TikTok spend imported every night (tokens in the host's environment variables)
   const saveAdDays = async (days: any[]) => upsertFinance('ad', days.map(d => sanitizeFinance('ad', d)).filter(Boolean));
   scheduleAdSpendSync(saveAdDays);
+
+  // TikTok redirects here after "Autoriser" on the app's advertiser authorization link.
+  // The code is useless without the app secret (server-side only), so the page itself needs no login.
+  app.get('/api/tiktok/callback', async (req, res) => {
+    const page = (title: string, text: string) => res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:Arial;padding:24px;max-width:560px;margin:auto"><h2>${title}</h2><p>${text}</p><p><a href="/adminonly">Retour à l'admin</a></p></body></html>`);
+    const code = String(req.query.auth_code || req.query.code || '').slice(0, 300);
+    if (!code) return page('TikTok : code manquant', 'Ouvrez le lien d\'autorisation de votre application TikTok puis cliquez sur Autoriser.');
+    try {
+      const auth = await exchangeTiktokAuthCode(code);
+      await saveIntegration('tiktokAds', auth);
+      setTiktokAdsAuth(auth);
+      const result = await syncAdSpend(saveAdDays, 14).catch((err: any) => err.message);
+      return page('TikTok connecté ✓', `Comptes publicitaires : ${auth.advertiserIds.length}. ${String(result).replace(/[<>]/g, '')}`);
+    } catch (err: any) {
+      return page('TikTok : connexion refusée', String(err.message || err).replace(/[<>]/g, ''));
+    }
+  });
 
   app.get('/api/finance/ads-sync', requireAdmin, (req, res) => res.json({ success: true, ...adSyncStatus() }));
 
