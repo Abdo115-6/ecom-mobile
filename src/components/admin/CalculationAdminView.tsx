@@ -50,7 +50,7 @@ const TABS: Array<[Tab, string]> = [
 ];
 const EXPENSE_CATEGORIES = ['Emballage', 'Internet / téléphone', 'Abonnements & outils', 'Salaires', 'Transport', 'Loyer', 'Autre'];
 
-const emptyFinance = (): FinanceData => ({ purchase: [], ad: [], expense: [], order: [], offline: [], settings: [] });
+const emptyFinance = (): FinanceData => ({ purchase: [], ad: [], expense: [], order: [], offline: [], unit: [], settings: [] });
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 const num = (v: string) => Math.max(0, Number(String(v).replace(',', '.')) || 0);
@@ -118,7 +118,7 @@ export const CalculationAdminView: React.FC = () => {
       const res = await fetch('/api/finance');
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(res.status === 401 ? 'Session admin expirée : reconnectez-vous' : data.message || `HTTP ${res.status}`);
-      setFinance({ purchase: data.purchase || [], ad: data.ad || [], expense: data.expense || [], order: data.order || [], offline: data.offline || [], settings: data.settings || [] });
+      setFinance({ purchase: data.purchase || [], ad: data.ad || [], expense: data.expense || [], order: data.order || [], offline: data.offline || [], unit: data.unit || [], settings: data.settings || [] });
       setLoadError('');
     } catch (err: any) {
       setLoadError(err.message || 'Chargement impossible');
@@ -331,8 +331,9 @@ export const CalculationAdminView: React.FC = () => {
   };
 
   const applyStock = (r: ProductProfit) => {
-    if (r.stockLeft === null) return;
-    saveProductPatch(r.product, { stockQuantity: Math.max(0, r.stockLeft) }, `✓ Stock de « ${r.product.name} » mis à ${Math.max(0, r.stockLeft)}`);
+    const qty = r.unitsInStock ?? r.stockLeft;
+    if (qty === null) return;
+    saveProductPatch(r.product, { stockQuantity: Math.max(0, qty) }, `✓ Stock de « ${r.product.name} » mis à ${Math.max(0, qty)}`);
   };
 
   // ---------- Ads ----------
@@ -1182,21 +1183,23 @@ export const CalculationAdminView: React.FC = () => {
                       <th className="font-semibold py-2">Produit</th>
                       <th className={th}>Acheté</th>
                       <th className={th}>Restant calculé</th>
+                      <th className={th}>En stock (QR)</th>
                       <th className={th}>Stock fiche</th>
                       <th className={th}>Coût moyen</th>
                       <th className={th}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.products.filter(r => r.stockLeft !== null).map(r => (
+                    {report.products.filter(r => r.stockLeft !== null || r.unitsInStock !== null).map(r => (
                       <tr key={r.product.id} className="border-b border-slate-800">
                         <td className="py-2 text-slate-200 font-semibold truncate max-w-[200px]">{r.product.name}</td>
                         <td className="py-2 text-right font-mono text-slate-300">{r.purchasedPieces}</td>
                         <td className={`py-2 text-right font-mono font-bold ${(r.stockLeft ?? 0) < 0 ? 'text-rose-400' : (r.stockLeft ?? 0) <= 5 ? 'text-amber-300' : 'text-emerald-300'}`}>{r.stockLeft}</td>
+                        <td className="py-2 text-right font-mono text-cyan-300">{r.unitsInStock ?? '—'}</td>
                         <td className="py-2 text-right font-mono text-slate-400">{r.product.stockQuantity}</td>
                         <td className="py-2 text-right font-mono text-amber-300">{formatMoney(r.unitCost)}</td>
                         <td className="py-2 text-right">
-                          {r.stockLeft !== r.product.stockQuantity && (
+                          {(r.unitsInStock ?? r.stockLeft) !== r.product.stockQuantity && (
                             <button onClick={() => applyStock(r)} className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer">Appliquer</button>
                           )}
                         </td>

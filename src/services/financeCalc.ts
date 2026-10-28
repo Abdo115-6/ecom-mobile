@@ -61,6 +61,24 @@ export interface OfflineSale {
   note?: string;
 }
 
+/** One physical piece with its own QR code */
+export type UnitStatus = 'in_stock' | 'linked' | 'sold' | 'lost';
+export interface StockUnit {
+  id: string;            // the code printed in the QR
+  productId: string;
+  productName: string;
+  unitCost: number;
+  batch?: string;
+  status: UnitStatus;    // linked = packed for an order, then follows that order (Ozon)
+  orderId?: string;
+  orderNumber?: string;
+  saleId?: string;       // off-site sale created by a direct sale
+  createdAt: string;
+  history: Array<{ at: string; action: string; note?: string }>;
+}
+
+export const QR_PREFIX = 'SHOPME-U:';
+
 export interface FinanceSettings {
   id: 'settings';
   openingCash: number;
@@ -73,6 +91,7 @@ export interface FinanceData {
   expense: Expense[];
   order: OrderCost[];
   offline?: OfflineSale[];
+  unit?: StockUnit[];
   settings: FinanceSettings[];
 }
 
@@ -192,6 +211,7 @@ export interface ProductProfit {
   profit: number;
   purchasedPieces: number;   // all time
   stockLeft: number | null;  // purchased - dispatched + restocked; null without purchases
+  unitsInStock: number | null; // QR pieces on the shelf; null when the product has no QR pieces
 }
 
 export interface AdPerformance {
@@ -394,7 +414,7 @@ export function buildFinanceReport(input: {
       product: p, category: categoryOf(p, categories), unitCost: uc.cost, unitCostSource: uc.source,
       ordersDelivered: 0, ordersReturned: 0, ordersInProgress: 0, piecesSold: 0, collected: 0,
       productCost: 0, courierCost: 0, adCost: 0, profit: 0,
-      purchasedPieces: purchasedByProduct.get(p.id)?.pieces || 0, stockLeft: null
+      purchasedPieces: purchasedByProduct.get(p.id)?.pieces || 0, stockLeft: null, unitsInStock: null
     });
   });
 
@@ -424,11 +444,17 @@ export function buildFinanceReport(input: {
     o.order.items.forEach(i => outByProduct.set(i.productId, (outByProduct.get(i.productId) || 0) + i.quantity * piecesPerUnit(i)));
   });
 
+  const units = finance.unit || [];
   let stockValue = 0;
   productRows.forEach(r => {
     r.profit = r.collected - r.productCost - r.courierCost - r.adCost;
-    if (r.purchasedPieces > 0) {
-      r.stockLeft = r.purchasedPieces - (outByProduct.get(r.product.id) || 0);
+    if (r.purchasedPieces > 0) r.stockLeft = r.purchasedPieces - (outByProduct.get(r.product.id) || 0);
+    const own = units.filter(u => u.productId === r.product.id);
+    if (own.length > 0) {
+      // Counted pieces are the truth once QR codes are used
+      r.unitsInStock = own.filter(u => u.status === 'in_stock').length;
+      stockValue += own.filter(u => u.status === 'in_stock').reduce((s, u) => s + (u.unitCost || r.unitCost), 0);
+    } else if (r.stockLeft !== null) {
       stockValue += Math.max(0, r.stockLeft) * r.unitCost;
     }
   });

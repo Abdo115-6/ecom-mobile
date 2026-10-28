@@ -58,6 +58,7 @@ const TrackingInspectorView = lazyNamed(() => import('./components/admin/Trackin
 const DataMiningView = lazyNamed(() => import('./components/admin/DataMiningView'), 'DataMiningView');
 const WhatsAppAdminView = lazyNamed(() => import('./components/admin/WhatsAppAdminView'), 'WhatsAppAdminView');
 const CalculationAdminView = lazyNamed(() => import('./components/admin/CalculationAdminView'), 'CalculationAdminView');
+const StockQrView = lazyNamed(() => import('./components/admin/StockQrView'), 'StockQrView');
 const UsersAdminView = lazyNamed(() => import('./components/admin/UsersAdminView'), 'UsersAdminView');
 const AuditLogsView = lazyNamed(() => import('./components/admin/AuditLogsView'), 'AuditLogsView');
 const SettingsAdminView = lazyNamed(() => import('./components/admin/SettingsAdminView'), 'SettingsAdminView');
@@ -195,6 +196,7 @@ const MainRouter: React.FC = () => {
           {currentView === 'admin-datamining' && <DataMiningView />}
           {currentView === 'admin-whatsapp' && <WhatsAppAdminView />}
           {currentView === 'admin-calculation' && <CalculationAdminView />}
+          {currentView === 'admin-stockqr' && <StockQrView />}
           {currentView === 'admin-users' && <UsersAdminView />}
           {currentView === 'admin-audit' && <AuditLogsView />}
           {currentView === 'admin-settings' && <SettingsAdminView />}

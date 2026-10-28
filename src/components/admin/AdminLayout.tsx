@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp, ActiveView } from '../../context/AppContext';
 import { Logo } from '../common/Logo';
-import { 
+import { QrCode, 
   LayoutDashboard, 
   Package, 
   FolderTree, 
@@ -52,6 +52,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { id: 'admin-categories', label: 'Catégories', icon: <FolderTree className="w-4 h-4" />, category: 'Catalogue' },
     { id: 'admin-inventory', label: 'Stock & Mouvements', icon: <Boxes className="w-4 h-4" />, category: 'Catalogue', badge: 'Audit IN/OUT' },
     { id: 'admin-calculation', label: 'Calculation (Rentabilité)', icon: <Calculator className="w-4 h-4 text-emerald-400" />, category: 'Catalogue', badge: 'Marge & Profit' },
+    { id: 'admin-stockqr', label: 'Stock QR (Scanner)', icon: <QrCode className="w-4 h-4 text-cyan-400" />, category: 'Catalogue', badge: 'Caméra' },
     
     // Sales
     { id: 'admin-orders', label: 'Commandes', icon: <ShoppingCart className="w-4 h-4" />, category: 'Ventes' },

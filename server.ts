@@ -298,7 +298,7 @@ async function startServer() {
             shipping_fee, total_amount, shipping_address, payment_method,
             payment_status, shipment, items, utm_source, utm_campaign, notes, extra, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, COALESCE($22::timestamptz, NOW()), NOW()
           )
           ON CONFLICT (id) DO UPDATE SET
             status = EXCLUDED.status,
@@ -324,7 +324,8 @@ async function startServer() {
           order.utmSource || 'direct',
           order.utmCampaign || '',
           order.notes || '',
-          JSON.stringify({ whatsappConfirmation: order.whatsappConfirmation, whatsappNotification: order.whatsappNotification })
+          JSON.stringify({ whatsappConfirmation: order.whatsappConfirmation, whatsappNotification: order.whatsappNotification }),
+          order.createdAt && !Number.isNaN(Date.parse(order.createdAt)) ? order.createdAt : null
         ]);
       } catch (dbErr) {
         console.warn('Postgres order insert error:', dbErr);
@@ -1084,6 +1085,66 @@ async function startServer() {
     }
   });
 
+  app.post('/api/ozon/import', requireAdmin, async (req, res) => {
+    const productId = String(req.body?.productId || '');
+    const product = (await loadProducts()).products.find((p: any) => p.id === productId);
+    if (!product) return res.status(400).json({ success: false, message: 'Produit introuvable' });
+    const numbers: string[] = (Array.isArray(req.body?.trackingNumbers) ? req.body.trackingNumbers : [])
+      .map((t: any) => String(t || '').trim()).filter(Boolean).slice(0, 100);
+    const known = new Set((await loadAllOrders()).orders.map(o => o.shipment?.trackingNumber).filter(Boolean));
+    const results: Array<{ trackingNumber: string; result: string }> = [];
+
+    for (const tn of numbers) {
+      if (known.has(tn)) { results.push({ trackingNumber: tn, result: 'déjà présent' }); continue; }
+      try {
+        const { info, tracking } = await fetchOzonParcelRaw(tn);
+        const p = info?.['PARCEL-INFO']?.INFOS;
+        if (!p) { results.push({ trackingNumber: tn, result: 'introuvable chez Ozon' }); continue; }
+        const history = Object.values(tracking?.TRACKING?.HISTORY || {})
+          .filter((h: any) => h?.STATUT)
+          .sort((a: any, b: any) => Number(a.TIME || 0) - Number(b.TIME || 0))
+          .map((h: any) => ({ status: String(h.STATUT), at: new Date(Number(h.TIME) * 1000).toISOString() }));
+        const label = history[history.length - 1]?.status || 'Nouveau colis';
+        const total = Number(p.PRICE) || 0;
+        const unitPrice = Math.min(Number(product.price) || total, total);
+        const createdAt = history[0]?.at || new Date().toISOString();
+        const order = {
+          id: `ozon-${tn}`,
+          orderNumber: `OZ-${tn}`,
+          customerId: 'guest',
+          customerName: String(p.RECEIVER || 'Client Ozon'),
+          customerEmail: '',
+          customerPhone: String(p.PHONE || ''),
+          status: orderStatusFromOzon(label) || (history.length > 1 ? 'SHIPPED' : 'CONFIRMED'),
+          currency: 'MAD',
+          subtotal: unitPrice,
+          discountAmount: 0,
+          shippingFee: Math.max(0, total - unitPrice),
+          taxAmount: 0,
+          totalAmount: total,
+          shippingAddress: { fullName: String(p.RECEIVER || ''), phone: String(p.PHONE || ''), street: String(p.ADDRESS || ''), city: String(p.CITY_NAME || ''), country: 'MA' },
+          paymentMethod: 'CASH_ON_DELIVERY',
+          paymentStatus: 'PENDING',
+          shipment: {
+            carrier: 'Ozon Express', trackingNumber: tn, status: label, cityId: Number(p.CITY_ID) || undefined, cityName: String(p.CITY_NAME || ''),
+            deliveredPrice: Number(p['DELIVERED-PRICE']) || undefined,
+            refusedPrice: Number(p['RETURNED-PRICE'] || p['REFUSED-PRICE']) || undefined,
+            sentAt: createdAt, lastCheckedAt: new Date().toISOString(), history: history.slice(-30)
+          },
+          items: [{ id: `item-${tn}`, productId: product.id, productName: product.name, sku: product.sku || '', unitPrice, quantity: 1, subtotal: unitPrice, imageUrl: product.images?.[0]?.imageUrl || '' }],
+          utmSource: 'ozon-portal',
+          notes: `Importé depuis Ozon (${String(p.NOTE || '').slice(0, 150)})`,
+          createdAt,
+          updatedAt: new Date().toISOString()
+        };
+        results.push({ trackingNumber: tn, result: (await insertOrderRecord(order)) ? `importé · ${label}` : 'déjà présent' });
+      } catch (err: any) {
+        results.push({ trackingNumber: tn, result: `erreur : ${err.message}` });
+      }
+    }
+    return res.json({ success: true, results });
+  });
+
   app.post('/api/ozon/sync', requireAdmin, async (req, res) => {
     try {
       return res.json({ success: true, updated: await syncOzonStatuses() });
@@ -1600,7 +1661,7 @@ async function startServer() {
   // Finance (Calcul de Marge): stock purchases, ad spend, other expenses and per-order delivery costs.
   // Kept server-side (Postgres + a private file outside /public) so every admin browser sees the same numbers.
   const FINANCE_FILE = path.resolve(process.cwd(), 'data', 'finance.json');
-  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'offline', 'settings'] as const;
+  const FINANCE_KINDS = ['purchase', 'ad', 'expense', 'order', 'offline', 'unit', 'settings'] as const;
   type FinanceKind = typeof FINANCE_KINDS[number];
   const AD_PLATFORMS = ['facebook', 'tiktok', 'snapchat', 'google', 'other'];
   const ORDER_OUTCOMES = ['delivered', 'returned', 'cancelled'];
@@ -1647,6 +1708,22 @@ async function startServer() {
       if (!amount) return null;
       return { id, date: day(raw.date), category: clip(raw.category, 60) || 'Autre', label: clip(raw.label, 200), amount };
     }
+    if (kind === 'unit') {
+      // One physical piece with its own QR code, followed from stock to the customer
+      if (!raw.productId) return null;
+      return {
+        id: clip(raw.id, 40).toUpperCase(),
+        productId: clip(raw.productId, 100), productName: clip(raw.productName, 255),
+        unitCost: money(raw.unitCost), batch: clip(raw.batch, 60),
+        status: ['in_stock', 'linked', 'sold', 'lost'].includes(raw.status) ? raw.status : 'in_stock',
+        orderId: clip(raw.orderId, 100) || undefined, orderNumber: clip(raw.orderNumber, 100) || undefined,
+        saleId: clip(raw.saleId, 100) || undefined,
+        createdAt: clip(raw.createdAt, 40) || new Date().toISOString(),
+        history: Array.isArray(raw.history)
+          ? raw.history.slice(-30).map((h: any) => ({ at: clip(h?.at, 40), action: clip(h?.action, 60), note: clip(h?.note, 200) }))
+          : []
+      };
+    }
     if (kind === 'order') {
       return {
         id,
@@ -1660,7 +1737,7 @@ async function startServer() {
     return { id: 'settings', openingCash: Number(raw.openingCash) || 0, defaultReturnCost: money(raw.defaultReturnCost) };
   }
 
-  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], offline: [], settings: [] });
+  const emptyFinance = (): Record<FinanceKind, any[]> => ({ purchase: [], ad: [], expense: [], order: [], offline: [], unit: [], settings: [] });
 
   async function loadFinance(): Promise<Record<FinanceKind, any[]>> {
     if (isPgConnected) {
@@ -1685,25 +1762,29 @@ async function startServer() {
   app.post('/api/finance/:kind', requireAdmin, async (req, res) => {
     const kind = req.params.kind as FinanceKind;
     if (!FINANCE_KINDS.includes(kind)) return res.status(404).json({ success: false });
-    const entry = sanitizeFinance(kind, kind === 'settings' ? { ...req.body, id: 'settings' } : req.body);
-    if (!entry) return res.status(400).json({ success: false, message: 'Entrée invalide' });
+    const raws = Array.isArray(req.body) ? req.body.slice(0, 500) : [req.body];
+    const entries = raws.map(r => sanitizeFinance(kind, kind === 'settings' ? { ...r, id: 'settings' } : r));
+    if (entries.length === 0 || entries.some(e => !e)) return res.status(400).json({ success: false, message: 'Entrée invalide' });
 
+    const ids = new Set(entries.map(e => e.id));
     const file = { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
-    file[kind] = [entry, ...file[kind].filter(e => e.id !== entry.id)].slice(0, 20000);
+    file[kind] = [...entries, ...file[kind].filter(e => !ids.has(e.id))].slice(0, 20000);
     writeJsonFile(FINANCE_FILE, file);
 
     if (isPgConnected) {
       try {
-        await pgPool.query(
-          `INSERT INTO finance_entries (kind, id, data, updated_at) VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (kind, id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
-          [kind, entry.id, JSON.stringify(entry)]
-        );
+        for (const entry of entries) {
+          await pgPool.query(
+            `INSERT INTO finance_entries (kind, id, data, updated_at) VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (kind, id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+            [kind, entry.id, JSON.stringify(entry)]
+          );
+        }
       } catch (err) {
         console.warn('Postgres finance upsert error:', err);
       }
     }
-    return res.json({ success: true, entry });
+    return res.json(Array.isArray(req.body) ? { success: true, entries } : { success: true, entry: entries[0] });
   });
 
   app.delete('/api/finance/:kind/:id', requireAdmin, async (req, res) => {
