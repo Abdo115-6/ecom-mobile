@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { baileysManager, TARGET_PHONE_NUMBER, DISPLAY_PHONE_NUMBER } from './server/baileysManager.js';
 import { createTracker } from './server/tracking.js';
 import { buildDataMiningReport } from './server/dataMining.js';
+import { adSyncStatus, syncAdSpend, scheduleAdSpendSync } from './server/adSpendSync.js';
 import { setSalesBotConfig, salesBotSummary, generateSalesReply, MAX_INSTRUCTIONS } from './server/salesBot.js';
 import { isOzonConfigured, setOzonCredentials, ozonCredentialSummary, verifyOzonCredentials, listOzonCities, matchOzonCity, createOzonParcel, fetchOzonStatuses, fetchOzonParcelRaw, orderStatusFromOzon } from './server/ozonExpress.js';
 import { pageMeta, injectMeta, injectGoogleTag, buildSitemap, buildRobots } from './server/seo.js';
@@ -1759,13 +1760,7 @@ async function startServer() {
     return res.json({ success: true, ...(await loadFinance()) });
   });
 
-  app.post('/api/finance/:kind', requireAdmin, async (req, res) => {
-    const kind = req.params.kind as FinanceKind;
-    if (!FINANCE_KINDS.includes(kind)) return res.status(404).json({ success: false });
-    const raws = Array.isArray(req.body) ? req.body.slice(0, 500) : [req.body];
-    const entries = raws.map(r => sanitizeFinance(kind, kind === 'settings' ? { ...r, id: 'settings' } : r));
-    if (entries.length === 0 || entries.some(e => !e)) return res.status(400).json({ success: false, message: 'Entrée invalide' });
-
+  async function upsertFinance(kind: FinanceKind, entries: any[]) {
     const ids = new Set(entries.map(e => e.id));
     const file = { ...emptyFinance(), ...readJsonFile<Record<string, any[]>>(FINANCE_FILE, {}) } as Record<FinanceKind, any[]>;
     file[kind] = [...entries, ...file[kind].filter(e => !ids.has(e.id))].slice(0, 20000);
@@ -1784,6 +1779,34 @@ async function startServer() {
         console.warn('Postgres finance upsert error:', err);
       }
     }
+  }
+
+  // Facebook / TikTok spend imported every night (tokens in the host's environment variables)
+  const saveAdDays = async (days: any[]) => upsertFinance('ad', days.map(d => sanitizeFinance('ad', d)).filter(Boolean));
+  scheduleAdSpendSync(saveAdDays);
+
+  app.get('/api/finance/ads-sync', requireAdmin, (req, res) => res.json({ success: true, ...adSyncStatus() }));
+
+  app.post('/api/finance/ads-sync', requireAdmin, async (req, res) => {
+    const s = adSyncStatus();
+    if (!s.meta && !s.tiktok) return res.status(400).json({ success: false, message: 'Aucun token Facebook / TikTok configuré sur le serveur' });
+    try {
+      const days = Math.min(Math.max(Number(req.body?.days) || 7, 1), 30);
+      const result = await syncAdSpend(saveAdDays, days);
+      return res.json({ success: true, result, ...adSyncStatus() });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/finance/:kind', requireAdmin, async (req, res) => {
+    const kind = req.params.kind as FinanceKind;
+    if (!FINANCE_KINDS.includes(kind)) return res.status(404).json({ success: false });
+    const raws = Array.isArray(req.body) ? req.body.slice(0, 500) : [req.body];
+    const entries = raws.map(r => sanitizeFinance(kind, kind === 'settings' ? { ...r, id: 'settings' } : r));
+    if (entries.length === 0 || entries.some(e => !e)) return res.status(400).json({ success: false, message: 'Entrée invalide' });
+
+    await upsertFinance(kind, entries);
     return res.json(Array.isArray(req.body) ? { success: true, entries } : { success: true, entry: entries[0] });
   });
 

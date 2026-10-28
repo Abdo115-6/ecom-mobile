@@ -101,6 +101,8 @@ export const CalculationAdminView: React.FC = () => {
   const [adForm, setAdForm] = useState({ date: today(), platform: 'facebook' as AdPlatform, campaign: '', productId: '', amount: '' });
   const [expenseForm, setExpenseForm] = useState({ date: today(), category: EXPENSE_CATEGORIES[0], label: '', amount: '' });
   const [offlineForm, setOfflineForm] = useState({ date: today(), productId: '', quantity: '', orders: '', unitPrice: '', deliveryCharged: '', courierCost: '', note: '' });
+  const [adSync, setAdSync] = useState<{ meta: boolean; tiktok: boolean; usdToMad: number; lastRunAt?: string; lastResult?: string; lastError?: string } | null>(null);
+  const [adSyncing, setAdSyncing] = useState(false);
   const [ozonCheck, setOzonCheck] = useState<{ loading: boolean; rows: Array<{ orderNumber: string; tn: string; status: string; detail: string }> } | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<{ openingCash: string; defaultReturnCost: string } | null>(null);
 
@@ -128,6 +130,27 @@ export const CalculationAdminView: React.FC = () => {
   }, []);
 
   useEffect(() => { loadFinance(); }, [loadFinance]);
+
+  useEffect(() => {
+    if (tab !== 'ads' || adSync) return;
+    fetch('/api/finance/ads-sync').then(r => r.json()).then(d => d.success && setAdSync(d)).catch(() => null);
+  }, [tab, adSync]);
+
+  const runAdSync = async () => {
+    setAdSyncing(true);
+    try {
+      const res = await fetch('/api/finance/ads-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: 14 }) });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
+      setAdSync(data);
+      showToast(`✓ ${data.result}`);
+      loadFinance();
+    } catch (err: any) {
+      showToast(`Synchro pub impossible : ${err.message}`);
+    } finally {
+      setAdSyncing(false);
+    }
+  };
 
   const saveEntry = async (kind: keyof FinanceData, entry: any): Promise<boolean> => {
     try {
@@ -1252,6 +1275,27 @@ export const CalculationAdminView: React.FC = () => {
       {/* ================= ADS ================= */}
       {tab === 'ads' && (
         <div className="space-y-6">
+          <div className={`${card} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+            <div className="text-xs space-y-0.5">
+              <div className="font-bold text-white uppercase tracking-wider">Synchro automatique (chaque nuit)</div>
+              <div className="text-slate-400">
+                Facebook : <span className={adSync?.meta ? 'text-emerald-300' : 'text-slate-500'}>{adSync?.meta ? 'connecté' : 'non configuré'}</span>
+                {' · '}TikTok : <span className={adSync?.tiktok ? 'text-emerald-300' : 'text-slate-500'}>{adSync?.tiktok ? 'connecté' : 'non configuré'}</span>
+                {adSync && <> · 1 $ = {adSync.usdToMad} DH</>}
+              </div>
+              {adSync?.lastResult && <div className="text-slate-500">Dernière synchro : {adSync.lastRunAt ? new Date(adSync.lastRunAt).toLocaleString('fr-FR') : ''} · {adSync.lastResult}</div>}
+              {adSync?.lastError && <div className="text-rose-300">{adSync.lastError}</div>}
+            </div>
+            <button
+              type="button"
+              onClick={runAdSync}
+              disabled={adSyncing || !(adSync?.meta || adSync?.tiktok)}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-40 shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${adSyncing ? 'animate-spin' : ''}`} />
+              <span>Synchroniser (14 jours)</span>
+            </button>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <form onSubmit={addAd} className={`lg:col-span-5 ${card} space-y-3`}>
               <div className="flex items-center gap-2">
